@@ -4189,7 +4189,10 @@ function chatAsk(text) {
 
 function buildChatContext() {
   if (weekDefs.length === 0) initWeekly();
-  const today = new Date();
+  // Use latest data date as "today" (not browser clock, which may not be 2026)
+  const today = data2026.length > 0
+    ? new Date(Math.max(...data2026.map(d => d.date.getTime())))
+    : new Date(2026, 3, 3);
   // This month
   const ms = new Date(2026, today.getMonth(), 1);
   const me = new Date(2026, today.getMonth()+1, 0);
@@ -4204,12 +4207,12 @@ function buildChatContext() {
   const lms = new Date(2026, today.getMonth()-1, 1);
   const lme = new Date(2026, today.getMonth(), 0);
   const lastMonthRev = data2026.filter(d => d.date >= lms && d.date <= lme).reduce((a,d) => a+d.revenue, 0);
-  // Current week
-  let currWeekIdx = -1;
+  // Current week (match initWeekly logic)
+  let currWeekIdx = 0;
   for (let i = 0; i < weekDefs.length; i++) {
     if (today >= weekDefs[i].start && today <= weekDefs[i].end) { currWeekIdx = i; break; }
+    if (today < weekDefs[i].start) { currWeekIdx = Math.max(0, i - 1); break; }
   }
-  if (currWeekIdx < 0) currWeekIdx = weekDefs.length - 1;
   const cw = weekDefs[currWeekIdx];
   const cwDays = data2026.filter(d => d.date >= cw.start && d.date <= cw.end);
   const cwRev = cwDays.reduce((a,d) => a+d.revenue, 0);
@@ -4263,7 +4266,13 @@ function buildChatContext() {
     }
   }
 
-  return `你是「起士公爵」京站門市的 AI 智能營運助理。你擁有門市所有營運數據，請根據數據精準回答店長的問題。
+  return `你是「起士公爵」京站門市的 AI 智能營運顧問，擁有豐富的百貨門市零售管理經驗。你完全掌握以下提供的門市所有營運數據，請**直接根據數據分析回答**，不要質疑數據是否正確或是否有更新。
+
+重要規則：
+1. 你只回答與「起士公爵」京站門市營運相關的問題（業績、商品、人員、客單價、訂單、行銷策略等）
+2. 如果問題與門市營運無關，友善地說「我是京站門市營運顧問，很樂意為您分析營運數據、提供策略建議。請問有什麼營運問題想了解的嗎？」
+3. 回答必須**引用具體數字**，不能說「無法判斷」或「數據未更新」
+4. 語氣像一位經驗豐富、關心業績的資深顧問
 
 回答架構必須包含三個面向（用標題標示）：
 ### 🔍 Why — 問題診斷
@@ -4280,7 +4289,6 @@ function buildChatContext() {
 - 正面趨勢用 ↑ 或 +，負面用 ↓ 或 -
 - 關鍵詞用**粗體**強調
 - 使用繁體中文，語氣專業但平易近人
-- 如果問題與數據無關，友善引導回營運相關話題
 
 ═══ 當前門市數據（2026年）═══
 
