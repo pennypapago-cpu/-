@@ -2998,7 +2998,13 @@ function renderWeekly() {
 }
 
 // ── AI Analysis (Gemini) ──
-function getGeminiKey() { return 'AIzaSyCeK6BbcLrCIOqyGpuLVfielclFrJpsQXw'; }
+function getGeminiKey() {
+  let key = sessionStorage.getItem('gemini_key');
+  if (key) return key;
+  key = prompt('首次使用 AI 功能，請輸入 Gemini API Key：\n\n到 https://aistudio.google.com/apikey 複製金鑰');
+  if (key && key.trim()) { sessionStorage.setItem('gemini_key', key.trim()); return key.trim(); }
+  return null;
+}
 let aiPlanRaw = ''; // stores raw plan text for editing
 
 function collectWeekData() {
