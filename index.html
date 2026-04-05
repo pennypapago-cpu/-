@@ -2998,20 +2998,7 @@ function renderWeekly() {
 }
 
 // ── AI Analysis (Gemini) ──
-// API Key 存在 sessionStorage，不寫在程式碼中避免公開倉庫洩漏
-function getGeminiKey() {
-  let key = sessionStorage.getItem('gemini_key');
-  if (!key) {
-    key = prompt('請輸入 Gemini API Key 以啟用 AI 功能：\n（到 https://aistudio.google.com/apikey 取得）');
-    if (key && key.trim()) {
-      sessionStorage.setItem('gemini_key', key.trim());
-    } else {
-      return null;
-    }
-  }
-  return key;
-}
-const GEMINI_KEY = null; // placeholder, use getGeminiKey() instead
+function getGeminiKey() { return 'AIzaSyCeK6BbcLrCIOqyGpuLVfielclFrJpsQXw'; }
 let aiPlanRaw = ''; // stores raw plan text for editing
 
 function collectWeekData() {
