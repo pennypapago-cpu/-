@@ -2998,7 +2998,20 @@ function renderWeekly() {
 }
 
 // ── AI Analysis (Gemini) ──
-const GEMINI_KEY = 'AIzaSyARvsQHkj-IPoeYxwBDoJebg9e3IlaRC4Q';
+// API Key 存在 sessionStorage，不寫在程式碼中避免公開倉庫洩漏
+function getGeminiKey() {
+  let key = sessionStorage.getItem('gemini_key');
+  if (!key) {
+    key = prompt('請輸入 Gemini API Key 以啟用 AI 功能：\n（到 https://aistudio.google.com/apikey 取得）');
+    if (key && key.trim()) {
+      sessionStorage.setItem('gemini_key', key.trim());
+    } else {
+      return null;
+    }
+  }
+  return key;
+}
+const GEMINI_KEY = null; // placeholder, use getGeminiKey() instead
 let aiPlanRaw = ''; // stores raw plan text for editing
 
 function collectWeekData() {
@@ -3144,8 +3157,10 @@ ${d.briefings || '無資料'}
 - 關鍵詞用**粗體**強調
 - 語言使用繁體中文，語氣專業但平易近人，建議要具體可行`;
 
+    const _apiKey = getGeminiKey();
+    if (!_apiKey) throw new Error('請先輸入 Gemini API Key');
     const resp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${_apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -3380,8 +3395,10 @@ ${briefings.slice(0, 12).join('\n') || '無資料'}
 - 關鍵詞用**粗體**強調
 - 語言使用繁體中文，語氣專業但平易近人，建議要具體可行`;
 
+    const _apiKey = getGeminiKey();
+    if (!_apiKey) throw new Error('請先輸入 Gemini API Key');
     const resp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${_apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -4325,8 +4342,10 @@ async function sendChat() {
   chatHistory.push({ role: 'user', parts: [{ text }] });
   const recentHistory = chatHistory.slice(-10);
   try {
+    const _apiKey = getGeminiKey();
+    if (!_apiKey) throw new Error('請先輸入 Gemini API Key');
     const resp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${_apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
