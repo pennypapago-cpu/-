@@ -891,10 +891,14 @@ if(sessionStorage.getItem('authed')==='1')document.getElementById('loginGate').s
   <div class="trend-chart-box" id="trendRevenueChart"></div>
   <div class="trend-legend" id="trendRevenueLegend"></div>
 
+  <div class="section-title">訂單數趨勢圖</div>
+  <div class="trend-chart-desc">各週訂單數變化</div>
+  <div class="trend-chart-box" id="trendOrderChart"></div>
+
   <!-- AI 營運分析（按需產生） -->
   <div style="text-align:center;margin:20px 0 16px">
     <button class="ai-gen-btn" id="aiGenBtn" onclick="generateAIAnalysis()">
-      <span class="ai-gen-icon">🤖</span> AI 營運分析
+      <span class="ai-gen-icon">🤖</span> AI 週報營運分析
     </button>
   </div>
   <div class="ai-loading" id="aiLoading" style="display:none">
@@ -906,7 +910,7 @@ if(sessionStorage.getItem('authed')==='1')document.getElementById('loginGate').s
     <div class="ai-section-header">
       <div class="ai-title-row">
         <span class="ai-icon">🤖</span>
-        <span class="ai-title">AI 營運分析</span>
+        <span class="ai-title">AI 週報營運分析</span>
         <span class="ai-badge">Gemini</span>
       </div>
     </div>
@@ -931,10 +935,6 @@ if(sessionStorage.getItem('authed')==='1')document.getElementById('loginGate').s
       <div class="ai-card-body" id="aiRisks"></div>
     </div>
   </div>
-
-  <div class="section-title">訂單數趨勢圖</div>
-  <div class="trend-chart-desc">各週訂單數變化</div>
-  <div class="trend-chart-box" id="trendOrderChart"></div>
 
 </div>
 
@@ -990,6 +990,47 @@ if(sessionStorage.getItem('authed')==='1')document.getElementById('loginGate').s
   <div class="section-title">訂單數趨勢圖</div>
   <div class="trend-chart-desc">各月訂單數變化</div>
   <div class="trend-chart-box" id="monthlyOrderChart"></div>
+
+  <!-- AI 月報營運分析（按需產生） -->
+  <div style="text-align:center;margin:20px 0 16px">
+    <button class="ai-gen-btn" id="aiMonthlyGenBtn" onclick="generateMonthlyAIAnalysis()">
+      <span class="ai-gen-icon">🤖</span> AI 月報營運分析
+    </button>
+  </div>
+  <div class="ai-loading" id="aiMonthlyLoading" style="display:none">
+    <div class="ai-spinner"></div>
+    <div>AI 正在分析月度營運數據...</div>
+  </div>
+  <div class="ai-error" id="aiMonthlyError" style="display:none"></div>
+  <div id="aiMonthlyAnalysisWrap" style="display:none">
+    <div class="ai-section-header">
+      <div class="ai-title-row">
+        <span class="ai-icon">🤖</span>
+        <span class="ai-title">AI 月報營運分析</span>
+        <span class="ai-badge">Gemini</span>
+      </div>
+    </div>
+    <div class="ai-card">
+      <div class="ai-card-header"><span class="ai-card-icon">💡</span> 月度經營洞察與優化建議</div>
+      <div class="ai-card-body" id="aiMonthlyInsights"></div>
+    </div>
+    <div class="ai-card">
+      <div class="ai-card-header">
+        <span><span class="ai-card-icon">📋</span> 下月行動計畫</span>
+        <button class="ai-edit-btn" id="aiMonthlyPlanEditBtn" onclick="toggleMonthlyPlanEdit()">編輯</button>
+      </div>
+      <div class="ai-card-body" id="aiMonthlyPlanView"></div>
+      <textarea class="ai-plan-editor" id="aiMonthlyPlanEditor" style="display:none" placeholder="請輸入或修改行動計畫..."></textarea>
+      <div class="ai-plan-actions" id="aiMonthlyPlanActions" style="display:none">
+        <button class="ai-save-btn" onclick="saveMonthlyPlanEdit()">儲存</button>
+        <button class="ai-cancel-btn" onclick="cancelMonthlyPlanEdit()">取消</button>
+      </div>
+    </div>
+    <div class="ai-card">
+      <div class="ai-card-header"><span class="ai-card-icon">⚠️</span> 下月營運風險預測</div>
+      <div class="ai-card-body" id="aiMonthlyRisks"></div>
+    </div>
+  </div>
 
 </div>
 
@@ -3216,6 +3257,235 @@ function cancelPlanEdit() {
   const actions = document.getElementById('aiPlanActions');
   const btn = document.getElementById('aiPlanEditBtn');
 
+  editor.style.display = 'none';
+  actions.style.display = 'none';
+  view.style.display = 'block';
+  btn.textContent = '編輯';
+  btn.classList.remove('editing');
+}
+
+// ── Monthly AI Analysis ──
+let aiMonthlyPlanRaw = '';
+
+async function generateMonthlyAIAnalysis() {
+  if (!monthlyInited) initMonthly();
+
+  const btn = document.getElementById('aiMonthlyGenBtn');
+  const wrap = document.getElementById('aiMonthlyAnalysisWrap');
+  const loading = document.getElementById('aiMonthlyLoading');
+  const errorEl = document.getElementById('aiMonthlyError');
+
+  btn.disabled = true;
+  wrap.style.display = 'none';
+  errorEl.style.display = 'none';
+  loading.style.display = 'flex';
+
+  try {
+    const month = parseInt(document.getElementById('monthSelect').value);
+    const start = new Date(2026, month - 1, 1);
+    const end = new Date(2026, month, 0);
+
+    const periodData = data2026.filter(d => d.date >= start && d.date <= end);
+    const periodStaff = staffData.filter(d => d.date >= start && d.date <= end);
+    const periodRevenue = periodData.reduce((s, d) => s + d.revenue, 0);
+    const staffRevenue = periodStaff.reduce((s, d) => s + d.deptRevenue, 0);
+    const displayRevenue = periodRevenue > 0 ? periodRevenue : staffRevenue;
+    const totalVisits = periodStaff.reduce((s, d) => s + d.visits, 0);
+    const totalTx = periodStaff.reduce((s, d) => s + d.transactions, 0);
+    const avgPrice = totalTx > 0 ? Math.round(displayRevenue / totalTx) : 0;
+    const datadays = periodData.length > 0 ? periodData.length : [...new Set(periodStaff.map(d => d.date.getTime()))].length;
+
+    if (datadays === 0) throw new Error('本月無營運數據');
+
+    // YoY
+    const lyStart = new Date(2025, month - 1, 1);
+    const lyEnd = new Date(2025, month, 0);
+    const lyData = data2025.filter(d => d.date >= lyStart && d.date <= lyEnd);
+    const lyRevenue = lyData.reduce((s, d) => s + d.revenue, 0);
+    const yoyPct = lyRevenue > 0 ? ((displayRevenue - lyRevenue) / lyRevenue * 100).toFixed(1) : 'N/A';
+
+    // Order types
+    const ot = getOrderTypes(start, end);
+
+    // Staff summary
+    const staffMap = {};
+    periodStaff.forEach(d => {
+      if (!staffMap[d.person]) staffMap[d.person] = { rev: 0, tx: 0, visits: 0, days: 0 };
+      staffMap[d.person].rev += d.deptRevenue;
+      staffMap[d.person].tx += d.transactions;
+      staffMap[d.person].visits += d.visits;
+      staffMap[d.person].days++;
+    });
+    const staffSummary = Object.entries(staffMap)
+      .sort((a, b) => b[1].rev - a[1].rev)
+      .map(([name, v]) => `${name}: $${fmt(v.rev)}, ${v.tx}筆, 靠櫃${v.visits}人, ${v.days}天`)
+      .join('\n');
+
+    // Top products
+    const prodMap = {};
+    for (const item of PRODUCT_ITEMS) {
+      const parts = item[0].split('/').map(Number);
+      const dt = new Date(2026, parts[0] - 1, parts[1]);
+      if (dt >= start && dt <= end) {
+        const nm = item[1];
+        if (!prodMap[nm]) prodMap[nm] = { rev: 0, qty: 0 };
+        prodMap[nm].rev += item[2]; prodMap[nm].qty += item[3];
+      }
+    }
+    const topProducts = Object.entries(prodMap).sort((a, b) => b[1].rev - a[1].rev).slice(0, 10)
+      .map(([nm, v], i) => `${i + 1}. ${nm}: $${fmt(v.rev)} (${v.qty}個)`).join('\n');
+
+    // Briefing highlights
+    const briefings = [];
+    for (const item of BRIEFING_DATA) {
+      const parts = item[0].split('/').map(Number);
+      const dt = new Date(2026, parts[0] - 1, parts[1]);
+      if (dt >= start && dt <= end && dt <= maxBriefingDate) {
+        briefings.push(`${item[0]} ${item[1]}: ${item[2].substring(0, 150)}`);
+      }
+    }
+
+    const prompt = `你是「起士公爵」京站門市的資深營運分析師。請根據以下 ${month} 月的營運數據，產出專業月度分析報告。
+
+【${month}月營運數據】
+- 月營收：$${fmt(displayRevenue)}（去年同期：$${lyRevenue > 0 ? fmt(lyRevenue) : '無資料'}，YoY：${yoyPct}%）
+- 營業天數：${datadays}天，日均營收：$${fmt(Math.round(displayRevenue / datadays))}
+- 總來客數（靠櫃）：${totalVisits}人，總交易筆數：${totalTx}筆
+- 客單價：$${fmt(avgPrice)}
+- 訂單結構：一般訂單$${fmt(ot.regular)}, 外送$${fmt(ot.delivery)}, 彌月訂單$${fmt(ot.babyOrder)}
+
+【人員績效】
+${staffSummary || '無資料'}
+
+【商品 Top 10】
+${topProducts || '無資料'}
+
+【現場簡報摘要（部分）】
+${briefings.slice(0, 12).join('\n') || '無資料'}
+
+請嚴格按照以下三個區塊輸出，使用豐富的 Markdown 格式（粗體、子標題、列點）：
+
+## 月度經營洞察與優化建議
+用 ### 子標題分段分析（如「### 營收表現」「### 客單價分析」「### 商品銷售結構」「### 人員績效」「### 訂單結構分析」），每段用列點 (-) 說明關鍵發現。在數字前加 $ 符號、百分比用粗體標示。最後用列點總結 3-5 條具體**優化建議**。
+
+## 下月行動計畫
+列出 5-7 項具體行動，使用 - [ ] 待辦格式，每項包含**具體動作**與**量化目標**。
+
+## 下月營運風險預測
+用列點列出 3-4 個風險項目，每項先說明風險，接著用 > 引用格式寫預防措施。
+
+格式要求：
+- 金額一律加 $ 前綴（如 $97,440）
+- 正面趨勢用 ↑ 或 +，負面用 ↓ 或 -
+- 關鍵詞用**粗體**強調
+- 語言使用繁體中文，語氣專業但平易近人，建議要具體可行`;
+
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.7, maxOutputTokens: 8192, thinkingConfig: { thinkingBudget: 0 } }
+        })
+      }
+    );
+
+    if (!resp.ok) {
+      const errBody = await resp.text();
+      throw new Error(`API 錯誤 (${resp.status}): ${errBody.substring(0, 200)}`);
+    }
+
+    const json = await resp.json();
+    const text = json.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) throw new Error('AI 未回傳有效內容');
+
+    // Parse 3 sections
+    const sections = parseMonthlyAISections(text);
+    document.getElementById('aiMonthlyInsights').innerHTML = mdToHtml(sections.insights);
+    document.getElementById('aiMonthlyPlanView').innerHTML = mdToHtml(sections.plan);
+    document.getElementById('aiMonthlyRisks').innerHTML = mdToHtml(sections.risks);
+    aiMonthlyPlanRaw = sections.plan;
+
+    loading.style.display = 'none';
+    wrap.style.display = 'block';
+
+  } catch (err) {
+    loading.style.display = 'none';
+    errorEl.style.display = 'block';
+    errorEl.textContent = '分析失敗：' + err.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function parseMonthlyAISections(text) {
+  const sections = { insights: '', plan: '', risks: '' };
+  const parts = text.split(/^#{2,4}\s+/m);
+  for (const part of parts) {
+    const t = part.trim().replace(/^\*\*/,'');
+    if (t.match(/^月度經營洞察|^經營洞察/)) {
+      sections.insights = part.replace(/^.*?\n/, '').trim();
+    } else if (t.match(/^下月行動/)) {
+      sections.plan = part.replace(/^.*?\n/, '').trim();
+    } else if (t.match(/^下月營運/)) {
+      sections.risks = part.replace(/^.*?\n/, '').trim();
+    }
+  }
+  if (!sections.insights || !sections.plan || !sections.risks) {
+    const tryExtract = (keyword) => {
+      const re = new RegExp('(?:#{2,4}|\\*\\*)\\s*' + keyword + '[^\\n]*\\n([\\s\\S]*?)(?=(?:#{2,4}|\\*\\*)\\s*(?:月度經營|經營洞察|下月行動|下月營運)|$)');
+      const m = text.match(re);
+      return m ? m[1].trim() : '';
+    };
+    if (!sections.insights) sections.insights = tryExtract('(?:月度)?經營洞察');
+    if (!sections.plan) sections.plan = tryExtract('下月行動');
+    if (!sections.risks) sections.risks = tryExtract('下月營運');
+  }
+  if (!sections.insights && !sections.plan && !sections.risks) {
+    sections.insights = text;
+  }
+  return sections;
+}
+
+function toggleMonthlyPlanEdit() {
+  const view = document.getElementById('aiMonthlyPlanView');
+  const editor = document.getElementById('aiMonthlyPlanEditor');
+  const actions = document.getElementById('aiMonthlyPlanActions');
+  const btn = document.getElementById('aiMonthlyPlanEditBtn');
+  if (editor.style.display !== 'none') {
+    cancelMonthlyPlanEdit();
+  } else {
+    editor.value = aiMonthlyPlanRaw;
+    view.style.display = 'none';
+    editor.style.display = 'block';
+    actions.style.display = 'flex';
+    btn.textContent = '取消';
+    btn.classList.add('editing');
+    editor.focus();
+  }
+}
+
+function saveMonthlyPlanEdit() {
+  const editor = document.getElementById('aiMonthlyPlanEditor');
+  const view = document.getElementById('aiMonthlyPlanView');
+  const actions = document.getElementById('aiMonthlyPlanActions');
+  const btn = document.getElementById('aiMonthlyPlanEditBtn');
+  aiMonthlyPlanRaw = editor.value;
+  view.innerHTML = mdToHtml(aiMonthlyPlanRaw);
+  editor.style.display = 'none';
+  actions.style.display = 'none';
+  view.style.display = 'block';
+  btn.textContent = '編輯';
+  btn.classList.remove('editing');
+}
+
+function cancelMonthlyPlanEdit() {
+  const view = document.getElementById('aiMonthlyPlanView');
+  const editor = document.getElementById('aiMonthlyPlanEditor');
+  const actions = document.getElementById('aiMonthlyPlanActions');
+  const btn = document.getElementById('aiMonthlyPlanEditBtn');
   editor.style.display = 'none';
   actions.style.display = 'none';
   view.style.display = 'block';
