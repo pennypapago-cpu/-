@@ -1925,7 +1925,7 @@ let BRIEFING_DATA = [
 
 // Order type revenue per date: [regularDept, babyDept, regularOwn, babyOwn, delivery]
 // D=百貨收入含試吃不含彌月, E=百貨收入彌月, F=自有收入含試吃不含彌月, G=自有收入彌月, I=外送金額
-const ORDER_TYPES = {
+const ORDER_TYPES_2025 = {
 "1/1":[11544,0,0,0,0],"1/2":[14173,0,0,35469,2209],"1/3":[17719,0,1056,0,667],"1/4":[17772,0,0,0,657],"1/5":[25685,0,0,0,1018],"1/6":[19424,0,0,0,886],"1/7":[7417,0,0,0,686],"1/8":[11492,0,0,0,1399],"1/9":[18138,0,0,0,1533],"1/10":[23976,0,0,0,590],"1/11":[24108,0,0,0,3967],"1/12":[30379,0,0,0,1018],"1/13":[28239,0,0,0,676],"1/14":[37517,0,0,0,2268],"1/15":[18386,0,0,0,0],"1/16":[17766,0,0,0,7431],"1/17":[13715,0,0,0,2933],"1/18":[33581,0,0,0,0],"1/19":[35699,0,0,0,0],"1/20":[17189,0,0,0,696],"1/21":[30207,0,0,0,0],"1/22":[24348,0,0,0,981],"1/23":[17334,0,0,0,1400],"1/24":[35975,0,0,0,3849],"1/25":[33531,0,0,0,1608],"1/26":[28144,0,0,0,4366],"1/27":[25251,0,0,0,1133],"1/28":[25246,0,0,0,3534],"1/29":[30870,0,0,0,3398],"1/30":[26262,0,0,0,2644],"1/31":[23411,0,0,0,2887],
 "2/1":[26826,0,0,0,1885],"2/2":[22115,0,0,0,5034],"2/3":[13156,0,0,0,3087],"2/4":[8443,0,0,0,1505],"2/5":[19001,0,0,0,2913],"2/6":[14303,0,0,0,962],"2/7":[13499,0,0,0,1457],"2/8":[22847,0,0,0,1322],"2/9":[15742,0,0,0,3018],"2/10":[9120,0,0,0,0],"2/11":[10689,0,0,0,4000],"2/12":[17164,0,0,0,2924],"2/13":[12099,0,0,0,1352],"2/14":[39224,0,731,0,2554],"2/15":[32930,0,0,0,1468],"2/16":[16834,0,0,0,684],"2/17":[24197,0,0,0,0],"2/18":[13060,0,0,0,181],"2/19":[12291,0,0,0,1229],"2/20":[19529,0,0,0,534],"2/21":[23263,0,0,0,962],"2/22":[26972,0,1205,0,5162],"2/23":[22501,0,0,0,3276],"2/24":[12212,0,861,0,1026],"2/25":[13527,0,0,0,1360],"2/26":[16350,0,0,0,590],"2/27":[19496,0,0,0,1762],"2/28":[33774,0,0,0,590],
 "3/1":[20078,0,731,0,2553],"3/2":[18471,0,0,0,1151],"3/3":[14355,0,0,0,1991],"3/4":[10842,0,0,0,0],"3/5":[9660,0,0,0,3142],"3/6":[19400,0,0,0,1628],"3/7":[24861,0,0,0,3161],"3/8":[27625,0,0,0,648],"3/9":[23905,0,0,0,1751],"3/10":[10519,0,0,0,6571],"3/11":[8387,0,0,0,342],"3/12":[14946,0,0,0,429],"3/13":[18691,0,0,0,390],"3/14":[32194,0,0,0,3666],"3/15":[24895,0,0,0,5063],"3/16":[25325,0,0,0,3110],"3/17":[12063,0,0,0,342],"3/18":[11887,0,0,0,486],"3/19":[13255,0,0,0,3190],"3/20":[22779,0,0,0,990],"3/21":[41761,0,0,0,7792],"3/22":[20213,0,0,0,780],"3/23":[9213,0,0,0,2656],"3/24":[7011,0,0,0,342],"3/25":[9269,0,0,0,1563],"3/26":[13470,0,1139,0,0],"3/27":[17356,0,0,0,513],"3/28":[22720,0,0,0,676],"3/29":[30353,0,0,0,1978],"3/30":[21709,0,0,0,2209],"3/31":[17268,0,0,0,1790],
@@ -1940,21 +1940,32 @@ const ORDER_TYPES = {
 "12/1":[17867,0,0,0,740],"12/2":[13065,0,0,0,1572],"12/3":[11827,0,0,0,1053],"12/4":[51681,0,0,0,2867],"12/5":[19961,0,926,0,3181],"12/6":[26463,0,0,0,3284],"12/7":[26898,0,0,0,1005],"12/8":[12574,0,0,0,647],"12/9":[8225,0,0,0,3201],"12/10":[10267,0,0,0,1943],"12/11":[10138,0,0,0,7545],"12/12":[21062,0,0,0,2995],"12/13":[33128,0,0,0,4625],"12/14":[27499,0,0,0,485],"12/15":[15867,0,0,0,4951],"12/16":[11617,0,0,0,1771],"12/17":[14320,0,0,0,1286],"12/18":[14324,0,0,0,1485],"12/19":[23168,0,0,0,1676],"12/20":[22284,0,0,0,5223],"12/21":[15822,0,0,0,0],"12/22":[11165,0,0,0,3848],"12/23":[18603,0,0,0,4650],"12/24":[25158,0,0,0,7176],"12/25":[15048,0,0,0,4586],"12/26":[11184,0,0,0,1420],"12/27":[21253,0,0,0,3857],"12/28":[19270,0,0,0,1575],"12/29":[14633,0,0,0,741],"12/30":[9003,0,0,0,531],"12/31":[44081,0,0,0,6027]
 };
 
-// Helper: aggregate order type REVENUE for a date range
-// Data format: [regularDept(D), babyDept(E), regularOwn(F), babyOwn(G), delivery(I)]
-function getOrderTypes(start, end) {
+// 2026 order types: built dynamically from Google Sheets fetch, keyed by "m/d"
+let ORDER_TYPES_2026 = {};
+
+// Helper: aggregate order type REVENUE for a date range from a given dataset
+function getOrderTypesFrom(dataset, start, end) {
   let regularDept=0, babyDept=0, regularOwn=0, babyOwn=0, delivery=0;
   const s = new Date(start); s.setHours(0,0,0,0);
   const e = new Date(end); e.setHours(0,0,0,0);
   for (const d = new Date(s); d <= e; d.setDate(d.getDate()+1)) {
     const key = `${d.getMonth()+1}/${d.getDate()}`;
-    const ot = ORDER_TYPES[key];
+    const ot = dataset[key];
     if (ot) { regularDept += ot[0]; babyDept += ot[1]; regularOwn += ot[2]; babyOwn += ot[3]; delivery += ot[4]; }
   }
   const regular = regularDept + regularOwn;
   const babyOrder = babyDept + babyOwn;
   const total = regular + babyOrder + delivery;
   return { total, regular, delivery, lineGift: 0, babyTaste: 0, babyOrder };
+}
+// Current year order types (2026 if available, fallback to 2025)
+function getOrderTypes(start, end) {
+  const has2026 = Object.keys(ORDER_TYPES_2026).length > 0;
+  return getOrderTypesFrom(has2026 ? ORDER_TYPES_2026 : ORDER_TYPES_2025, start, end);
+}
+// Last year order types (always 2025)
+function getOrderTypes2025(start, end) {
+  return getOrderTypesFrom(ORDER_TYPES_2025, start, end);
 }
 
 // ── Parse embedded data into working arrays ──
@@ -2171,10 +2182,16 @@ function render() {
 
   // Order type breakdown
   const ot = getOrderTypes(start, end);
+  // Last year order types for YOY
+  const lyOt = getOrderTypes2025(lyStart, lyEnd);
+  function otYoy(cur, prev) {
+    if (prev === 0) return null;
+    return ((cur - prev) / prev * 100);
+  }
 
   // Period label
   const periodLabel = `${dateStr(start)} ~ ${dateStr(end)}`;
-  document.getElementById('periodLabel').innerHTML = `查詢區間：<strong>${periodLabel}</strong>（共 ${periodDays} 天，營收合計 $${fmt(displayRevenue)}）<br>銷貨單交易彙總`;
+  document.getElementById('periodLabel').innerHTML = `��詢區間：<strong>${periodLabel}</strong>（共 ${periodDays} 天，營收合計 $${fmt(displayRevenue)}）<br>銷貨單交易彙總`;
 
   // Render KPI cards
   document.getElementById('kpiGrid').innerHTML = `
@@ -2211,26 +2228,31 @@ function render() {
       <div class="kpi-label">一般訂單</div>
       <div class="kpi-value">$${fmt(ot.regular)}</div>
       <div class="kpi-sub neutral">佔 ${ot.total > 0 ? (ot.regular/ot.total*100).toFixed(0) : 0}%</div>
+      ${yoyBadge(otYoy(ot.regular, lyOt.regular))}
     </div>
     <div class="kpi-card">
       <div class="kpi-label">外送（UB/空腹）</div>
       <div class="kpi-value">$${fmt(ot.delivery)}</div>
       <div class="kpi-sub neutral">佔 ${ot.total > 0 ? (ot.delivery/ot.total*100).toFixed(0) : 0}%</div>
+      ${yoyBadge(otYoy(ot.delivery, lyOt.delivery))}
     </div>
     <div class="kpi-card">
       <div class="kpi-label">Line 禮物</div>
       <div class="kpi-value">$${fmt(ot.lineGift)}</div>
       <div class="kpi-sub neutral">佔 ${ot.total > 0 ? (ot.lineGift/ot.total*100).toFixed(0) : 0}%</div>
+      ${yoyBadge(otYoy(ot.lineGift, lyOt.lineGift))}
     </div>
     <div class="kpi-card">
       <div class="kpi-label">彌月試吃</div>
       <div class="kpi-value">$${fmt(ot.babyTaste)}</div>
       <div class="kpi-sub neutral">佔 ${ot.total > 0 ? (ot.babyTaste/ot.total*100).toFixed(0) : 0}%</div>
+      ${yoyBadge(otYoy(ot.babyTaste, lyOt.babyTaste))}
     </div>
     <div class="kpi-card">
       <div class="kpi-label">彌月訂單</div>
       <div class="kpi-value">$${fmt(ot.babyOrder)}</div>
       <div class="kpi-sub neutral">佔 ${ot.total > 0 ? (ot.babyOrder/ot.total*100).toFixed(0) : 0}%</div>
+      ${yoyBadge(otYoy(ot.babyOrder, lyOt.babyOrder))}
     </div>
     <div class="kpi-card">
       <div class="kpi-label">上週營收</div>
@@ -2597,6 +2619,7 @@ async function updateData() {
     if (resStaff.ok) {
       const csvStaff = parseCSVRow(await resStaff.text());
       staffData.length = 0;
+      const otBuild = {}; // Build ORDER_TYPES_2026 from staff rows
       for (const row of csvStaff) {
         if (row.length < 21) continue;
         const dateVal = row[0].replace(/"/g, '').trim();
@@ -2608,6 +2631,10 @@ async function updateData() {
         const month = dateParts.length === 3 ? dateParts[1] : dateParts[0];
         const day = dateParts.length === 3 ? dateParts[2] : dateParts[1];
         const deptRevenue = parseInt(row[3].replace(/[",]/g, '')) || 0;
+        const babyDept = parseInt(row[4].replace(/[",]/g, '')) || 0;
+        const regularOwn = parseInt(row[5].replace(/[",]/g, '')) || 0;
+        const babyOwn = parseInt(row[6].replace(/[",]/g, '')) || 0;
+        const delivery = parseInt(row[8].replace(/[",]/g, '')) || 0;
         const transactions = parseInt(row[10].replace(/[",]/g, '')) || 0;
         const visits = parseInt(row[20].replace(/[",]/g, '')) || 0;
         const birthday = parseInt(row[21].replace(/[",]/g, '')) || 0;
@@ -2622,7 +2649,16 @@ async function updateData() {
           avgPrice: transactions > 0 ? deptRevenue / transactions : 0,
           newCust: 0, oldCust: 0, omoIncomplete: 0
         });
+        // Aggregate order types per day for 2026
+        const otKey = `${month}/${day}`;
+        if (!otBuild[otKey]) otBuild[otKey] = [0,0,0,0,0];
+        otBuild[otKey][0] += deptRevenue;
+        otBuild[otKey][1] += babyDept;
+        otBuild[otKey][2] += regularOwn;
+        otBuild[otKey][3] += babyOwn;
+        otBuild[otKey][4] += delivery;
       }
+      ORDER_TYPES_2026 = otBuild;
     }
 
     // 4. Fetch product data from multiple spreadsheets
@@ -2820,6 +2856,12 @@ function renderWeekly() {
 
   // Order type breakdown
   const ot = getOrderTypes(start, end);
+  // Last year order types for YOY
+  const lyOt = getOrderTypes2025(lyStart, lyEnd);
+  function otYoy(cur, prev) {
+    if (prev === 0) return null;
+    return ((cur - prev) / prev * 100);
+  }
 
   // Period label
   document.getElementById('weeklyPeriodLabel').innerHTML =
@@ -2857,26 +2899,31 @@ function renderWeekly() {
       <div class="kpi-label">一般訂單</div>
       <div class="kpi-value">$${fmt(ot.regular)}</div>
       <div class="kpi-sub neutral">佔 ${ot.total > 0 ? (ot.regular/ot.total*100).toFixed(0) : 0}%</div>
+      ${yoyBadge(otYoy(ot.regular, lyOt.regular))}
     </div>
     <div class="kpi-card">
       <div class="kpi-label">外送（UB/空腹）</div>
       <div class="kpi-value">$${fmt(ot.delivery)}</div>
       <div class="kpi-sub neutral">佔 ${ot.total > 0 ? (ot.delivery/ot.total*100).toFixed(0) : 0}%</div>
+      ${yoyBadge(otYoy(ot.delivery, lyOt.delivery))}
     </div>
     <div class="kpi-card">
       <div class="kpi-label">Line 禮物</div>
       <div class="kpi-value">$${fmt(ot.lineGift)}</div>
       <div class="kpi-sub neutral">佔 ${ot.total > 0 ? (ot.lineGift/ot.total*100).toFixed(0) : 0}%</div>
+      ${yoyBadge(otYoy(ot.lineGift, lyOt.lineGift))}
     </div>
     <div class="kpi-card">
       <div class="kpi-label">彌月試吃</div>
       <div class="kpi-value">$${fmt(ot.babyTaste)}</div>
       <div class="kpi-sub neutral">佔 ${ot.total > 0 ? (ot.babyTaste/ot.total*100).toFixed(0) : 0}%</div>
+      ${yoyBadge(otYoy(ot.babyTaste, lyOt.babyTaste))}
     </div>
     <div class="kpi-card">
       <div class="kpi-label">彌月訂單</div>
       <div class="kpi-value">$${fmt(ot.babyOrder)}</div>
       <div class="kpi-sub neutral">佔 ${ot.total > 0 ? (ot.babyOrder/ot.total*100).toFixed(0) : 0}%</div>
+      ${yoyBadge(otYoy(ot.babyOrder, lyOt.babyOrder))}
     </div>
   `;
 
@@ -3503,6 +3550,12 @@ function renderMonthly() {
 
   // Order type breakdown
   const ot = getOrderTypes(start, end);
+  // Last year order types for YOY
+  const lyOt = getOrderTypes2025(lyStart, lyEnd);
+  function otYoy(cur, prev) {
+    if (prev === 0) return null;
+    return ((cur - prev) / prev * 100);
+  }
 
   // Period label
   document.getElementById('monthlyPeriodLabel').innerHTML =
@@ -3540,26 +3593,31 @@ function renderMonthly() {
       <div class="kpi-label">一般訂單</div>
       <div class="kpi-value">$${fmt(ot.regular)}</div>
       <div class="kpi-sub neutral">佔 ${ot.total > 0 ? (ot.regular/ot.total*100).toFixed(0) : 0}%</div>
+      ${yoyBadge(otYoy(ot.regular, lyOt.regular))}
     </div>
     <div class="kpi-card">
       <div class="kpi-label">外送（UB/空腹）</div>
       <div class="kpi-value">$${fmt(ot.delivery)}</div>
       <div class="kpi-sub neutral">佔 ${ot.total > 0 ? (ot.delivery/ot.total*100).toFixed(0) : 0}%</div>
+      ${yoyBadge(otYoy(ot.delivery, lyOt.delivery))}
     </div>
     <div class="kpi-card">
       <div class="kpi-label">Line 禮物</div>
       <div class="kpi-value">$${fmt(ot.lineGift)}</div>
       <div class="kpi-sub neutral">佔 ${ot.total > 0 ? (ot.lineGift/ot.total*100).toFixed(0) : 0}%</div>
+      ${yoyBadge(otYoy(ot.lineGift, lyOt.lineGift))}
     </div>
     <div class="kpi-card">
       <div class="kpi-label">彌月試吃</div>
       <div class="kpi-value">$${fmt(ot.babyTaste)}</div>
       <div class="kpi-sub neutral">佔 ${ot.total > 0 ? (ot.babyTaste/ot.total*100).toFixed(0) : 0}%</div>
+      ${yoyBadge(otYoy(ot.babyTaste, lyOt.babyTaste))}
     </div>
     <div class="kpi-card">
       <div class="kpi-label">彌月訂單</div>
       <div class="kpi-value">$${fmt(ot.babyOrder)}</div>
       <div class="kpi-sub neutral">佔 ${ot.total > 0 ? (ot.babyOrder/ot.total*100).toFixed(0) : 0}%</div>
+      ${yoyBadge(otYoy(ot.babyOrder, lyOt.babyOrder))}
     </div>
   `;
 
