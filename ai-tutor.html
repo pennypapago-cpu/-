@@ -1,0 +1,1461 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 口語陪練外教</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --card: #1a1d27;
+    --card-hover: #222632;
+    --border: #2a2e3a;
+    --text: #e4e6eb;
+    --text-muted: #8b8fa3;
+    --accent: #6c5ce7;
+    --accent-light: #a29bfe;
+    --green: #00b894;
+    --red: #e17055;
+    --orange: #fdcb6e;
+    --blue: #74b9ff;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { height: 100%; }
+  body {
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, "Noto Sans TC", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── Header ── */
+  .header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 20px; border-bottom: 1px solid var(--border);
+    background: var(--card); flex-shrink: 0; gap: 12px; flex-wrap: wrap;
+  }
+  .header-left { display: flex; align-items: center; gap: 12px; }
+  .header h1 {
+    font-size: 19px; font-weight: 700;
+    background: linear-gradient(135deg, var(--accent-light), var(--blue));
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .badge {
+    background: var(--accent); color:#fff; padding: 3px 9px;
+    border-radius: 20px; font-size: 11px; font-weight: 600;
+  }
+  .status-pill {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;
+    background: var(--bg); border: 1px solid var(--border); color: var(--text-muted);
+  }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-muted); flex-shrink:0; }
+  .status-pill.listening { color: var(--green); border-color: var(--green); }
+  .status-pill.listening .status-dot { background: var(--green); animation: pulse 1.2s infinite; }
+  .status-pill.thinking { color: var(--orange); border-color: var(--orange); }
+  .status-pill.thinking .status-dot { background: var(--orange); animation: pulse .7s infinite; }
+  .status-pill.speaking { color: var(--blue); border-color: var(--blue); }
+  .status-pill.speaking .status-dot { background: var(--blue); animation: pulse .9s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.35;transform:scale(.8)} }
+
+  .btn {
+    padding: 7px 14px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--bg); color: var(--text); cursor: pointer;
+    font-size: 13px; font-family: inherit; transition: all .18s;
+  }
+  .btn:hover:not(:disabled) { background: var(--card-hover); border-color: var(--accent); }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color:#fff; font-weight:600; }
+  .btn.primary:hover:not(:disabled) { background: var(--accent-light); border-color: var(--accent-light); }
+  .btn.danger { background: var(--red); border-color: var(--red); color:#fff; font-weight:600; }
+  .btn.danger:hover:not(:disabled) { filter: brightness(1.12); }
+
+  /* ── Layout ── */
+  .layout { flex: 1; display: flex; min-height: 0; }
+
+  /* ── Settings sidebar ── */
+  .sidebar {
+    width: 320px; flex-shrink: 0; border-right: 1px solid var(--border);
+    background: var(--card); overflow-y: auto; padding: 16px;
+  }
+  .sidebar.hidden { display: none; }
+  .field { margin-bottom: 14px; }
+  .field label {
+    display: block; font-size: 12px; color: var(--text-muted);
+    margin-bottom: 5px; font-weight: 600;
+  }
+  .field input[type=text], .field input[type=password], .field select, .field textarea {
+    width: 100%; padding: 8px 10px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--bg); color: var(--text);
+    font-size: 13px; font-family: inherit; outline: none;
+  }
+  .field input:focus, .field select:focus, .field textarea:focus { border-color: var(--accent); }
+  .field textarea { resize: vertical; min-height: 62px; line-height: 1.5; }
+  .field .hint { font-size: 11px; color: var(--text-muted); margin-top: 4px; line-height: 1.45; }
+  .field .hint a { color: var(--accent-light); }
+  .range-row { display: flex; align-items: center; gap: 10px; }
+  .range-row input[type=range] { flex: 1; accent-color: var(--accent); }
+  .range-val { font-size: 12px; color: var(--accent-light); font-weight: 600; min-width: 58px; text-align: right; }
+  .check-row { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 10px; }
+  .check-row input[type=checkbox] { accent-color: var(--accent); margin-top: 2px; flex-shrink: 0; }
+  .check-row label { font-size: 13px; color: var(--text); cursor: pointer; font-weight: 500; }
+  .check-row .hint { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
+
+  .section-title {
+    font-size: 11px; text-transform: uppercase; letter-spacing: .09em;
+    color: var(--text-muted); font-weight: 700;
+    margin: 20px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 7px;
+  }
+  .section-title:first-child { margin-top: 0; }
+  .section-title .ico { font-size: 14px; }
+
+  /* ── Chat ── */
+  .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .metrics {
+    display: flex; gap: 0; border-bottom: 1px solid var(--border);
+    background: var(--card); flex-shrink: 0; overflow-x: auto;
+  }
+  .metric { padding: 9px 16px; border-right: 1px solid var(--border); min-width: 108px; }
+  .metric-label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .05em; }
+  .metric-value { font-size: 15px; font-weight: 700; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .metric-value.good { color: var(--green); }
+  .metric-value.mid { color: var(--orange); }
+  .metric-value.bad { color: var(--red); }
+
+  .chat { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+  .msg { display: flex; gap: 10px; max-width: 78%; }
+  .msg.user { align-self: flex-end; flex-direction: row-reverse; }
+  .avatar {
+    width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px; background: var(--card); border: 1px solid var(--border);
+  }
+  .msg.ai .avatar { background: linear-gradient(135deg, var(--accent), var(--blue)); border: none; }
+  .bubble {
+    background: var(--card); border: 1px solid var(--border);
+    padding: 10px 14px; border-radius: 14px; font-size: 14.5px; line-height: 1.6;
+    white-space: pre-wrap; word-break: break-word;
+  }
+  .msg.user .bubble { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .msg.ai .bubble { border-top-left-radius: 4px; }
+  .msg.user .bubble { border-top-right-radius: 4px; }
+  .bubble.interim { opacity: .55; font-style: italic; }
+  .fix-box {
+    margin-top: 9px; padding: 9px 11px; border-radius: 9px;
+    background: rgba(253,203,110,.09); border-left: 3px solid var(--orange);
+    font-size: 12.5px; line-height: 1.6; color: var(--orange); white-space: pre-wrap;
+  }
+  .fix-box b { color: var(--orange); }
+  .msg-meta { font-size: 10.5px; color: var(--text-muted); margin-top: 5px; font-variant-numeric: tabular-nums; }
+  .sys-note {
+    align-self: center; font-size: 12px; color: var(--text-muted);
+    background: var(--card); border: 1px solid var(--border);
+    padding: 6px 14px; border-radius: 20px; text-align: center; max-width: 90%;
+  }
+
+  .empty { margin: auto; text-align: center; color: var(--text-muted); max-width: 480px; padding: 20px; }
+  .empty .big { font-size: 46px; margin-bottom: 14px; }
+  .empty h2 { font-size: 18px; color: var(--text); margin-bottom: 10px; }
+  .empty p { font-size: 13.5px; line-height: 1.75; }
+  .pipeline {
+    display: flex; align-items: center; justify-content: center;
+    gap: 8px; margin-top: 22px; flex-wrap: wrap;
+  }
+  .pipe-node {
+    background: var(--card); border: 1px solid var(--border);
+    padding: 9px 13px; border-radius: 10px; font-size: 12px; text-align: center;
+  }
+  .pipe-node .n-ico { font-size: 18px; display: block; margin-bottom: 3px; }
+  .pipe-node .n-name { display: block; color: var(--text); font-weight: 600; }
+  .pipe-node .n-tech { display: block; color: var(--text-muted); font-size: 10.5px; margin-top: 1px; }
+  .pipe-arrow { color: var(--accent); font-size: 16px; }
+
+  /* ── Composer ── */
+  .composer {
+    border-top: 1px solid var(--border); background: var(--card);
+    padding: 12px 20px; flex-shrink: 0;
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  }
+  .live-caption {
+    flex: 1; min-width: 180px; font-size: 13px; color: var(--text-muted);
+    min-height: 20px; line-height: 1.5;
+  }
+  .live-caption .lc-text { color: var(--accent-light); font-style: italic; }
+  .mic-btn {
+    width: 56px; height: 56px; border-radius: 50%; border: none;
+    background: var(--accent); color: #fff; font-size: 23px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all .2s; flex-shrink: 0;
+  }
+  .mic-btn:hover:not(:disabled) { background: var(--accent-light); transform: scale(1.05); }
+  .mic-btn:disabled { opacity: .4; cursor: not-allowed; }
+  .mic-btn.active { background: var(--red); box-shadow: 0 0 0 0 rgba(225,112,85,.6); animation: ring 1.6s infinite; }
+  .mic-btn.held { background: var(--green); transform: scale(1.1); }
+  @keyframes ring {
+    0% { box-shadow: 0 0 0 0 rgba(225,112,85,.55); }
+    70% { box-shadow: 0 0 0 16px rgba(225,112,85,0); }
+    100% { box-shadow: 0 0 0 0 rgba(225,112,85,0); }
+  }
+  .text-fallback { display: flex; gap: 8px; flex: 1; min-width: 200px; }
+  .text-fallback input {
+    flex: 1; padding: 9px 12px; border-radius: 9px; border: 1px solid var(--border);
+    background: var(--bg); color: var(--text); font-size: 14px; font-family: inherit; outline: none;
+  }
+  .text-fallback input:focus { border-color: var(--accent); }
+
+  /* ── Modal ── */
+  .modal-bg {
+    position: fixed; inset: 0; background: rgba(0,0,0,.72);
+    display: none; align-items: center; justify-content: center; z-index: 100; padding: 20px;
+  }
+  .modal-bg.show { display: flex; }
+  .modal {
+    background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+    max-width: 720px; width: 100%; max-height: 86vh; display: flex; flex-direction: column;
+  }
+  .modal-head {
+    padding: 16px 20px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  }
+  .modal-head h3 { font-size: 16px; }
+  .modal-body { padding: 20px; overflow-y: auto; font-size: 14px; line-height: 1.75; }
+  .modal-body h1, .modal-body h2, .modal-body h3 { font-size: 15px; margin: 16px 0 7px; color: var(--accent-light); }
+  .modal-body h1:first-child, .modal-body h2:first-child { margin-top: 0; }
+  .modal-body ul, .modal-body ol { margin: 7px 0 7px 20px; }
+  .modal-body li { margin-bottom: 5px; }
+  .modal-body p { margin-bottom: 9px; }
+  .modal-body code { background: var(--bg); padding: 1px 5px; border-radius: 4px; font-size: 12.5px; }
+  .modal-body strong { color: var(--text); }
+  .modal-foot {
+    padding: 13px 20px; border-top: 1px solid var(--border);
+    display: flex; gap: 9px; justify-content: flex-end;
+  }
+  .spinner {
+    width: 26px; height: 26px; border: 3px solid var(--border);
+    border-top-color: var(--accent); border-radius: 50%;
+    animation: spin .8s linear infinite; margin: 26px auto;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .warn-bar {
+    background: rgba(225,112,85,.12); border-bottom: 1px solid var(--red);
+    color: var(--red); padding: 9px 20px; font-size: 12.5px; display: none; flex-shrink: 0;
+  }
+  .warn-bar.show { display: block; }
+  .warn-bar a { color: var(--red); font-weight: 600; }
+
+  @media (max-width: 820px) {
+    .sidebar {
+      position: fixed; inset: 0 auto 0 0; z-index: 50; width: 300px;
+      box-shadow: 4px 0 24px rgba(0,0,0,.5);
+    }
+    .msg { max-width: 92%; }
+    .header h1 { font-size: 16px; }
+    .chat { padding: 14px; }
+    .composer { padding: 10px 14px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <button class="btn" id="toggleSidebar" title="設定">☰</button>
+    <h1>AI 口語陪練外教</h1>
+    <span class="badge">ASR + LLM + TTS</span>
+  </div>
+  <div class="header-left">
+    <div class="status-pill" id="statusPill"><span class="status-dot"></span><span id="statusText">待機</span></div>
+    <button class="btn" id="reportBtn" disabled>結束並產出報告</button>
+  </div>
+</div>
+
+<div class="warn-bar" id="warnBar"></div>
+
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+
+    <div class="section-title"><span class="ico">🔑</span>連線</div>
+    <div class="field">
+      <label>Gemini API Key</label>
+      <input type="password" id="apiKey" placeholder="貼上 API Key">
+      <div class="hint">只存在瀏覽器的 sessionStorage，關掉分頁就清除，不會進到程式碼裡。到 <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> 取得。</div>
+    </div>
+
+    <div class="section-title"><span class="ico">🎓</span>課程設定</div>
+    <div class="field">
+      <label>練習語言</label>
+      <select id="langSel">
+        <option value="en-US">英文（美式）</option>
+        <option value="en-GB">英文（英式）</option>
+        <option value="ja-JP">日文</option>
+        <option value="ko-KR">韓文</option>
+        <option value="fr-FR">法文</option>
+        <option value="es-ES">西班牙文</option>
+        <option value="de-DE">德文</option>
+        <option value="zh-CN">中文（普通話）</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>程度</label>
+      <select id="levelSel">
+        <option value="A1">A1 入門 — 簡單單字與短句</option>
+        <option value="A2">A2 基礎 — 日常對話</option>
+        <option value="B1" selected>B1 中級 — 能表達想法</option>
+        <option value="B2">B2 中高級 — 流暢討論</option>
+        <option value="C1">C1 進階 — 接近母語者</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>情境課程</label>
+      <select id="sceneSel">
+        <option value="free">自由聊天</option>
+        <option value="cafe">咖啡廳點餐</option>
+        <option value="airport">機場報到與過海關</option>
+        <option value="hotel">飯店入住</option>
+        <option value="interview">工作面試</option>
+        <option value="meeting">商務會議討論</option>
+        <option value="doctor">看醫生描述症狀</option>
+        <option value="shopping">購物與退換貨</option>
+        <option value="smalltalk">認識新朋友閒聊</option>
+        <option value="custom">自訂情境…</option>
+      </select>
+    </div>
+    <div class="field" id="customSceneField" style="display:none">
+      <label>自訂情境描述</label>
+      <textarea id="customScene" placeholder="例如：我是來自台灣的甜點品牌行銷，正在跟日本客戶介紹產品"></textarea>
+    </div>
+
+    <div class="section-title"><span class="ico">🧑‍🏫</span>外教人設</div>
+    <div class="field">
+      <label>人設模板</label>
+      <select id="personaSel">
+        <option value="emma">Emma — 親切耐心的老師</option>
+        <option value="jack">Jack — 幽默活潑的朋友</option>
+        <option value="sofia">Sofia — 嚴格的商務教練</option>
+        <option value="custom">自訂人設…</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>人設描述（可直接改）</label>
+      <textarea id="personaText" rows="3"></textarea>
+    </div>
+    <div class="field">
+      <label>糾錯模式</label>
+      <select id="fixMode">
+        <option value="inline" selected>即時糾錯 — 每輪對話後附上修正</option>
+        <option value="gentle">溫和引導 — 只在錯得明顯時提醒</option>
+        <option value="none">完全不糾錯 — 專心練流利度</option>
+      </select>
+    </div>
+
+    <div class="section-title"><span class="ico">🔊</span>聲音</div>
+    <div class="field">
+      <label>音色</label>
+      <select id="voiceSel"><option value="">（載入中…）</option></select>
+      <div class="hint" id="voiceHint">音色由作業系統／瀏覽器提供，不同裝置清單不同。</div>
+    </div>
+    <div class="field">
+      <label>語速</label>
+      <div class="range-row">
+        <input type="range" id="rate" min="0.5" max="1.5" step="0.05" value="1">
+        <span class="range-val" id="rateVal">1.00x</span>
+      </div>
+    </div>
+    <div class="field">
+      <label>音調</label>
+      <div class="range-row">
+        <input type="range" id="pitch" min="0.5" max="1.5" step="0.05" value="1">
+        <span class="range-val" id="pitchVal">1.00</span>
+      </div>
+    </div>
+    <button class="btn" id="testVoice" style="width:100%">試聽音色</button>
+
+    <div class="section-title"><span class="ico">⚡</span>對話絲滑度</div>
+    <div class="field">
+      <label>輸入模式</label>
+      <select id="modeSel">
+        <option value="handsfree" selected>免持連續 — 講完自動送出</option>
+        <option value="ptt">按住說話 — 按住麥克風或空白鍵</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>延遲判停（靜音多久算你講完）</label>
+      <div class="range-row">
+        <input type="range" id="endpoint" min="300" max="2500" step="100" value="900">
+        <span class="range-val" id="endpointVal">900 ms</span>
+      </div>
+      <div class="hint">調太短會把你的停頓當成講完而插話；調太長則回應變慢。900ms 是多數人的舒適點。</div>
+    </div>
+    <div class="check-row">
+      <input type="checkbox" id="bargeIn" checked>
+      <div>
+        <label for="bargeIn">允許插話打斷</label>
+        <div class="hint">外教講到一半你開口，立刻停嘴並中斷生成。</div>
+      </div>
+    </div>
+    <div class="check-row">
+      <input type="checkbox" id="echoGuard" checked>
+      <div>
+        <label for="echoGuard">回音防護</label>
+        <div class="hint">用喇叭外放時，麥克風會收到外教自己的聲音而誤判成你在插話。開啟後會過濾掉與朗讀內容重疊的辨識結果。戴耳機可關閉，打斷會更靈敏。</div>
+      </div>
+    </div>
+    <div class="check-row">
+      <input type="checkbox" id="streamTts" checked>
+      <div>
+        <label for="streamTts">流式朗讀</label>
+        <div class="hint">LLM 邊生成、湊滿一句就先唸，不等整段講完。首次出聲通常快 1–3 秒。</div>
+      </div>
+    </div>
+
+    <div class="section-title"><span class="ico">🧠</span>模型</div>
+    <div class="field">
+      <label>Gemini 模型</label>
+      <select id="modelSel">
+        <option value="gemini-2.5-flash" selected>gemini-2.5-flash（推薦，快）</option>
+        <option value="gemini-2.5-pro">gemini-2.5-pro（強但慢）</option>
+      </select>
+      <div class="hint">語音對話延遲優先，已關閉 thinking 以求最短首字延遲。</div>
+    </div>
+
+    <button class="btn" id="aboutBtn" style="width:100%;margin-top:6px">關於這個架構</button>
+  </aside>
+
+  <main class="main">
+    <div class="metrics">
+      <div class="metric">
+        <div class="metric-label">判停延遲</div>
+        <div class="metric-value" id="mEndpoint">— </div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">首字延遲</div>
+        <div class="metric-value" id="mFirstToken">—</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">首次出聲</div>
+        <div class="metric-value" id="mFirstAudio">—</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">對話輪次</div>
+        <div class="metric-value" id="mTurns">0</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">被你打斷</div>
+        <div class="metric-value" id="mBarge">0</div>
+      </div>
+    </div>
+
+    <div class="chat" id="chat">
+      <div class="empty" id="emptyState">
+        <div class="big">🎙️</div>
+        <h2>按下麥克風，直接開口說話</h2>
+        <p>不用寫程式，一個 AI 口語陪練外教就是三個模組串起來：耳朵聽、大腦想、嘴巴說。真正難的不是這三個，而是讓對話變絲滑 — 流式響應、延遲判停、插話打斷。</p>
+        <div class="pipeline">
+          <div class="pipe-node"><span class="n-ico">👂</span><span class="n-name">耳朵</span><span class="n-tech">Web Speech ASR</span></div>
+          <span class="pipe-arrow">→</span>
+          <div class="pipe-node"><span class="n-ico">🧠</span><span class="n-name">大腦</span><span class="n-tech">Gemini 流式</span></div>
+          <span class="pipe-arrow">→</span>
+          <div class="pipe-node"><span class="n-ico">👄</span><span class="n-name">嘴巴</span><span class="n-tech">speechSynthesis</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="composer">
+      <button class="mic-btn" id="micBtn" title="開始／停止對話">🎤</button>
+      <div class="live-caption" id="liveCaption">先在左側填入 Gemini API Key，然後按麥克風開始。</div>
+      <div class="text-fallback">
+        <input type="text" id="textInput" placeholder="也可以直接打字（Enter 送出）">
+        <button class="btn" id="sendText">送出</button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Report modal -->
+<div class="modal-bg" id="reportModal">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>📋 本次練習報告</h3>
+      <button class="btn" id="closeReport">關閉</button>
+    </div>
+    <div class="modal-body" id="reportBody"></div>
+    <div class="modal-foot">
+      <button class="btn" id="copyReport">複製</button>
+      <button class="btn primary" id="downloadReport">下載 .md</button>
+    </div>
+  </div>
+</div>
+
+<!-- About modal -->
+<div class="modal-bg" id="aboutModal">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>🏗️ 這個 App 怎麼運作</h3>
+      <button class="btn" id="closeAbout">關閉</button>
+    </div>
+    <div class="modal-body">
+      <h3>三個模組</h3>
+      <ul>
+        <li><strong>耳朵（ASR）</strong> — 瀏覽器原生 Web Speech API，連續辨識、即時回傳中間結果。Chrome 會把音訊送到 Google 伺服器做辨識。</li>
+        <li><strong>大腦（LLM）</strong> — Gemini <code>streamGenerateContent</code>，SSE 逐字回傳。已關閉 thinking，換取最短首字延遲。</li>
+        <li><strong>嘴巴（TTS）</strong> — 瀏覽器原生 <code>speechSynthesis</code>，音色由作業系統提供。</li>
+      </ul>
+      <h3>難的不是三個模組，是讓對話絲滑</h3>
+      <ul>
+        <li><strong>流式響應</strong> — 不等 LLM 講完整段。邊收字邊切句，湊滿一個完整句子就立刻丟給 TTS 排隊唸。首次出聲從「等三秒」變成「等半秒」。</li>
+        <li><strong>延遲判停（endpointing）</strong> — 人講話會停頓，不能一停就當講完。這裡用靜音計時器：最後一次辨識到聲音後，靜音超過設定的毫秒數才算一輪結束。太短會插你的話，太長顯得遲鈍。</li>
+        <li><strong>插話打斷（barge-in）</strong> — 外教朗讀時麥克風不關，一偵測到你開口就同時做三件事：<code>speechSynthesis.cancel()</code> 停嘴、<code>AbortController.abort()</code> 中斷還在生成的 LLM 串流、把已講出口的半句寫回對話歷史（讓 AI 知道自己被打斷在哪）。</li>
+        <li><strong>回音問題</strong> — 外放時麥克風會收到 TTS 自己的聲音，被誤判成插話。這裡用文字比對過濾：辨識結果如果和正在朗讀的內容高度重疊就丟掉。戴耳機可以關掉這層防護，打斷會更靈敏。</li>
+      </ul>
+      <h3>為什麼不直接用端到端語音模型</h3>
+      <p>端到端模型（GPT 語音、豆包、千問）延遲短、體驗好，但難以客製。要套進具體的教學或商業場景，人設、課程、糾錯邏輯、記憶都得能改。拆成模組雖然要自己處理絲滑度，但每一層都能換、能調。技術終局大概是「端到端模型 + skill + tool」— 用外接技能和工具補上客製化與記憶。</p>
+      <h3>成本</h3>
+      <p>ASR 和 TTS 都是瀏覽器原生功能，不用錢。只有 LLM 走 Gemini API 計費，一般對話練習用 flash 模型單次成本極低。</p>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ══════════════════════════════════════════════════════════
+   AI 口語陪練外教
+   耳朵 ASR → 大腦 LLM（流式）→ 嘴巴 TTS
+   ══════════════════════════════════════════════════════════ */
+
+const FIX_MARK = '§FIX§';           // 分隔「要唸出來的回覆」與「糾錯內容」
+const MAX_HISTORY_TURNS = 24;       // 送給模型的歷史上限（控制 token）
+
+const LANG_NAMES = {
+  'en-US': 'English (American)', 'en-GB': 'English (British)',
+  'ja-JP': 'Japanese', 'ko-KR': 'Korean', 'fr-FR': 'French',
+  'es-ES': 'Spanish', 'de-DE': 'German', 'zh-CN': 'Mandarin Chinese'
+};
+
+const SCENES = {
+  free:      'Open free conversation. Follow the learner\'s interests and keep the chat going naturally.',
+  cafe:      'Role-play: you are a barista at a busy cafe, the learner is a customer ordering drinks and food.',
+  airport:   'Role-play: you are an airline check-in agent and then an immigration officer. The learner is a traveller.',
+  hotel:     'Role-play: you are a hotel front-desk receptionist. The learner is a guest checking in with requests and problems.',
+  interview: 'Role-play: you are a hiring manager interviewing the learner for a job. Ask realistic interview questions and follow up on their answers.',
+  meeting:   'Role-play: you are a colleague in a business meeting. Discuss a project, ask for the learner\'s opinion, and push back politely.',
+  doctor:    'Role-play: you are a doctor at a clinic. The learner is a patient describing symptoms. Ask diagnostic questions.',
+  shopping:  'Role-play: you are a shop assistant. The learner wants to buy something, ask about sizes, or return a faulty item.',
+  smalltalk: 'Role-play: you are a friendly stranger meeting the learner for the first time at a social event. Make small talk.',
+  custom:    ''
+};
+
+const PERSONAS = {
+  emma:  'Your name is Emma. You are a warm, patient and encouraging language teacher. You speak clearly, celebrate small wins, and never make the learner feel stupid.',
+  jack:  'Your name is Jack. You are a funny, energetic friend rather than a teacher. You joke around, use casual everyday expressions, and keep the energy high.',
+  sofia: 'Your name is Sofia. You are a demanding business communication coach. You are direct, push for precision, and expect professional register.',
+  custom: ''
+};
+
+const LEVEL_GUIDE = {
+  A1: 'CEFR A1 beginner. Use only very simple words and short sentences. Speak slowly. One idea per sentence.',
+  A2: 'CEFR A2 elementary. Use common everyday vocabulary and simple sentence structures.',
+  B1: 'CEFR B1 intermediate. Use normal everyday language with some idioms. Keep sentences moderate in length.',
+  B2: 'CEFR B2 upper-intermediate. Speak at a natural pace with richer vocabulary and complex sentences.',
+  C1: 'CEFR C1 advanced. Speak like you would to a native speaker, including idioms, nuance and fast natural phrasing.'
+};
+
+const FIX_GUIDE = {
+  inline: 'After every learner turn, if their sentence had ANY grammar, word-choice or phrasing problem, add corrections.',
+  gentle: 'Only add corrections when the learner made a mistake that would genuinely confuse a native speaker. Ignore small slips.',
+  none:   'Never correct the learner. Just keep the conversation flowing.'
+};
+
+/* ── State ── */
+const S = {
+  active: false,
+  recog: null,
+  recogRunning: false,
+  wantRecog: false,        // 我們希望辨識持續跑（用來處理 Chrome 自動斷線後重啟）
+  pendingFinal: '',        // 已定稿的辨識文字
+  interim: '',             // 中間結果
+  silenceTimer: null,
+  lastSpeechAt: 0,
+  agentSpeaking: false,    // TTS 正在唸
+  generating: false,       // LLM 正在生成
+  abort: null,             // 中斷 LLM 串流
+  ttsQueue: [],
+  currentUtterance: null,
+  spokenSoFar: '',         // 這一輪已經唸出口的內容（打斷時要寫回歷史）
+  speakingText: '',        // 正在唸的句子（回音防護用）
+  history: [],             // [{role:'user'|'model', text}]
+  turns: 0,
+  barges: 0,
+  voices: [],
+  pttHeld: false,
+  turnStartedAt: 0,        // 判停觸發的時間點
+  firstTokenAt: 0,
+  aliveNode: null,         // 正在串流的 AI 泡泡
+  reportText: ''
+};
+
+/* ── DOM ── */
+const $ = id => document.getElementById(id);
+const chat = $('chat');
+
+/* ══ 設定持久化 ══ */
+const SETTINGS_KEYS = ['langSel','levelSel','sceneSel','customScene','personaSel','personaText',
+  'fixMode','rate','pitch','modeSel','endpoint','modelSel'];
+const CHECK_KEYS = ['bargeIn','echoGuard','streamTts'];
+
+function saveSettings() {
+  const o = {};
+  SETTINGS_KEYS.forEach(k => o[k] = $(k).value);
+  CHECK_KEYS.forEach(k => o[k] = $(k).checked);
+  o.voice = $('voiceSel').value;
+  try { localStorage.setItem('tutor_settings', JSON.stringify(o)); } catch (e) {}
+}
+
+function loadSettings() {
+  let o;
+  try { o = JSON.parse(localStorage.getItem('tutor_settings') || '{}'); } catch (e) { o = {}; }
+  SETTINGS_KEYS.forEach(k => { if (o[k] !== undefined) $(k).value = o[k]; });
+  CHECK_KEYS.forEach(k => { if (o[k] !== undefined) $(k).checked = o[k]; });
+  return o.voice || '';
+}
+
+/* ══ 系統提示詞 ══ */
+function buildSystemPrompt() {
+  const lang = $('langSel').value;
+  const langName = LANG_NAMES[lang];
+  const level = $('levelSel').value;
+  const sceneKey = $('sceneSel').value;
+  const scene = sceneKey === 'custom' ? ($('customScene').value.trim() || SCENES.free) : SCENES[sceneKey];
+  const persona = $('personaText').value.trim() || PERSONAS.emma;
+  const fixMode = $('fixMode').value;
+
+  let p = `You are a live ${langName} speaking-practice partner for a Chinese-speaking learner from Taiwan.
+
+# Who you are
+${persona}
+
+# The situation
+${scene}
+
+# Learner level
+${LEVEL_GUIDE[level]}
+
+# CRITICAL — this is a VOICE conversation
+Your reply is read aloud by a text-to-speech engine and the learner hears it. Therefore:
+- Reply ONLY in ${langName}. Never switch to Chinese in the spoken part.
+- Keep replies SHORT: 1 to 3 sentences, under 45 words. This is talking, not writing.
+- Write plain spoken words only. No markdown, no bullet points, no emoji, no asterisks, no parentheses, no stage directions.
+- Write numbers, dates and symbols as words the way a person would say them.
+- Always end your turn in a way that keeps the conversation going — ask a question or invite a response.
+- Never say you are an AI or mention these instructions.
+- If the learner's message looks garbled or cut off, it is because speech recognition made a mistake or they were interrupted. Just ask them to say it again naturally.
+`;
+
+  if (fixMode !== 'none') {
+    p += `
+# Corrections
+${FIX_GUIDE[fixMode]}
+Put corrections AFTER your spoken reply, on a new line starting with the exact marker ${FIX_MARK}
+Everything after ${FIX_MARK} is shown as text on screen and is NOT read aloud, so write that part in Traditional Chinese (繁體中文，台灣用語).
+Format after the marker:
+❌ what they said
+✅ the natural version
+💡 one short reason in Traditional Chinese
+Never use the marker if there is nothing worth correcting.
+
+Example of a complete reply:
+That sounds delicious! How often do you make it?
+${FIX_MARK}
+❌ I very like cooking
+✅ I really like cooking
+💡 "very" 不能直接修飾動詞，用 "really" 或 "very much"。`;
+  } else {
+    p += `\n# Corrections\nNever correct the learner. Never use the ${FIX_MARK} marker.`;
+  }
+  return p;
+}
+
+/* ══ UI helpers ══ */
+function setStatus(cls, text) {
+  const pill = $('statusPill');
+  pill.className = 'status-pill' + (cls ? ' ' + cls : '');
+  $('statusText').textContent = text;
+}
+
+function warn(msg) {
+  const w = $('warnBar');
+  if (!msg) { w.classList.remove('show'); return; }
+  w.innerHTML = msg;
+  w.classList.add('show');
+}
+
+function clearEmpty() {
+  const e = $('emptyState');
+  if (e) e.remove();
+}
+
+function scrollDown() { chat.scrollTop = chat.scrollHeight; }
+
+function addMessage(role, text, opts = {}) {
+  clearEmpty();
+  const wrap = document.createElement('div');
+  wrap.className = 'msg ' + role;
+  const av = document.createElement('div');
+  av.className = 'avatar';
+  av.textContent = role === 'user' ? '🙋' : '🎓';
+  const body = document.createElement('div');
+  const bub = document.createElement('div');
+  bub.className = 'bubble' + (opts.interim ? ' interim' : '');
+  bub.textContent = text;
+  body.appendChild(bub);
+  wrap.appendChild(av); wrap.appendChild(body);
+  chat.appendChild(wrap);
+  scrollDown();
+  return { wrap, bubble: bub, body };
+}
+
+function addNote(text) {
+  clearEmpty();
+  const n = document.createElement('div');
+  n.className = 'sys-note';
+  n.textContent = text;
+  chat.appendChild(n);
+  scrollDown();
+}
+
+function setMetric(id, ms) {
+  const el = $(id);
+  if (ms == null) { el.textContent = '—'; el.className = 'metric-value'; return; }
+  el.textContent = ms + ' ms';
+  el.className = 'metric-value ' + (ms < 800 ? 'good' : ms < 1800 ? 'mid' : 'bad');
+}
+
+/* ══ 嘴巴：TTS ══ */
+function pickVoice() {
+  const want = $('voiceSel').value;
+  if (want) {
+    const v = S.voices.find(v => v.voiceURI === want);
+    if (v) return v;
+  }
+  const lang = $('langSel').value;
+  return S.voices.find(v => v.lang === lang)
+      || S.voices.find(v => v.lang.startsWith(lang.split('-')[0]))
+      || null;
+}
+
+function loadVoices() {
+  S.voices = speechSynthesis.getVoices();
+  const sel = $('voiceSel');
+  const prev = sel.value;
+  const lang = $('langSel').value;
+  const base = lang.split('-')[0];
+  const matching = S.voices.filter(v => v.lang.startsWith(base));
+  sel.innerHTML = '';
+  if (!matching.length) {
+    sel.innerHTML = '<option value="">（此語言無可用音色，將使用預設）</option>';
+    $('voiceHint').textContent = '你的系統沒有安裝這個語言的語音。Windows 可到「設定 → 時間與語言 → 語音」新增，macOS 在「系統設定 → 輔助使用 → 朗讀內容」。';
+    return;
+  }
+  $('voiceHint').textContent = '音色由作業系統／瀏覽器提供，不同裝置清單不同。';
+  matching.forEach(v => {
+    const o = document.createElement('option');
+    o.value = v.voiceURI;
+    o.textContent = v.name + (v.localService ? '' : ' ☁️');
+    sel.appendChild(o);
+  });
+  if (prev && matching.some(v => v.voiceURI === prev)) sel.value = prev;
+}
+
+/** 把串流文字切成完整句子，湊滿一句就丟給 TTS */
+function splitSentences(buf) {
+  const out = [];
+  let rest = buf;
+  const re = /[^.!?。！？\n]*[.!?。！？\n]+["'」』）)]*\s*/g;
+  let m, lastEnd = 0;
+  while ((m = re.exec(buf)) !== null) {
+    const chunk = m[0].trim();
+    if (chunk) out.push(chunk);
+    lastEnd = re.lastIndex;
+  }
+  rest = buf.slice(lastEnd);
+  return { sentences: out, rest };
+}
+
+function enqueueSpeak(text) {
+  const t = text.trim();
+  if (!t) return;
+  S.ttsQueue.push(t);
+  if (!S.agentSpeaking) speakNext();
+}
+
+function speakNext() {
+  if (!S.ttsQueue.length) {
+    S.agentSpeaking = false;
+    S.speakingText = '';
+    S.currentUtterance = null;
+    if (S.active && !S.generating) setStatus('listening', '聆聽中');
+    return;
+  }
+  const text = S.ttsQueue.shift();
+  const u = new SpeechSynthesisUtterance(text);
+  const v = pickVoice();
+  if (v) u.voice = v;
+  u.lang = $('langSel').value;
+  u.rate = parseFloat($('rate').value);
+  u.pitch = parseFloat($('pitch').value);
+
+  S.agentSpeaking = true;
+  S.speakingText = text;
+  S.currentUtterance = u;
+  setStatus('speaking', '外教說話中');
+
+  u.onstart = () => {
+    if (S.turnStartedAt && !S.firstAudioLogged) {
+      setMetric('mFirstAudio', Date.now() - S.turnStartedAt);
+      S.firstAudioLogged = true;
+    }
+  };
+  u.onend = () => {
+    S.spokenSoFar += (S.spokenSoFar ? ' ' : '') + text;
+    S.currentUtterance = null;
+    speakNext();
+  };
+  u.onerror = () => { S.currentUtterance = null; speakNext(); };
+
+  speechSynthesis.speak(u);
+}
+
+function stopSpeaking() {
+  S.ttsQueue = [];
+  try { speechSynthesis.cancel(); } catch (e) {}
+  S.agentSpeaking = false;
+  S.speakingText = '';
+  S.currentUtterance = null;
+}
+
+/* ══ 回音防護：辨識到的是不是 TTS 自己的聲音？ ══ */
+function normalize(s) {
+  return s.toLowerCase().replace(/[^a-z0-9一-鿿぀-ヿ가-힯]+/g, ' ').trim();
+}
+
+function looksLikeEcho(heard) {
+  if (!$('echoGuard').checked) return false;
+  const h = normalize(heard);
+  if (!h) return true;
+  // 比對正在唸的句子 + 這一輪已經唸出口的內容
+  const spoken = normalize(S.speakingText + ' ' + S.spokenSoFar);
+  if (!spoken) return false;
+  if (spoken.includes(h)) return true;
+  // 詞級重疊率
+  const hw = h.split(' ').filter(Boolean);
+  if (!hw.length) return true;
+  const sw = new Set(spoken.split(' ').filter(Boolean));
+  const hit = hw.filter(w => sw.has(w)).length;
+  return hit / hw.length > 0.6;
+}
+
+/* ══ 耳朵：ASR ══ */
+function initRecognition() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) return null;
+  const r = new SR();
+  r.continuous = true;
+  r.interimResults = true;
+  r.lang = $('langSel').value;
+  r.maxAlternatives = 1;
+
+  r.onstart = () => { S.recogRunning = true; };
+
+  r.onresult = (ev) => {
+    let finalChunk = '', interim = '';
+    for (let i = ev.resultIndex; i < ev.results.length; i++) {
+      const txt = ev.results[i][0].transcript;
+      if (ev.results[i].isFinal) finalChunk += txt; else interim += txt;
+    }
+    const heard = (finalChunk + interim).trim();
+    if (!heard) return;
+
+    // ── 插話打斷 ──
+    if (S.agentSpeaking || S.generating) {
+      if (!$('bargeIn').checked) return;
+      if (looksLikeEcho(heard)) return;
+      if (heard.length < 3) return;
+      handleBargeIn();
+    }
+
+    S.lastSpeechAt = Date.now();
+    if (finalChunk) S.pendingFinal += (S.pendingFinal ? ' ' : '') + finalChunk.trim();
+    S.interim = interim.trim();
+    renderLiveCaption();
+
+    if ($('modeSel').value === 'handsfree') armSilenceTimer();
+  };
+
+  r.onerror = (ev) => {
+    if (ev.error === 'not-allowed' || ev.error === 'service-not-allowed') {
+      warn('🎤 麥克風權限被拒絕。請點網址列左邊的鎖頭圖示允許麥克風，然後重新整理。');
+      stopSession();
+    } else if (ev.error === 'no-speech') {
+      // 正常，忽略
+    } else if (ev.error === 'network') {
+      warn('⚠️ 語音辨識服務連線失敗。Web Speech API 需要連外網路，請確認網路狀況。');
+    }
+  };
+
+  r.onend = () => {
+    S.recogRunning = false;
+    // Chrome 會自己斷線，只要還在對話中就重啟
+    if (S.wantRecog) {
+      try { r.start(); } catch (e) { setTimeout(() => { try { r.start(); } catch (e2) {} }, 250); }
+    }
+  };
+  return r;
+}
+
+function startRecog() {
+  if (!S.recog) S.recog = initRecognition();
+  if (!S.recog) return false;
+  S.recog.lang = $('langSel').value;
+  S.wantRecog = true;
+  if (!S.recogRunning) { try { S.recog.start(); } catch (e) {} }
+  return true;
+}
+
+function stopRecog() {
+  S.wantRecog = false;
+  if (S.recog && S.recogRunning) { try { S.recog.stop(); } catch (e) {} }
+}
+
+/* ══ 延遲判停 ══ */
+function armSilenceTimer() {
+  clearTimeout(S.silenceTimer);
+  const ms = parseInt($('endpoint').value);
+  S.silenceTimer = setTimeout(() => {
+    const text = (S.pendingFinal + ' ' + S.interim).trim();
+    if (!text) return;
+    if (S.generating || S.agentSpeaking) return;
+    commitTurn(text);
+  }, ms);
+}
+
+function renderLiveCaption() {
+  const lc = $('liveCaption');
+  const text = (S.pendingFinal + ' ' + S.interim).trim();
+  if (text) lc.innerHTML = '<span class="lc-text">' + escapeHtml(text) + '</span>';
+  else if (S.active) lc.textContent = $('modeSel').value === 'ptt' ? '按住麥克風或空白鍵說話…' : '請開口說話…';
+}
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+/* ══ 打斷處理 ══ */
+function handleBargeIn() {
+  S.barges++;
+  $('mBarge').textContent = S.barges;
+  stopSpeaking();
+  if (S.abort) { try { S.abort.abort(); } catch (e) {} }
+  S.generating = false;
+  // 把「已經唸出口的部分」寫回歷史 — 讓 AI 知道自己被打斷在哪
+  if (S.aliveNode) {
+    const said = S.spokenSoFar.trim();
+    S.aliveNode.bubble.textContent = (said || S.aliveNode.bubble.textContent) + ' …（被打斷）';
+    if (said) S.history.push({ role: 'model', text: said + ' [interrupted by learner]' });
+    S.aliveNode = null;
+  }
+  setStatus('listening', '聆聽中');
+}
+
+/* ══ 一輪對話 ══ */
+function commitTurn(text) {
+  clearTimeout(S.silenceTimer);
+  S.pendingFinal = '';
+  S.interim = '';
+  renderLiveCaption();
+  $('liveCaption').textContent = '';
+
+  S.turnStartedAt = Date.now();
+  S.firstTokenAt = 0;
+  S.firstAudioLogged = false;
+  setMetric('mEndpoint', parseInt($('endpoint').value));
+  setMetric('mFirstToken', null);
+  setMetric('mFirstAudio', null);
+
+  addMessage('user', text);
+  S.history.push({ role: 'user', text });
+  S.turns++;
+  $('mTurns').textContent = S.turns;
+  $('reportBtn').disabled = false;
+
+  streamReply();
+}
+
+/* ══ 大腦：Gemini 流式 ══ */
+async function streamReply() {
+  const key = ($('apiKey').value || '').trim();
+  if (!key) { warn('請先在左側填入 Gemini API Key。'); return; }
+
+  S.generating = true;
+  S.spokenSoFar = '';
+  setStatus('thinking', '思考中');
+
+  const node = addMessage('ai', '');
+  S.aliveNode = node;
+
+  const contents = S.history.slice(-MAX_HISTORY_TURNS).map(h => ({
+    role: h.role, parts: [{ text: h.text }]
+  }));
+
+  S.abort = new AbortController();
+  const model = $('modelSel').value;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${encodeURIComponent(key)}`;
+
+  const genCfg = { temperature: 0.9, maxOutputTokens: 400 };
+  // 語音對話延遲優先：flash 可以完全關掉 thinking；pro 不允許 0，只能壓到最低
+  if (model.includes('flash')) genCfg.thinkingConfig = { thinkingBudget: 0 };
+  else genCfg.thinkingConfig = { thinkingBudget: 128 };
+
+  const body = {
+    contents,
+    systemInstruction: { parts: [{ text: buildSystemPrompt() }] },
+    generationConfig: genCfg
+  };
+
+  let full = '', speakBuf = '', hitMarker = false;
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: S.abort.signal
+    });
+
+    if (!res.ok) {
+      const errTxt = await res.text().catch(() => '');
+      throw new Error(`HTTP ${res.status} ${errTxt.slice(0, 300)}`);
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let sseBuf = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      sseBuf += decoder.decode(value, { stream: true });
+
+      let nl;
+      while ((nl = sseBuf.indexOf('\n')) >= 0) {
+        const line = sseBuf.slice(0, nl).trim();
+        sseBuf = sseBuf.slice(nl + 1);
+        if (!line.startsWith('data:')) continue;
+        const payload = line.slice(5).trim();
+        if (!payload || payload === '[DONE]') continue;
+
+        let json;
+        try { json = JSON.parse(payload); } catch (e) { continue; }
+
+        const parts = json?.candidates?.[0]?.content?.parts || [];
+        for (const p of parts) {
+          if (p.thought || typeof p.text !== 'string') continue;
+          const chunk = p.text;
+          full += chunk;
+
+          if (!S.firstTokenAt) {
+            S.firstTokenAt = Date.now();
+            setMetric('mFirstToken', S.firstTokenAt - S.turnStartedAt);
+          }
+
+          renderStreaming(node, full);
+
+          // 流式朗讀：只唸 marker 之前的內容
+          if (!hitMarker && $('streamTts').checked) {
+            speakBuf += chunk;
+            const mi = speakBuf.indexOf(FIX_MARK);
+            if (mi >= 0) {
+              const before = speakBuf.slice(0, mi);
+              if (before.trim()) enqueueSpeak(before);
+              speakBuf = '';
+              hitMarker = true;
+            } else {
+              const { sentences, rest } = splitSentences(speakBuf);
+              sentences.forEach(enqueueSpeak);
+              speakBuf = rest;
+            }
+          }
+        }
+      }
+    }
+
+    // 收尾
+    if (!hitMarker && $('streamTts').checked && speakBuf.trim()) enqueueSpeak(speakBuf);
+    if (!$('streamTts').checked) {
+      const spokenPart = full.split(FIX_MARK)[0];
+      if (spokenPart.trim()) enqueueSpeak(spokenPart);
+    }
+
+    renderStreaming(node, full);
+    if (full.trim()) S.history.push({ role: 'model', text: full.trim() });
+
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      // 使用者打斷，handleBargeIn 已處理
+    } else {
+      node.bubble.textContent = '⚠️ ' + err.message;
+      node.bubble.style.color = 'var(--red)';
+      if (/API key|API_KEY|400|403/.test(err.message)) {
+        warn('⚠️ API 呼叫失敗，請確認 Gemini API Key 是否正確、是否已啟用。');
+      }
+    }
+  } finally {
+    S.generating = false;
+    S.abort = null;
+    if (S.aliveNode === node) S.aliveNode = null;
+    if (!S.agentSpeaking && S.active) setStatus('listening', '聆聽中');
+    else if (!S.active) setStatus('', '待機');
+  }
+}
+
+function renderStreaming(node, full) {
+  const [spoken, fix] = full.split(FIX_MARK);
+  node.bubble.textContent = spoken.trim();
+  if (fix !== undefined && fix.trim()) {
+    let box = node.body.querySelector('.fix-box');
+    if (!box) {
+      box = document.createElement('div');
+      box.className = 'fix-box';
+      node.body.appendChild(box);
+    }
+    box.textContent = fix.trim();
+  }
+  scrollDown();
+}
+
+/* ══ 對話開關 ══ */
+function startSession() {
+  const key = ($('apiKey').value || '').trim();
+  if (!key) { warn('請先在左側填入 Gemini API Key，才能開始對話。'); $('apiKey').focus(); return; }
+  sessionStorage.setItem('gemini_key', key);
+  warn('');
+
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    warn('⚠️ 這個瀏覽器不支援語音辨識，請改用 Chrome 或 Edge。你仍然可以用下方的打字輸入練習。');
+    S.active = true;
+    $('micBtn').classList.add('active');
+    setStatus('listening', '打字模式');
+    $('reportBtn').disabled = S.turns === 0;
+    return;
+  }
+
+  S.active = true;
+  $('micBtn').classList.add('active');
+  $('micBtn').textContent = '⏹';
+  startRecog();
+  setStatus('listening', '聆聽中');
+  renderLiveCaption();
+
+  if (S.turns === 0) {
+    addNote(`開始練習 · ${LANG_NAMES[$('langSel').value]} · ${$('levelSel').selectedOptions[0].textContent.split(' —')[0]} · ${$('sceneSel').selectedOptions[0].textContent}`);
+    // 讓外教先開口，破冰
+    S.history.push({ role: 'user', text: '(The learner just joined. Greet them and start the conversation for this scenario in one or two short sentences.)' });
+    S.turnStartedAt = Date.now();
+    S.firstAudioLogged = false;
+    streamReply();
+  }
+}
+
+function stopSession() {
+  S.active = false;
+  clearTimeout(S.silenceTimer);
+  stopRecog();
+  stopSpeaking();
+  if (S.abort) { try { S.abort.abort(); } catch (e) {} }
+  S.generating = false;
+  S.pendingFinal = ''; S.interim = '';
+  $('micBtn').classList.remove('active', 'held');
+  $('micBtn').textContent = '🎤';
+  setStatus('', '待機');
+  $('liveCaption').textContent = S.turns ? '已暫停。按麥克風繼續，或產出練習報告。' : '按麥克風開始對話。';
+}
+
+/* ══ 練習報告 ══ */
+async function generateReport() {
+  if (!S.history.length) return;
+  const key = ($('apiKey').value || '').trim();
+  if (!key) { warn('需要 Gemini API Key 才能產出報告。'); return; }
+
+  stopSession();
+  $('reportModal').classList.add('show');
+  $('reportBody').innerHTML = '<div class="spinner"></div><p style="text-align:center;color:var(--text-muted)">分析對話中…</p>';
+
+  const transcript = S.history
+    .filter(h => !h.text.startsWith('(The learner just joined'))
+    .map(h => (h.role === 'user' ? '學員: ' : '外教: ') + h.text.split(FIX_MARK)[0].trim())
+    .join('\n');
+
+  const prompt = `以下是一段 ${LANG_NAMES[$('langSel').value]} 口語練習的逐字對話紀錄。學員是台灣人，目標程度 ${$('levelSel').value}，練習情境是「${$('sceneSel').selectedOptions[0].textContent}」。
+
+請用繁體中文（台灣用語）寫一份練習報告，用 Markdown 格式，包含這幾個部分：
+
+## 整體表現
+兩三句話總結這次表現，具體一點，不要空泛稱讚。
+
+## 文法問題
+列出學員實際講錯的地方，每一條都要引用他原本說的句子，寫出正確說法，並用一句話解釋為什麼。最多 5 條，挑最值得改的。
+
+## 用詞升級
+學員用了哪些「文法沒錯但不夠道地」的說法？給出母語者會怎麼講。最多 4 條。
+
+## 流利度觀察
+從句子長度、停頓、重複、詞彙多樣性來看，學員的流利度如何。
+
+## 下次練習建議
+三個具體可執行的建議，不要寫「多練習」這種廢話。
+
+注意：逐字稿是語音辨識的結果，可能有同音字錯誤，請用常識判斷哪些是學員真的講錯、哪些只是辨識失誤，辨識失誤的不要算成錯誤。
+
+對話紀錄：
+${transcript}`;
+
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${$('modelSel').value}:generateContent?key=${encodeURIComponent(key)}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.4, maxOutputTokens: 2400 }
+        })
+      }
+    );
+    if (!res.ok) throw new Error('HTTP ' + res.status + ' ' + (await res.text().catch(() => '')).slice(0, 200));
+    const data = await res.json();
+    const md = data?.candidates?.[0]?.content?.parts?.map(p => p.text).filter(Boolean).join('') || '(沒有產生內容)';
+    S.reportText = md;
+    $('reportBody').innerHTML = miniMarkdown(md);
+  } catch (e) {
+    $('reportBody').innerHTML = '<p style="color:var(--red)">產生報告失敗：' + escapeHtml(e.message) + '</p>';
+  }
+}
+
+/** 極簡 Markdown 轉 HTML（報告用） */
+function miniMarkdown(md) {
+  const lines = md.split('\n');
+  let html = '', inList = false;
+  const inline = s => escapeHtml(s)
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/`(.+?)`/g, '<code>$1</code>');
+  for (let raw of lines) {
+    const line = raw.trimEnd();
+    const li = line.match(/^\s*[-*]\s+(.*)$/);
+    if (li) {
+      if (!inList) { html += '<ul>'; inList = true; }
+      html += '<li>' + inline(li[1]) + '</li>';
+      continue;
+    }
+    if (inList) { html += '</ul>'; inList = false; }
+    const h = line.match(/^(#{1,4})\s+(.*)$/);
+    if (h) { html += '<h3>' + inline(h[2]) + '</h3>'; continue; }
+    if (!line.trim()) continue;
+    html += '<p>' + inline(line) + '</p>';
+  }
+  if (inList) html += '</ul>';
+  return html;
+}
+
+/* ══════════════════ 事件綁定 ══════════════════ */
+
+// 側欄開關
+$('toggleSidebar').onclick = () => $('sidebar').classList.toggle('hidden');
+
+// 設定變動即存
+[...SETTINGS_KEYS, ...CHECK_KEYS, 'voiceSel'].forEach(k => {
+  $(k).addEventListener('change', saveSettings);
+});
+
+$('rate').oninput = e => { $('rateVal').textContent = parseFloat(e.target.value).toFixed(2) + 'x'; };
+$('pitch').oninput = e => { $('pitchVal').textContent = parseFloat(e.target.value).toFixed(2); };
+$('endpoint').oninput = e => { $('endpointVal').textContent = e.target.value + ' ms'; };
+
+$('sceneSel').onchange = () => {
+  $('customSceneField').style.display = $('sceneSel').value === 'custom' ? '' : 'none';
+  saveSettings();
+};
+
+$('personaSel').onchange = () => {
+  const v = $('personaSel').value;
+  if (v !== 'custom') $('personaText').value = PERSONAS[v];
+  saveSettings();
+};
+
+$('langSel').onchange = () => {
+  loadVoices();
+  if (S.recog) S.recog.lang = $('langSel').value;
+  saveSettings();
+};
+
+$('apiKey').onchange = () => {
+  const v = $('apiKey').value.trim();
+  if (v) { sessionStorage.setItem('gemini_key', v); warn(''); }
+};
+
+$('testVoice').onclick = () => {
+  stopSpeaking();
+  const samples = {
+    'en': 'Hi there! I am your speaking partner. Shall we start?',
+    'ja': 'こんにちは。会話の練習を始めましょうか。',
+    'ko': '안녕하세요. 회화 연습을 시작할까요?',
+    'fr': 'Bonjour ! On commence la conversation ?',
+    'es': '¡Hola! ¿Empezamos a conversar?',
+    'de': 'Hallo! Sollen wir mit dem Gespräch anfangen?',
+    'zh': '你好，我們開始練習對話吧。'
+  };
+  const base = $('langSel').value.split('-')[0];
+  const u = new SpeechSynthesisUtterance(samples[base] || samples.en);
+  const v = pickVoice();
+  if (v) u.voice = v;
+  u.lang = $('langSel').value;
+  u.rate = parseFloat($('rate').value);
+  u.pitch = parseFloat($('pitch').value);
+  speechSynthesis.speak(u);
+};
+
+// 麥克風：免持模式點擊切換，PTT 模式按住
+$('micBtn').onclick = () => {
+  if ($('modeSel').value === 'ptt') return;   // PTT 走 pointerdown/up
+  if (S.active) stopSession(); else startSession();
+};
+
+function pttDown(e) {
+  if ($('modeSel').value !== 'ptt') return;
+  e.preventDefault();
+  if (!S.active) {
+    // 第一次按下：開場白才剛開始生成，別把它當成要打斷的對象
+    startSession();
+  } else if (S.agentSpeaking || S.generating) {
+    handleBargeIn();
+  }
+  S.pttHeld = true;
+  S.pendingFinal = ''; S.interim = '';
+  $('micBtn').classList.add('held');
+  startRecog();
+  setStatus('listening', '錄音中');
+}
+
+function pttUp(e) {
+  if ($('modeSel').value !== 'ptt' || !S.pttHeld) return;
+  e && e.preventDefault();
+  S.pttHeld = false;
+  $('micBtn').classList.remove('held');
+  // 給辨識引擎一點時間吐出最後的定稿結果
+  setTimeout(() => {
+    const text = (S.pendingFinal + ' ' + S.interim).trim();
+    if (text) commitTurn(text);
+    else setStatus('listening', '沒聽到聲音');
+  }, 350);
+}
+
+$('micBtn').addEventListener('pointerdown', pttDown);
+$('micBtn').addEventListener('pointerup', pttUp);
+$('micBtn').addEventListener('pointerleave', pttUp);
+
+// 空白鍵 PTT
+document.addEventListener('keydown', e => {
+  if (e.code !== 'Space' || e.repeat) return;
+  if (document.activeElement && ['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) return;
+  pttDown(e);
+});
+document.addEventListener('keyup', e => {
+  if (e.code !== 'Space') return;
+  if (document.activeElement && ['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) return;
+  pttUp(e);
+});
+
+$('modeSel').onchange = () => {
+  saveSettings();
+  const ptt = $('modeSel').value === 'ptt';
+  $('micBtn').title = ptt ? '按住說話（或按住空白鍵）' : '開始／停止對話';
+  renderLiveCaption();
+};
+
+// 打字輸入
+function sendTyped() {
+  const inp = $('textInput');
+  const text = inp.value.trim();
+  if (!text) return;
+  if (!($('apiKey').value || '').trim()) { warn('請先填入 Gemini API Key。'); return; }
+  if (S.agentSpeaking || S.generating) handleBargeIn();
+  inp.value = '';
+  S.active = true;
+  $('reportBtn').disabled = false;
+  commitTurn(text);
+}
+$('sendText').onclick = sendTyped;
+$('textInput').addEventListener('keydown', e => { if (e.key === 'Enter') sendTyped(); });
+
+// 報告
+$('reportBtn').onclick = generateReport;
+$('closeReport').onclick = () => $('reportModal').classList.remove('show');
+$('copyReport').onclick = () => {
+  navigator.clipboard.writeText(S.reportText).then(
+    () => { $('copyReport').textContent = '已複製 ✓'; setTimeout(() => $('copyReport').textContent = '複製', 1600); },
+    () => { $('copyReport').textContent = '複製失敗'; setTimeout(() => $('copyReport').textContent = '複製', 1600); }
+  );
+};
+$('downloadReport').onclick = () => {
+  const blob = new Blob([S.reportText], { type: 'text/markdown;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `口語練習報告_${new Date().toISOString().slice(0,10)}.md`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
+
+$('aboutBtn').onclick = () => $('aboutModal').classList.add('show');
+$('closeAbout').onclick = () => $('aboutModal').classList.remove('show');
+[$('reportModal'), $('aboutModal')].forEach(m => {
+  m.addEventListener('click', e => { if (e.target === m) m.classList.remove('show'); });
+});
+
+// 離開頁面時把嘴巴關掉
+window.addEventListener('beforeunload', () => { try { speechSynthesis.cancel(); } catch (e) {} });
+
+/* ══════════════════ 初始化 ══════════════════ */
+(function init() {
+  const savedVoice = loadSettings();
+
+  $('rateVal').textContent = parseFloat($('rate').value).toFixed(2) + 'x';
+  $('pitchVal').textContent = parseFloat($('pitch').value).toFixed(2);
+  $('endpointVal').textContent = $('endpoint').value + ' ms';
+  $('customSceneField').style.display = $('sceneSel').value === 'custom' ? '' : 'none';
+  if (!$('personaText').value.trim()) {
+    $('personaText').value = PERSONAS[$('personaSel').value] || PERSONAS.emma;
+  }
+  $('micBtn').title = $('modeSel').value === 'ptt' ? '按住說話（或按住空白鍵）' : '開始／停止對話';
+
+  const savedKey = sessionStorage.getItem('gemini_key');
+  if (savedKey) $('apiKey').value = savedKey;
+
+  // 音色清單是非同步載入的
+  loadVoices();
+  speechSynthesis.onvoiceschanged = () => {
+    loadVoices();
+    if (savedVoice && [...$('voiceSel').options].some(o => o.value === savedVoice)) {
+      $('voiceSel').value = savedVoice;
+    }
+  };
+
+  if (!(window.SpeechRecognition || window.webkitSpeechRecognition)) {
+    warn('⚠️ 這個瀏覽器不支援語音辨識（Web Speech API）。語音功能需要 Chrome 或 Edge；你仍然可以用下方打字輸入練習，外教一樣會說話。');
+  } else if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.protocol !== 'file:') {
+    warn('⚠️ 麥克風需要 HTTPS 才能使用。請透過 https:// 或 localhost 開啟本頁。');
+  }
+})();
+</script>
+</body>
+</html>
