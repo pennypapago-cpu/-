@@ -1,6 +1,12 @@
 # 專案內容
 
-兩個獨立的單一 HTML 檔，都不需要建置工具，直接用瀏覽器開或丟上 GitHub Pages 就能跑。
+| 目錄／檔案 | 是什麼 |
+|---|---|
+| `index.html` | 京站門巿營運儀表板 |
+| `ai-tutor.html` | AI 口語陪練外教 |
+| `worklog/` | 工作看板（Apps Script + Google Sheet，見該資料夾的 README） |
+
+根目錄的兩個 HTML 都是獨立的單一檔案，不需要建置工具，直接用瀏覽器開或丟上 GitHub Pages 就能跑。
 
 ## `index.html` — 京站門巿營運儀表板
 
