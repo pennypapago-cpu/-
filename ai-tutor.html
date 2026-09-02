@@ -962,7 +962,13 @@ function handleBargeIn() {
   if (S.aliveNode) {
     const said = S.spokenSoFar.trim();
     S.aliveNode.bubble.textContent = (said || S.aliveNode.bubble.textContent) + ' …（被打斷）';
-    if (said) S.history.push({ role: 'model', text: said + ' [interrupted by learner]' });
+    // 一定要補一個 model 回合，否則歷史會出現連續兩個 user，模型會看到一段沒有回應的對話
+    S.history.push({
+      role: 'model',
+      text: said
+        ? said + ' [interrupted by learner]'
+        : '[interrupted by learner before saying anything]'
+    });
     S.aliveNode = null;
   }
   setStatus('listening', '聆聽中');

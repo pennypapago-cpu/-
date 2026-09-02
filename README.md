@@ -43,3 +43,13 @@
 - 即時延遲指標：首字延遲、首次出聲、打斷次數
 - 練習結束產出繁中報告（文法問題、用詞升級、流利度觀察、下次建議），可複製或下載 `.md`
 - 不支援語音的瀏覽器可改用打字輸入，外教一樣會說話
+- 設定存 `localStorage`，下次開啟自動帶回
+
+### 測試
+
+`tests/voice-loop.test.js` 把 ASR、TTS、Gemini API 三個外部相依換成假的，在無頭瀏覽器裡跑完整對話流程，驗證真實麥克風測不到的邏輯（判停、流式朗讀、插話打斷、回音防護）。日常使用不需要跑，改到對話狀態機時才需要：
+
+```bash
+npm i -g playwright && npx playwright install chromium
+node tests/voice-loop.test.js
+```
