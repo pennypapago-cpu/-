@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>工作看板</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --line:#e3e6ea; --ink:#1c1f24; --mute:#6b7280; --acc:#2563eb; --ok:#16a34a; --warn:#d97706; --bad:#dc2626; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:15px/1.5 -apple-system, "PingFang TC", "Noto Sans TC", system-ui, sans-serif; background:var(--bg); color:var(--ink); }
+  header { position:sticky; top:0; background:var(--card); border-bottom:1px solid var(--line); padding:10px 14px; display:flex; align-items:center; gap:10px; z-index:2; }
+  header h1 { font-size:17px; margin:0; flex:1; }
+  header button { background:none; border:1px solid var(--line); border-radius:8px; padding:4px 10px; font-size:13px; }
+  nav { display:flex; background:var(--card); border-bottom:1px solid var(--line); }
+  nav button { flex:1; padding:10px 0; border:0; background:none; font-size:14px; color:var(--mute); border-bottom:2px solid transparent; }
+  nav button.on { color:var(--acc); border-color:var(--acc); font-weight:600; }
+  main { padding:12px 12px 90px; max-width:720px; margin:0 auto; }
+  h2 { font-size:13px; color:var(--mute); margin:16px 4px 6px; text-transform:uppercase; letter-spacing:.04em; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px 12px; margin-bottom:8px; }
+  .row { display:flex; gap:8px; align-items:flex-start; }
+  .row .grow { flex:1; min-width:0; }
+  .t { font-weight:600; word-break:break-word; }
+  .m { font-size:12px; color:var(--mute); }
+  .sum { font-size:13px; color:#374151; margin-top:4px; white-space:pre-wrap; word-break:break-word; }
+  .badge { font-size:11px; padding:1px 7px; border-radius:999px; background:#eef2ff; color:#3730a3; white-space:nowrap; }
+  .badge.cc { background:#ecfdf5; color:#065f46; } .badge.cw { background:#fff7ed; color:#9a3412; }
+  .st { font-size:11px; padding:1px 7px; border-radius:999px; border:1px solid var(--line); color:var(--mute); white-space:nowrap; }
+  .st.doing { color:var(--acc); border-color:var(--acc); } .st.done { color:var(--ok); border-color:var(--ok); }
+  .due.over { color:var(--bad); font-weight:600; } .due.today { color:var(--warn); font-weight:600; }
+  .acts { display:flex; gap:6px; margin-top:8px; flex-wrap:wrap; }
+  .acts button { border:1px solid var(--line); background:#fafafa; border-radius:8px; padding:5px 10px; font-size:13px; }
+  .empty { color:var(--mute); font-size:13px; padding:8px 4px; }
+  .fab { position:fixed; right:16px; bottom:20px; width:52px; height:52px; border-radius:50%; background:var(--acc); color:#fff; border:0; font-size:28px; box-shadow:0 4px 14px rgba(0,0,0,.2); }
+  .sheet { position:fixed; inset:0; background:rgba(0,0,0,.35); display:none; align-items:flex-end; z-index:5; }
+  .sheet.on { display:flex; }
+  .panel { background:var(--card); width:100%; max-width:720px; margin:0 auto; border-radius:16px 16px 0 0; padding:16px 16px 28px; }
+  .panel h3 { margin:0 0 10px; font-size:16px; }
+  .panel label { display:block; font-size:12px; color:var(--mute); margin:8px 0 3px; }
+  .panel input, .panel select, .panel textarea { width:100%; font-size:15px; padding:9px 10px; border:1px solid var(--line); border-radius:8px; background:#fff; }
+  .panel .btns { display:flex; gap:8px; margin-top:14px; }
+  .panel .btns button { flex:1; padding:11px; border-radius:10px; border:1px solid var(--line); background:#fafafa; font-size:15px; }
+  .panel .btns button.pri { background:var(--acc); color:#fff; border-color:var(--acc); }
+  .seg { display:flex; gap:6px; margin-bottom:10px; }
+  .seg button { flex:1; padding:7px; border-radius:8px; border:1px solid var(--line); background:#fff; font-size:13px; }
+  .seg button.on { background:#eef2ff; border-color:var(--acc); color:var(--acc); }
+  .stat { display:flex; gap:8px; margin-bottom:10px; }
+  .stat div { flex:1; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:8px; text-align:center; }
+  .stat b { display:block; font-size:20px; }
+  .stat span { font-size:11px; color:var(--mute); }
+  #gate { padding:40px 20px; max-width:420px; margin:0 auto; }
+  #toast { position:fixed; left:50%; bottom:84px; transform:translateX(-50%); background:#111; color:#fff; padding:8px 14px; border-radius:8px; font-size:13px; display:none; z-index:9; }
+  .spin { text-align:center; color:var(--mute); padding:24px; }
+</style>
+</head>
+<body>
+<div id="gate" style="display:none">
+  <h2 style="margin-bottom:8px">工作看板</h2>
+  <p class="m">貼上「設定」工作表裡的 TOKEN，這台裝置之後就記住了。</p>
+  <input id="tokIn" placeholder="TOKEN" style="width:100%;padding:10px;font-size:15px;border:1px solid var(--line);border-radius:8px">
+  <button onclick="saveToken()" style="width:100%;margin-top:10px;padding:11px;border-radius:10px;border:0;background:var(--acc);color:#fff;font-size:15px">進入</button>
+  <p id="gateErr" class="m" style="color:var(--bad)"></p>
+</div>
+
+<div id="app" style="display:none">
+  <header>
+    <h1 id="hTitle">今日</h1>
+    <button onclick="load(true)">↻</button>
+    <button onclick="logout()">登出</button>
+  </header>
+  <nav>
+    <button data-tab="today" class="on" onclick="go('today')">今日</button>
+    <button data-tab="week" onclick="go('week')">本週</button>
+    <button data-tab="month" onclick="go('month')">本月</button>
+    <button data-tab="tasks" onclick="go('tasks')">任務</button>
+  </nav>
+  <main id="main"></main>
+  <button class="fab" onclick="openAdd()">＋</button>
+</div>
+
+<div class="sheet" id="sheet" onclick="if(event.target===this)closeAdd()">
+  <div class="panel">
+    <div class="seg">
+      <button id="segTask" class="on" onclick="setKind('task')">新任務</button>
+      <button id="segLog" onclick="setKind('log')">手動紀錄</button>
+    </div>
+    <label>標題</label><input id="fTitle" placeholder="要做什麼 / 做了什麼">
+    <label>專案</label><input id="fProject" placeholder="例：起士公爵、電腦舖">
+    <div id="taskFields">
+      <label>到期日</label><input id="fDue" type="date">
+      <label>優先</label>
+      <select id="fPri"><option>高</option><option selected>中</option><option>低</option></select>
+    </div>
+    <div id="logFields" style="display:none">
+      <label>摘要</label><textarea id="fSummary" rows="2"></textarea>
+      <label>連結</label><input id="fLink" placeholder="https://">
+    </div>
+    <div class="btns">
+      <button onclick="closeAdd()">取消</button>
+      <button class="pri" onclick="submitAdd()">儲存</button>
+    </div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script>
+var TOKEN = '', TAB = 'today', KIND = 'task', CACHE = {};
+try { TOKEN = localStorage.getItem('worklog_token') || ''; } catch (e) {}
+
+function $(id) { return document.getElementById(id); }
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]; }); }
+function toast(m) { var t = $('toast'); t.textContent = m; t.style.display = 'block'; clearTimeout(t._h); t._h = setTimeout(function () { t.style.display = 'none'; }, 1800); }
+function todayStr() { var d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+
+function call(action, params) {
+  return new Promise(function (res, rej) {
+    google.script.run.withSuccessHandler(function (r) { r && r.ok ? res(r) : rej(new Error((r && r.error) || '未知錯誤')); })
+      .withFailureHandler(function (e) { rej(e); }).uiCall(TOKEN, action, params || {});
+  });
+}
+
+function boot() {
+  if (!TOKEN) { $('gate').style.display = 'block'; return; }
+  $('gate').style.display = 'none'; $('app').style.display = 'block';
+  load();
+}
+function saveToken() {
+  var v = $('tokIn').value.trim(); if (!v) return;
+  TOKEN = v; $('gateErr').textContent = '';
+  call('ping').then(function () { try { localStorage.setItem('worklog_token', v); } catch (e) {} boot(); })
+    .catch(function (e) { TOKEN = ''; $('gateErr').textContent = e.message; });
+}
+function logout() { try { localStorage.removeItem('worklog_token'); } catch (e) {} location.reload(); }
+
+function go(tab) {
+  TAB = tab;
+  document.querySelectorAll('nav button').forEach(function (b) { b.classList.toggle('on', b.dataset.tab === tab); });
+  $('hTitle').textContent = { today: '今日', week: '本週', month: '本月', tasks: '任務' }[tab];
+  load();
+}
+
+function load(force) {
+  var main = $('main');
+  if (force || !CACHE[TAB]) main.innerHTML = '<div class="spin">載入中…</div>';
+  var p;
+  if (TAB === 'today') p = call('brief');
+  else if (TAB === 'tasks') p = call('tasks', { status: 'open' });
+  else p = call('logs', { range: TAB });
+  p.then(function (r) { CACHE[TAB] = r; render(r); })
+   .catch(function (e) { main.innerHTML = '<div class="empty">錯誤：' + esc(e.message) + '</div>'; if (/token/.test(e.message)) logout(); });
+}
+
+function render(r) {
+  var h = '';
+  if (TAB === 'today') {
+    h += '<div class="stat"><div><b>' + r.overdue.length + '</b><span>逾期</span></div><div><b>' + r.today.length + '</b><span>今天到期</span></div><div><b>' + r.doing.length + '</b><span>進行中</span></div><div><b>' + r.logs.length + '</b><span>今日紀錄</span></div></div>';
+    if (r.note) h += '<h2>早晨簡報</h2><div class="card"><div class="sum">' + esc(r.note) + '</div></div>';
+    h += section('逾期', r.overdue.map(taskCard), '');
+    h += section('今天', r.today.map(taskCard), '今天沒有到期的任務');
+    h += section('進行中', r.doing.map(taskCard), '');
+    h += section('接下來', r.upcoming.map(taskCard), '');
+    h += section('未排程', r.unscheduled.map(taskCard), '');
+    h += section('今日紀錄', r.logs.map(logCard), '今天還沒有紀錄');
+  } else if (TAB === 'tasks') {
+    h += section('進行中', r.rows.filter(function (t) { return t.status === '進行中'; }).map(taskCard), '');
+    h += section('待辦', r.rows.filter(function (t) { return t.status === '待辦'; }).map(taskCard), '沒有待辦');
+  } else {
+    var byDay = {}, order = [], src = {};
+    r.rows.forEach(function (l) { var d = String(l.start).slice(0, 10); if (!byDay[d]) { byDay[d] = []; order.push(d); } byDay[d].push(l); src[l.source] = (src[l.source] || 0) + 1; });
+    h += '<div class="stat"><div><b>' + r.rows.length + '</b><span>紀錄</span></div><div><b>' + order.length + '</b><span>有紀錄的天數</span></div><div><b>' + (src['Claude Code'] || 0) + '</b><span>Claude Code</span></div><div><b>' + (src['Cowork'] || 0) + '</b><span>Cowork</span></div></div>';
+    if (!order.length) h += '<div class="empty">這段期間沒有紀錄</div>';
+    order.forEach(function (d) { h += section(d, byDay[d].map(logCard), ''); });
+  }
+  $('main').innerHTML = h;
+}
+
+function section(title, cards, emptyMsg) {
+  if (!cards.length && !emptyMsg) return '';
+  return '<h2>' + esc(title) + '</h2>' + (cards.length ? cards.join('') : '<div class="empty">' + esc(emptyMsg) + '</div>');
+}
+
+function taskCard(t) {
+  var td = todayStr(), dueCls = t.due ? (t.due < td ? 'over' : (t.due === td ? 'today' : '')) : '';
+  var acts = '';
+  if (t.status !== '進行中') acts += '<button onclick="setStatus(\'' + t.id + '\',\'進行中\')">開始</button>';
+  acts += '<button onclick="setStatus(\'' + t.id + '\',\'完成\')">完成 ✓</button>';
+  acts += '<button onclick="bump(\'' + t.id + '\')">延到明天</button>';
+  acts += '<button onclick="setStatus(\'' + t.id + '\',\'取消\')">取消</button>';
+  return '<div class="card"><div class="row"><div class="grow"><div class="t">' + esc(t.title) + '</div><div class="m">' +
+    (t.project ? esc(t.project) + ' · ' : '') + (t.due ? '<span class="due ' + dueCls + '">到期 ' + esc(t.due) + '</span>' : '未排日期') +
+    (t.priority ? ' · ' + esc(t.priority) : '') + '</div>' + (t.note ? '<div class="sum">' + esc(t.note) + '</div>' : '') + '</div>' +
+    '<span class="st ' + (t.status === '進行中' ? 'doing' : '') + '">' + esc(t.status) + '</span></div><div class="acts">' + acts + '</div></div>';
+}
+
+function logCard(l) {
+  var bc = l.source === 'Claude Code' ? 'cc' : (l.source === 'Cowork' ? 'cw' : '');
+  var time = String(l.start).slice(11, 16) + (l.end ? '–' + String(l.end).slice(11, 16) : '');
+  return '<div class="card"><div class="row"><div class="grow"><div class="t">' + esc(l.title) + '</div><div class="m">' + esc(time) +
+    (l.project ? ' · ' + esc(l.project) : '') + '</div>' + (l.summary ? '<div class="sum">' + esc(l.summary) + '</div>' : '') +
+    (l.link ? '<div class="m"><a href="' + esc(l.link) + '" target="_blank">產出連結</a></div>' : '') + '</div>' +
+    '<div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end"><span class="badge ' + bc + '">' + esc(l.source) + '</span>' +
+    '<span class="st ' + (l.status === '完成' ? 'done' : (l.status === '進行中' ? 'doing' : '')) + '">' + esc(l.status) + '</span></div></div></div>';
+}
+
+function setStatus(id, status) {
+  call('task_update', { id: id, status: status }).then(function () { toast('已更新'); CACHE = {}; load(); }).catch(function (e) { toast(e.message); });
+}
+function bump(id) {
+  var d = new Date(); d.setDate(d.getDate() + 1);
+  var s = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  call('task_update', { id: id, due: s }).then(function () { toast('延到 ' + s); CACHE = {}; load(); }).catch(function (e) { toast(e.message); });
+}
+
+function openAdd() { $('sheet').classList.add('on'); setKind(TAB === 'week' || TAB === 'month' ? 'log' : 'task'); setTimeout(function () { $('fTitle').focus(); }, 50); }
+function closeAdd() { $('sheet').classList.remove('on'); }
+function setKind(k) {
+  KIND = k;
+  $('segTask').classList.toggle('on', k === 'task'); $('segLog').classList.toggle('on', k === 'log');
+  $('taskFields').style.display = k === 'task' ? '' : 'none'; $('logFields').style.display = k === 'log' ? '' : 'none';
+}
+function submitAdd() {
+  var title = $('fTitle').value.trim(); if (!title) { toast('標題必填'); return; }
+  var p;
+  if (KIND === 'task') p = call('task_add', { title: title, project: $('fProject').value.trim(), due: $('fDue').value, priority: $('fPri').value });
+  else p = call('log', { title: title, project: $('fProject').value.trim(), summary: $('fSummary').value.trim(), link: $('fLink').value.trim(), source: '手動', status: '完成' });
+  p.then(function () { toast('已儲存'); ['fTitle', 'fProject', 'fDue', 'fSummary', 'fLink'].forEach(function (i) { $(i).value = ''; }); closeAdd(); CACHE = {}; load(); })
+   .catch(function (e) { toast(e.message); });
+}
+
+boot();
+</script>
+</body>
+</html>
