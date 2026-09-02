@@ -12,7 +12,9 @@
 var SHEET_LOG = '紀錄';
 var SHEET_TASK = '任務';
 var SHEET_CFG = '設定';
+var SHEET_BRIEF = '簡報';
 var TZ = 'Asia/Taipei';
+var BRIEF_HEADERS = ['日期', '產生時間', '內容'];
 
 // 表頭（中文，給人看）與欄位鍵（英文，給 API 用）一一對應
 var LOG_HEADERS = ['id', '開始時間', '結束時間', '來源', '專案', '標題', '狀態', '摘要', '產出連結', 'session_id', '任務id'];
@@ -29,6 +31,7 @@ function setup() {
   var ss = SpreadsheetApp.getActive();
   ensureSheet_(ss, SHEET_LOG, LOG_HEADERS);
   ensureSheet_(ss, SHEET_TASK, TASK_HEADERS);
+  ensureSheet_(ss, SHEET_BRIEF, BRIEF_HEADERS);
   var cfg = ensureSheet_(ss, SHEET_CFG, ['項目', '值']);
 
   var props = PropertiesService.getScriptProperties();
@@ -42,7 +45,7 @@ function setup() {
   cfg.autoResizeColumns(1, 2);
 
   var defaultSheet = ss.getSheetByName('工作表1') || ss.getSheetByName('Sheet1');
-  if (defaultSheet && ss.getSheets().length > 3) ss.deleteSheet(defaultSheet);
+  if (defaultSheet && ss.getSheets().length > 4) ss.deleteSheet(defaultSheet);
 
   Logger.log('TOKEN = ' + token);
   return token;
@@ -95,6 +98,7 @@ function handle_(action, p, token) {
       case 'task_add':    return { ok: true, row: addTask_(p) };
       case 'task_update': return { ok: true, row: updateTask_(p) };
       case 'brief':       return Object.assign({ ok: true }, brief_(p.date));
+      case 'brief_save':  return { ok: true, row: saveBrief_(p) };
       default:            return { ok: false, error: '不認識的 action: ' + action };
     }
   } catch (err) {
@@ -245,8 +249,41 @@ function brief_(date) {
     doing: tasks.filter(function (t) { return t.status === '進行中' && t.due !== today && !(t.due && t.due < today); }),
     upcoming: tasks.filter(function (t) { return t.due && t.due > today; }).slice(0, 10),
     unscheduled: tasks.filter(function (t) { return !t.due && t.status !== '進行中'; }).slice(0, 10),
-    logs: readLogs_('day', today)
+    logs: readLogs_('day', today),
+    yesterday: readLogs_('day', fmtDate_(new Date(parseDate_(today).getTime() - 86400000))),
+    note: readBrief_(today)
   };
+}
+
+/** 早晨簡報：一天一列，同日期覆蓋 */
+function saveBrief_(p) {
+  if (!p.content) throw new Error('content 必填');
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    var ss = SpreadsheetApp.getActive();
+    var sh = ensureSheet_(ss, SHEET_BRIEF, BRIEF_HEADERS);
+    var date = p.date || fmtDate_(new Date());
+    var rowNum = findRow_(sh, 0, date);
+    var row = [date, now_(), String(p.content)];
+    if (rowNum) sh.getRange(rowNum, 1, 1, 3).setValues([row]);
+    else sh.appendRow(row);
+    return { date: date, time: row[1], content: row[2] };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function readBrief_(date) {
+  var sh = SpreadsheetApp.getActive().getSheetByName(SHEET_BRIEF);
+  if (!sh) return '';
+  var rows = sh.getLastRow() < 2 ? [] : sh.getRange(2, 1, sh.getLastRow() - 1, 3).getValues();
+  for (var i = 0; i < rows.length; i++) {
+    var d = rows[i][0];
+    if (Object.prototype.toString.call(d) === '[object Date]') d = fmtDate_(d);
+    if (String(d) === date) return String(rows[i][2] || '');
+  }
+  return '';
 }
 
 // ---------------------------------------------------------------- helpers

@@ -152,7 +152,8 @@ function render(r) {
   var h = '';
   if (TAB === 'today') {
     h += '<div class="stat"><div><b>' + r.overdue.length + '</b><span>逾期</span></div><div><b>' + r.today.length + '</b><span>今天到期</span></div><div><b>' + r.doing.length + '</b><span>進行中</span></div><div><b>' + r.logs.length + '</b><span>今日紀錄</span></div></div>';
-    h += section('逾期', r.overdue.map(taskCard), '') ;
+    if (r.note) h += '<h2>早晨簡報</h2><div class="card"><div class="sum">' + esc(r.note) + '</div></div>';
+    h += section('逾期', r.overdue.map(taskCard), '');
     h += section('今天', r.today.map(taskCard), '今天沒有到期的任務');
     h += section('進行中', r.doing.map(taskCard), '');
     h += section('接下來', r.upcoming.map(taskCard), '');

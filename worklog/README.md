@@ -14,6 +14,7 @@
 |---|---|
 | 紀錄 | id, 開始時間, 結束時間, 來源(Claude Code / Cowork / 手動), 專案, 標題, 狀態, 摘要, 產出連結, session_id, 任務id |
 | 任務 | id, 建立時間, 標題, 專案, 到期日, 優先(高/中/低), 狀態(待辦/進行中/完成/取消), 預估時數, 備註, 完成時間 |
+| 簡報 | 日期, 產生時間, 內容（早晨簡報，一天一列） |
 | 設定 | TOKEN |
 
 ## 部署（做一次）
@@ -40,7 +41,8 @@
 | `tasks` | status=open/待辦/進行中/完成 | 讀任務 |
 | `task_add` | title, project, due, priority, estimate, note | 新增任務 |
 | `task_update` | id + 任一欄位 | 更新任務；status=完成 會填完成時間 |
-| `brief` | date | 今日簡報：逾期、今天到期、進行中、接下來、今日紀錄 |
+| `brief` | date | 今日資料：逾期、今天到期、進行中、接下來、未排程、今日與昨日紀錄、當日簡報文字 |
+| `brief_save` | date, content | 寫入早晨簡報，同日期覆蓋；看板「今日」分頁最上方會顯示 |
 
 驗證：
 
@@ -68,7 +70,12 @@ EOF
 
 把 `skills/work-log/` 整個資料夾放進 Cowork 的 skills 目錄。它的觸發方式和 `auto-file-organizer` 一樣：每個任務結束時自動參考，送一筆紀錄到看板。同樣讀 `~/.claude/worklog.env`。
 
+## 早晨簡報
+
+`skills/morning-brief/` 也放進 Cowork 的 skills 目錄，再建一個 Cowork 排程任務：週一到週五 07:30，內容「執行 morning-brief skill」。它會讀任務與昨日紀錄，整理今日清單，寫進「簡報」工作表，手機看板「今日」最上方就會顯示。
+
+為什麼不用 claude.ai 的 Routine：遠端環境的網路政策目前擋掉 `script.google.com`，打不到 API。若之後在環境設定放行該網域，同一份 skill 內容可以直接搬成 Routine 的 prompt。
+
 ## 之後
 
-- 早晨 Routine：每天讀「任務」與昨日「紀錄」，整理今日清單。
 - 週／月統計圖表。
