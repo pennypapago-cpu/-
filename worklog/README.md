@@ -6,6 +6,10 @@
 - 後端＋介面：Apps Script（本資料夾的 `Code.gs`、`index.html`、`appsscript.json`）
 - 自動記錄：`hooks/`（Claude Code）、`skills/work-log/`（Cowork）
 
+## 安裝
+
+最快的方式：把 `COWORK-SETUP.md` 的指令貼進 Cowork，它會在你的電腦上完成全部安裝。手動步驟見下方各節。
+
 ## 資料結構
 
 「紀錄」一列一件事，「任務」一列一個待辦。日／週／月看板是從「紀錄」依時間範圍聚合出來的，不用另外維護。
@@ -74,7 +78,7 @@ EOF
 
 `skills/morning-brief/` 也放進 Cowork 的 skills 目錄，再建一個 Cowork 排程任務：週一到週五 07:30，內容「執行 morning-brief skill」。它會讀任務與昨日紀錄，整理今日清單，寫進「簡報」工作表，手機看板「今日」最上方就會顯示。
 
-為什麼不用 claude.ai 的 Routine：遠端環境的網路政策目前擋掉 `script.google.com`，打不到 API。若之後在環境設定放行該網域，同一份 skill 內容可以直接搬成 Routine 的 prompt。
+另外 claude.ai 上也建了一個同名 Routine（Default 環境，週一至週五 07:30，完成會推播手機）。它要能跑，得先在該環境的網路政策放行 `script.google.com` 與 `script.googleusercontent.com`，並加上 `WORKLOG_URL`、`WORKLOG_TOKEN` 兩個環境變數；未設定前它只會回報環境變數缺漏。兩邊同一天各寫一次簡報時，後寫的覆蓋前面的，不會重複。
 
 ## 之後
 
