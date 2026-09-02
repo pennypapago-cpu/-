@@ -1,0 +1,13 @@
+{
+  "hooks": {
+    "SessionStart": [
+      { "hooks": [ { "type": "command", "command": "~/.claude/hooks/claude-code-worklog.sh start" } ] }
+    ],
+    "UserPromptSubmit": [
+      { "hooks": [ { "type": "command", "command": "~/.claude/hooks/claude-code-worklog.sh prompt" } ] }
+    ],
+    "Stop": [
+      { "hooks": [ { "type": "command", "command": "~/.claude/hooks/claude-code-worklog.sh stop" } ] }
+    ]
+  }
+}
