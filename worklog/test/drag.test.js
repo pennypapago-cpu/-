@@ -17,6 +17,7 @@ const stub={className:'',dataset:{},style:{},classList:{add(){},remove(){},toggl
   closest(){return null},value:'',innerHTML:'',textContent:'',disabled:false};
 const ctx={
   document:{addEventListener(){},getElementById(){return stub},querySelectorAll(){return[]},
+    documentElement:{style:{setProperty(){},fontSize:''}},
     elementFromPoint(){return null},body:{classList:{add(){},remove(){}},appendChild(){}},createElement(){return stub}},
   window:{},localStorage:{getItem(){return 'tok'},setItem(){},removeItem(){}},
   setTimeout(f,ms){return 0},clearTimeout(){},location:{reload(){}},
@@ -112,6 +113,23 @@ assert.strictEqual(JSON.stringify(sent),
   want0({action:'task_update',params:{id:'T9',status:'取消'}}),'刪除＝把狀態設成取消');
 ctx.EDIT=null;sent=null;ctx.doDel();
 assert.strictEqual(sent,null,'沒在編輯任何任務時，刪除不做事');
+
+// ---- 字級縮放 ----
+assert.strictEqual(ctx.Z,2,'預設放大到兩倍');
+ctx.zoom(1);assert.strictEqual(ctx.Z,2.1,'A＋ 每次加一成');
+ctx.zoom(-1);ctx.zoom(-1);assert.strictEqual(ctx.Z,1.9);
+for(let i=0;i<20;i++)ctx.zoom(1);
+assert.strictEqual(ctx.Z,2.6,'有上限，不會無限放大');
+for(let i=0;i<30;i++)ctx.zoom(-1);
+assert.strictEqual(ctx.Z,1,'也有下限');
+ctx.Z=2;ctx.applyZ();
+
+// 字級都用 rem，沒有漏掉的 px 字級；縮放靠 html 的 font-size
+const cssZ=src.split('<style>')[1].split('</style>')[0];
+assert(/html\{font-size:calc\(16px \* var\(--z,2\)\)\}/.test(cssZ),'縮放的根');
+const leftover=(cssZ.match(/font-size:[\d.]+px/g)||[]);
+assert.deepStrictEqual(leftover,[],'還有寫死 px 的字級：'+leftover.join(' '));
+assert((cssZ.match(/font-size:[\d.]+rem/g)||[]).length>60,'字級都轉成 rem 了');
 
 // ---- CSS 類別撞名 ----
 // 「今天到期」的卡片日期是 class="dd now"，日曆的現在時間線本來也叫 .now，
