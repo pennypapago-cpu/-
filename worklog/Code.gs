@@ -38,6 +38,9 @@ var PRIORITY_RANK = { A: 0, B: 1, C: 2 };
 var PRIORITY_LEGACY = { 高: 'A', 中: 'B', 低: 'C' };
 var TASK_EDITABLE = ['title', 'project', 'due', 'priority', 'status', 'next', 'waiting', 'estimate', 'note'];
 
+// 紀錄可以在看板上手改的欄位。時間、來源、session_id 由 hook 寫，不給改。
+var LOG_EDITABLE = ['title', 'project', 'summary', 'link', 'status', 'path'];
+
 // 同一次請求內的工作表快取。一個 board 請求本來會讀任務兩次、紀錄三次，
 // 每次 getValues() 都是一趟慢的試算表 API，是介面卡頓的主因。
 var CACHE_ = null;
@@ -147,6 +150,7 @@ function handle_(action, p, token) {
     switch (action) {
       case 'ping':        return { ok: true, time: now_() };
       case 'log':         return withBoard_({ ok: true, row: upsertLog_(p) }, p);
+      case 'log_update':  return withBoard_({ ok: true, row: updateLog_(p) }, p);
       case 'logs':        return { ok: true, rows: readLogs_(p.range || 'day', p.date) };
       case 'tasks':       return { ok: true, rows: readTasks_(p.status) };
       case 'task_add':    return withBoard_({ ok: true, row: addTask_(p) }, p);
@@ -230,6 +234,33 @@ function upsertLog_(p) {
       if (!cur || cur === String(row[col.project] || '')) row[col.title] = clip_(p.prompt, 80);
     }
     if (p.status === '完成') row[col.end] = now_();
+    sh.getRange(rowNum, 1, 1, LOG_KEYS.length).setValues([row]);
+    dirty_(SHEET_LOG);
+    return toObj_(LOG_KEYS, row);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * 改一筆既有紀錄。日曆上點時間區塊就是走這裡——hook 自動寫進來的標題常常
+ * 只是當下的 prompt，事後補個像樣的標題和摘要才找得回來。
+ * 跟 upsertLog_ 不同：這裡空字串是「清掉」，不是「略過」。
+ */
+function updateLog_(p) {
+  if (!p.id) throw new Error('id 必填');
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    var sh = sheet_(SHEET_LOG);
+    var col = index_(LOG_KEYS);
+    var rowNum = findRow_(sh, col.id, p.id);
+    if (!rowNum) throw new Error('找不到紀錄 ' + p.id);
+    var row = sh.getRange(rowNum, 1, 1, LOG_KEYS.length).getValues()[0];
+    LOG_EDITABLE.forEach(function (k) {
+      if (p[k] !== undefined) row[col[k]] = p[k];
+    });
+    if (p.status === '完成' && !row[col.end]) row[col.end] = now_();
     sh.getRange(rowNum, 1, 1, LOG_KEYS.length).setValues([row]);
     dirty_(SHEET_LOG);
     return toObj_(LOG_KEYS, row);

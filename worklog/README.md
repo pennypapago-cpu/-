@@ -128,6 +128,7 @@ A 優先處理（直接帶來結果）、B 推進型（讓事情往前走）、C
 |---|---|---|
 | `ping` | | 測 token |
 | `log` | source, project, title, status, summary, link, path, task_id, session_id, prompt | 新增紀錄；帶 `session_id` 且已存在則更新那一列 |
+| `log_update` | id + title / project / summary / link / status / path | 手改一筆既有紀錄（日曆點時間區塊）；空字串是清掉 |
 | `logs` | range=day/week/month, date=yyyy-MM-dd | 讀紀錄 |
 | `tasks` | status=open/待辦/進行中/完成 | 讀任務 |
 | `task_add` | title, project, due, priority, next, waiting, estimate, note | 新增任務 |
