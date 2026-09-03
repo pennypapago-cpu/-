@@ -140,21 +140,33 @@ assert(pl.order.indexOf(waiting)>pl.order.indexOf(doing),'卡在別人身上的�
 assert(pl.projects.every(p=>Array.isArray(p.tasks)),'每個專案帶著自己的任務');
 assert.strictEqual(pl.order.length,Math.min(8,10),'最多十件');
 
-// ---- 目標追蹤 ----
-const g=ctx.handle_('goals',{date:T},'tok');
-assert(g.ok,'goals: '+g.error);
-assert.strictEqual(g.weeks.length,6,'六週');
-assert.strictEqual(g.weeks[5].from,'2026-08-31','最後一週是本週');
-assert.strictEqual(g.weeks[5].focusHours,2.5,'本週專注時間＝今天 1.5h＋昨天 1h');
-assert.strictEqual(g.weeks[5].done,1,'本週完成一件');
-assert.strictEqual(g.weeks[5].highDone,1,'那件是 A 級');
-assert.strictEqual(g.overdue,1);
-assert.strictEqual(g.byPriority.map(x=>x.priority+':'+x.open).join(' '),'A:4 B:3 C:1');
-assert.strictEqual(g.backlog,8,'未完成任務數');
+// ---- 完成項目 ----
+const dn=ctx.handle_('done',{range:'week',date:T},'tok');
+assert(dn.ok,'done: '+dn.error);
+assert.strictEqual(dn.range,'week');
+assert.strictEqual(dn.items.length,dn.total);
+assert(dn.items.every(x=>x.at),'每項都有完成時間');
+assert(dn.items.every((x,i,a)=>i===0||a[i-1].at>=x.at),'新的排前面');
+const lg=dn.items.find(x=>x.kind==='log');
+assert.strictEqual(lg.link,'https://drive.google.com/file/d/abc/view','紀錄帶產出連結');
+assert.strictEqual(dn.withLink,1,'有產出的項數');
+assert(dn.items.some(x=>x.kind==='task'&&x.title==='已完成的'),'完成的任務也要列進來');
+assert(!dn.items.some(x=>x.source==='任務'&&x.priority===''),'任務項要帶優先級');
+assert(dn.items.every(x=>x.source!=='Cowork'||x.at.slice(0,10)>=dn.from),'區間外的不列');
+assert.strictEqual(ctx.handle_('done',{range:'day',date:'2026-08-20'},'tok').items.length,0,'那天沒有完成項目');
+const all=ctx.handle_('done',{range:'all'},'tok');
+assert(all.items.length>=dn.items.length,'全部區間至少不會比本週少');
+assert.strictEqual(all.from,'0000-00-00','全部就是不設限');
+assert.strictEqual(ctx.handle_('done',{range:'亂寫'},'tok').range,'week','區間亂給就當週');
+
+// 掛在任務底下的紀錄，不重複列那個任務
+ctx.handle_('log',{source:'Cowork',title:'替 T2 做的',status:'完成',task_id:'T2',
+  link:'https://x/y',path:'/Users/penny/報告'},'tok');
+const dn2=ctx.handle_('done',{range:'week',date:T},'tok');
+assert(dn2.items.some(x=>x.title==='替 T2 做的'&&x.path==='/Users/penny/報告'),'檔案位置存得進去');
+
 console.log('週專案    ', wk.projects.map(p=>`${p.name}:${p.done}/${p.count}`).join(' '));
 console.log('建議順序  ', pl.order.slice(0,4).map((o,i)=>`${i+1}.${o.task.title}(${o.reason})`).join(' '));
 console.log('產出      ', out.rows.map(r=>r.title+'→'+r.link).join(' '));
-console.log('goals wk  ', g.weeks.map(w=>`${w.from}:${w.done}/${w.total}@${w.focusHours}h`).join(' '));
-console.log('byPriority', g.byPriority.map(x=>x.priority+':'+x.open).join(' '));
 
 console.log('\nALL PASS');

@@ -114,6 +114,16 @@ assert.strictEqual(JSON.stringify(sent),
 ctx.EDIT=null;sent=null;ctx.doDel();
 assert.strictEqual(sent,null,'沒在編輯任何任務時，刪除不做事');
 
+// ---- 每個側欄項目都要有對應的渲染函式 ----
+// 這條是補課：先前把 goals() 連同一整段程式碼刪掉，但 paint() 裡的呼叫還留著，
+// 「目標追蹤」那頁點下去就是空白，沒有任何測試發現。
+ctx.VIEWS.forEach(v=>assert.strictEqual(typeof ctx[v.v],'function',
+  '側欄有「'+v.n+'」但找不到 '+v.v+'() 這個渲染函式'));
+const painted=src.split('function paint()')[1].split('\n\n')[0];
+ctx.VIEWS.forEach(v=>assert(painted.includes("VIEW==='"+v.v+"'"),
+  'paint() 沒有處理「'+v.n+'」'));
+console.log('側欄      '+ctx.VIEWS.map(v=>v.n).join(' / ')+' 都有渲染函式');
+
 // ---- 統計列開關 ----
 // 預設收起來；早晨簡報改放頂部橫幅，所以不會跟著一起消失
 assert.strictEqual(ctx.STATS,0,'統計列預設不顯示');
