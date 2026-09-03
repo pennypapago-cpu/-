@@ -15,6 +15,7 @@ var SHEET_CFG = '設定';
 var SHEET_BRIEF = '簡報';
 var SHEET_SECT = '分區';
 var SHEET_DATA = '資料';
+var SHEET_METRIC = '指標';
 var TZ = 'Asia/Taipei';
 var BRIEF_HEADERS = ['日期', '產生時間', '內容'];
 // 資料區：分區是使用者自己開的欄位，資料是欄位裡的卡片
@@ -23,6 +24,12 @@ var SECT_KEYS    = ['id', 'name', 'color', 'order'];
 var DATA_HEADERS = ['id', '分區', '標題', '內容', '順序', '建立時間'];
 var DATA_KEYS    = ['id', 'section', 'title', 'body', 'order', 'created'];
 var SECT_COLORS  = ['acc', 'a', 'b', 'c', 'ok', 'tmr'];
+
+// 生意數字。看板自己連不到 Shopline 後台和 FB 廣告管理員（兩邊都要登入），
+// 所以由 Cowork 的 daily-metrics skill 定時抓好寫進來，看板只負責讀和換算。
+var METRIC_HEADERS = ['日期', '營業額', '訂單數', '廣告花費', '流量', '加入購物車', '更新時間'];
+var METRIC_KEYS    = ['date', 'revenue', 'orders', 'spend', 'clicks', 'carts', 'updated'];
+var METRIC_NUMS    = ['revenue', 'orders', 'spend', 'clicks', 'carts'];
 
 // 表頭（中文，給人看）與欄位鍵（英文，給 API 用）一一對應
 var LOG_HEADERS = ['id', '開始時間', '結束時間', '來源', '專案', '標題', '狀態', '摘要', '產出連結', 'session_id', '任務id', '檔案位置'];
@@ -55,6 +62,7 @@ function setup() {
   ensureSheet_(ss, SHEET_BRIEF, BRIEF_HEADERS);
   ensureSheet_(ss, SHEET_SECT, SECT_HEADERS);
   ensureSheet_(ss, SHEET_DATA, DATA_HEADERS);
+  ensureSheet_(ss, SHEET_METRIC, METRIC_HEADERS);
   var cfg = ensureSheet_(ss, SHEET_CFG, ['項目', '值']);
 
   var props = PropertiesService.getScriptProperties();
@@ -68,7 +76,7 @@ function setup() {
   cfg.autoResizeColumns(1, 2);
 
   var defaultSheet = ss.getSheetByName('工作表1') || ss.getSheetByName('Sheet1');
-  if (defaultSheet && ss.getSheets().length > 6) ss.deleteSheet(defaultSheet);
+  if (defaultSheet && ss.getSheets().length > 7) ss.deleteSheet(defaultSheet);
 
   Logger.log('TOKEN = ' + token);
   return token;
@@ -165,6 +173,8 @@ function handle_(action, p, token) {
       case 'sect_del':    return { ok: true, moved: sectDel_(p), data: data_() };
       case 'item_save':   return { ok: true, row: itemSave_(p), data: data_() };
       case 'item_del':    return { ok: true, removed: itemDel_(p), data: data_() };
+      case 'metrics':     return { ok: true, metrics: metrics_(p.date) };
+      case 'metrics_save': return withBoard_({ ok: true, metrics: saveMetrics_(p) }, p);
       case 'brief':       return Object.assign({ ok: true }, brief_(p.date));
       case 'brief_save':  return { ok: true, row: saveBrief_(p) };
       default:            return { ok: false, error: '不認識的 action: ' + action };
@@ -378,6 +388,7 @@ function board_(date) {
     projects: projectPool_(open, today),
     stats: stats_(today, week, open, logsToday),
     note: readBrief_(today),
+    metrics: metrics_(today),
     logs: logsToday
   };
 }
@@ -765,6 +776,66 @@ function itemDel_(p) {
 }
 
 // ---------------------------------------------------------------- 今日簡報
+
+/**
+ * 當天的生意數字，順便把換算過的比率一起算好。分母是 0 就回 null，
+ * 前端顯示成「—」，不要在畫面上噴 Infinity。
+ */
+function metrics_(date) {
+  var d = date || fmtDate_(new Date());
+  // 只更新程式碼、還沒重跑 setup 的情況下這張表不存在，看板不該整個掛掉
+  if (!SpreadsheetApp.getActive().getSheetByName(SHEET_METRIC)) return { date: d, has: false };
+  var rows = readAll_(SHEET_METRIC, METRIC_KEYS);
+  var row = null;
+  for (var i = rows.length - 1; i >= 0; i--) {
+    if (String(rows[i].date).slice(0, 10) === d) { row = rows[i]; break; }
+  }
+  var m = { date: d, has: !!row, updated: row ? row.updated : '' };
+  METRIC_NUMS.forEach(function (k) { m[k] = row ? num_(row[k]) : null; });
+  m.roas = ratio_(m.revenue, m.spend);        // 廣告花一塊換回幾塊
+  m.cpc = ratio_(m.spend, m.clicks);          // 流量成本：一個點擊多少錢
+  m.cpaCart = ratio_(m.spend, m.carts);       // 加購成本：一次加入購物車多少錢
+  return m;
+}
+
+function num_(v) {
+  if (v === '' || v === null || v === undefined) return null;
+  var n = Number(String(v).replace(/[,$\s]/g, ''));
+  return isNaN(n) ? null : n;
+}
+
+function ratio_(a, b) {
+  if (a === null || b === null || !b) return null;
+  return Math.round(a / b * 100) / 100;
+}
+
+/** 寫當天的數字。只有這次帶到的欄位會被覆蓋，沒帶的保留原值。 */
+function saveMetrics_(p) {
+  var d = p.date || fmtDate_(new Date());
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    var sh = sheet_(SHEET_METRIC);
+    var col = index_(METRIC_KEYS);
+    var rowNum = findRow_(sh, col.date, d);
+    var row;
+    if (rowNum) row = sh.getRange(rowNum, 1, 1, METRIC_KEYS.length).getValues()[0];
+    else { row = fill_([], METRIC_KEYS.length); row[col.date] = d; }
+    var got = 0;
+    METRIC_NUMS.forEach(function (k) {
+      var n = num_(p[k]);
+      if (p[k] !== undefined && p[k] !== '' && n !== null) { row[col[k]] = n; got++; }
+    });
+    if (!got) throw new Error('至少要帶一個數字（revenue / orders / spend / clicks / carts）');
+    row[col.updated] = now_();
+    if (rowNum) sh.getRange(rowNum, 1, 1, METRIC_KEYS.length).setValues([row]);
+    else sh.appendRow(row);
+    dirty_(SHEET_METRIC);
+    return metrics_(d);
+  } finally {
+    lock.releaseLock();
+  }
+}
 
 function brief_(date) {
   var today = fmtDate_(date ? parseDate_(date) : new Date());

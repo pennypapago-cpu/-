@@ -39,7 +39,9 @@ log('L1',T+' 09:00',T+' 10:30','Claude Code','工作看板','建立 board API','
 log('L2',T+' 10:40','','Cowork','起士公爵','FB 廣告週報','進行中','抓數據中');
 log('L3',Y+' 14:00',Y+' 15:00','Cowork','起士公爵','昨天的事','完成');
 
-const sheets={'任務':new Sheet('任務',TASKS),'紀錄':new Sheet('紀錄',LOGS),'簡報':new Sheet('簡報',[['日期','產生時間','內容'],[T,T+' 07:30','昨天：完成 board API。\n今天必做：吳若樺貼文定稿。\n建議：先清逾期那件。']])};
+const METRICS=[['日期','營業額','訂單數','廣告花費','流量','加入購物車','更新時間'],
+  [T,48200,31,12500,1840,96,T+' 14:30']];
+const sheets={'指標':new Sheet('指標',METRICS),'任務':new Sheet('任務',TASKS),'紀錄':new Sheet('紀錄',LOGS),'簡報':new Sheet('簡報',[['日期','產生時間','內容'],[T,T+' 07:30','昨天：完成 board API。\n今天必做：吳若樺貼文定稿。\n建議：先清逾期那件。']])};
 const ctx={Utilities:{formatDate:f,getUuid:()=>'u'+String(++UUID).padStart(7,'0')+'-'+UUID},Logger:{log(){}},
   SpreadsheetApp:{getActive:()=>({getSheetByName:n=>sheets[n]||null})},
   PropertiesService:{getScriptProperties:()=>({getProperty:()=>'tok',setProperty(){}})},
@@ -144,6 +146,38 @@ assert(pl.order.some(o=>o.reason==='A 優先處理'),'A 級的理由改成「A �
 assert(pl.order.indexOf(waiting)>pl.order.indexOf(doing),'卡在別人身上的往後排');
 assert(pl.projects.every(p=>Array.isArray(p.tasks)),'每個專案帶著自己的任務');
 assert.strictEqual(pl.order.length,Math.min(8,10),'最多十件');
+
+// ---- 生意數字 ----
+// 看板連不到 Shopline 和 FB 廣告管理員，數字由 Cowork 寫進「指標」表，這裡只換算。
+const mt=ctx.handle_('metrics',{date:T},'tok').metrics;
+assert(mt.has,'今天有數字');
+assert.strictEqual(mt.revenue,48200);
+assert.strictEqual(mt.roas,3.86,'ROAS＝營業額÷廣告花費');
+assert.strictEqual(mt.cpc,6.79,'流量成本＝廣告花費÷流量');
+assert.strictEqual(mt.cpaCart,130.21,'加購成本＝廣告花費÷加入購物車');
+assert.strictEqual(b.metrics.revenue,48200,'看板一次就把數字帶回來，不用再打一次 API');
+
+// 沒有數字的日子不能噴 Infinity/NaN，要給 null 讓前端顯示「—」
+const none=ctx.handle_('metrics',{date:'2026-01-01'},'tok').metrics;
+assert.strictEqual(none.has,false);
+assert.strictEqual(none.roas,null);
+assert.strictEqual(none.revenue,null);
+
+// 寫入：只覆蓋這次帶到的欄位，其他保留
+const ms=ctx.handle_('metrics_save',{date:T,spend:20000},'tok').metrics;
+assert.strictEqual(ms.spend,20000,'花費更新了');
+assert.strictEqual(ms.revenue,48200,'沒帶的營業額原封不動');
+assert.strictEqual(ms.roas,2.41,'比率跟著重算');
+assert(ms.updated,'記更新時間');
+// Cowork 是用網址送的，數字會是字串，還可能帶千分位和錢字號
+const mstr=ctx.handle_('metrics_save',{date:T,revenue:'$52,300',clicks:'2000'},'tok').metrics;
+assert.strictEqual(mstr.revenue,52300,'字串帶符號也要吃得下');
+assert.strictEqual(mstr.clicks,2000);
+assert(!ctx.handle_('metrics_save',{date:T},'tok').ok,'一個數字都沒帶就要報錯');
+// 新的一天沒有那一列，要自己長出來
+const mnew=ctx.handle_('metrics_save',{date:'2026-09-04',revenue:100,spend:50},'tok').metrics;
+assert.strictEqual(mnew.roas,2);
+console.log('生意數字   營業額 '+mstr.revenue+' / 花費 '+mstr.spend+' / ROAS '+mstr.roas);
 
 // ---- 手改紀錄 ----
 // 日曆上點時間區塊改的就是這個。hook 寫進來的標題常常只是當下的 prompt。

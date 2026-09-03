@@ -239,3 +239,45 @@ ctx.closeAdd();ctx.openAdd('task');
 assert.strictEqual(ctx.$('seg').style.display,'flex','新增時切換鈕要回來');
 assert.strictEqual(ctx.$('shTitle').textContent,'新增任務');
 console.log('編輯      點卡片＝編輯任務，點時間區塊＝編輯紀錄');
+
+// ---- 生意數字列 ----
+// 看板連不到 Shopline / FB，數字是 Cowork 寫進「指標」表的，這裡只負責顯示。
+ctx.mx({has:true,revenue:48200,orders:31,spend:12500,clicks:1840,carts:96,
+  roas:3.86,cpc:6.79,cpaCart:130.21,updated:T+' 14:30'});
+let mh=ctx.$('mx').innerHTML;
+assert(mh.includes('$48,200'),'營業額要有千分位');
+assert(mh.includes('31 筆訂單'));
+assert(mh.includes('3.86x'),'ROAS');
+assert(mh.includes('一次 $6.79'),'流量成本');
+assert(mh.includes('一次 $130.21'),'加購成本');
+assert(mh.includes('14:30 更新'),'看得出數字是什麼時候抓的');
+assert.strictEqual(ctx.$('mx').style.display,'');
+
+// 缺數字時顯示「—」，不能出現 NaN / Infinity
+ctx.mx({has:true,revenue:1000,orders:null,spend:null,clicks:null,carts:null,
+  roas:null,cpc:null,cpaCart:null,updated:''});
+mh=ctx.$('mx').innerHTML;
+assert(!/NaN|Infinity/.test(mh),'缺數字不要噴 NaN：'+mh);
+assert(mh.includes('—'),'缺的欄位顯示破折號');
+
+// 還沒抓過就講清楚怎麼抓
+ctx.mx({has:false});
+assert(ctx.$('mx').innerHTML.includes('更新今日數據'),'要告訴使用者怎麼補數字');
+// 不是每日看板就整條收掉
+ctx.mx(null);
+assert.strictEqual(ctx.$('mx').style.display,'none');
+
+// ---- 早晨簡報可以收起來 ----
+ctx.header=function(){};
+ctx.RAW={note:'昨天：做了事。\n今天必做：那件。'};
+ctx.BOPEN=true;ctx.brief(ctx.RAW.note);
+assert.strictEqual(ctx.$('brief').style.display,'');
+assert(ctx.$('brief').innerHTML.includes('toggleBrief'),'要有收起來的鈕');
+ctx.toggleBrief();
+assert.strictEqual(ctx.BOPEN,false);
+assert.strictEqual(ctx.$('brief').style.display,'none','收起來就不佔位子');
+ctx.toggleBrief();
+assert.strictEqual(ctx.$('brief').style.display,'','再按一次叫回來');
+// 收起來之後要有路徑叫回來，不然就永遠不見了
+assert(/onclick="toggleBrief\(\)">早晨簡報/.test(src),'標題列那顆鈕要能把簡報叫回來');
+console.log('數字列    營業額 / 廣告花費 / ROAS / 流量 / 加購，簡報可收合');
