@@ -125,6 +125,15 @@
   .nx b{color:var(--dim);font-weight:500}
   .dd{font-size:12.5px;color:var(--dim);white-space:nowrap;flex:0 0 auto;display:flex;align-items:center;gap:4px}
   .dd.over{color:var(--bad);font-weight:600} .dd.now{color:var(--warn);font-weight:600}
+  /* 拖曳換欄：手指直向留給捲動，橫向與長按才由我們接手 */
+  .t[data-id]{cursor:grab;touch-action:pan-y}
+  .t.lift{opacity:.28}
+  .ghost{position:fixed;z-index:40;pointer-events:none;margin:0;cursor:grabbing;
+    transform:rotate(-1.5deg);box-shadow:0 14px 34px rgba(0,0,0,.6);border-color:var(--acc)}
+  .col.drop{background:rgba(59,130,246,.08);border-color:var(--acc)}
+  .col.drop>h3 b{color:var(--acc)}
+  .col.drop .add{border-color:var(--acc);color:var(--acc)}
+  body.dragging{user-select:none;-webkit-user-select:none}
   .acts{display:none;gap:6px;margin-top:9px;flex-wrap:wrap}
   .t:hover .acts,.t.open .acts{display:flex}
   .acts button{background:var(--card2);border:1px solid var(--line2);border-radius:7px;
@@ -454,27 +463,30 @@ function paint(){
 
 /* ---------------- board ---------------- */
 function board(r,q){
-  var f=function(a){return a.filter(function(x){return hit(x,q)})};
-  var run=f(r.running).map(taskCard).concat(f(r.liveLogs).map(logCard));
+  var f=function(a,c){return a.filter(function(x){return hit(x,q)}).map(function(t){return taskCard(t,c)})};
+  var run=f(r.running,'run').concat(r.liveLogs.filter(function(l){return hit(l,q)}).map(logCard));
   return '<div class="cols">'+
     col('c-run','⏰','AI 正執行工作',run,'現在沒有進行中的工作')+
-    col('c-today','📅','今日工作',f(r.today).map(taskCard),'今天沒有到期的任務')+
-    col('c-tmr','🕐','明日工作',f(r.tomorrow).map(taskCard).concat(f(r.unscheduled).slice(0,3).map(taskCard)),'明天空著')+
+    col('c-today','📅','今日工作',f(r.today,'today'),'今天沒有到期的任務')+
+    col('c-tmr','🕐','明日工作',f(r.tomorrow,'tmr').concat(f(r.unscheduled.slice(0,3),'tmr')),'明天空著')+
     '</div>'+stats(r)}
 
 function col(cls,icon,title,cards,empty){
-  return '<section class="col '+cls+'"><h3><i>'+icon+'</i>'+title+'<b>'+cards.length+'</b></h3>'+
+  return '<section class="col '+cls+'" data-drop="'+cls.slice(2)+'"><h3><i>'+icon+'</i>'+title+'<b>'+cards.length+'</b></h3>'+
     (cards.length?cards.join(''):'<div class="none">'+esc(empty)+'</div>')+
     '<button class="add" onclick="openAdd(\'task\')">＋ 新增任務</button></section>'}
 
-function taskCard(t){
+/** col 是這張卡目前在哪一欄（run/today/tmr），用來決定動作列要出現哪些「移到」按鈕。
+    手機三欄是上下堆疊的，垂直拖曳會跟捲動打架，所以那邊靠這些按鈕，桌機才用拖的。 */
+function taskCard(t,col){
   var td=today(),cls=t.due?(t.due<td?'over':(t.due===td?'now':'')):'';
   var lbl=t.due?(t.due<td?'逾期 '+md(t.due):(t.due===td?'今天':(t.due===ymd(new Date(Date.now()+864e5))?'明天':md(t.due)))):'未排日期';
-  var a=(t.status!=='進行中'?'<button class="go" onclick="st(\''+t.id+'\',\'進行中\')">開始</button>':'')+
+  var a=(t.status!=='進行中'?'<button class="go" onclick="event.stopPropagation();toCol(\''+t.id+'\',\'run\',\''+(col||'')+'\')">開始</button>':'')+
     '<button class="ok" onclick="st(\''+t.id+'\',\'完成\')">完成 ✓</button>'+
-    '<button onclick="bump(\''+t.id+'\')">延一天</button>'+
+    (col!=='today'?'<button onclick="event.stopPropagation();toCol(\''+t.id+'\',\'today\',\''+(col||'')+'\')">移到今日</button>':'')+
+    (col!=='tmr'?'<button onclick="event.stopPropagation();toCol(\''+t.id+'\',\'tmr\',\''+(col||'')+'\')">移到明日</button>':'')+
     '<button onclick="edit(\''+t.id+'\')">編輯</button>';
-  return '<article class="t" onclick="this.classList.toggle(\'open\')">'+
+  return '<article class="t" data-id="'+t.id+'">'+
     '<div class="ti">'+esc(t.title)+'</div>'+
     '<div class="tags"><span class="tag '+t.priority+'">'+PN[t.priority]+'</span>'+
       (t.project?'<span class="tag pj">'+esc(t.project)+'</span>':'')+'</div>'+
@@ -630,6 +642,21 @@ function settings(){
 /* ---------------- actions ---------------- */
 function st(id,s){event.stopPropagation();
   call('task_update',{id:id,status:s}).then(function(){toast('已更新');load()}).catch(function(e){toast(e.message)})}
+
+/** 把任務移到某一欄。拖曳與動作列按鈕都走這裡。
+    run＝開始做；today/tmr＝改到期日，若原本在執行中就一併退回待辦。 */
+function toCol(id,to,from){
+  if(to===from)return;
+  var p={id:id},d=new Date();
+  if(to==='run')p.status='進行中';
+  else{
+    if(to==='tmr')d.setDate(d.getDate()+1);
+    p.due=ymd(d);
+    if(from==='run')p.status='待辦';
+  }
+  return call('task_update',p)
+    .then(function(){toast('移到「'+DROP[to]+'」');load()})
+    .catch(function(e){toast(e.message);load()})}
 function bump(id){event.stopPropagation();
   var t=findTask(id),base=t&&t.due?parse(t.due):new Date();base.setDate(base.getDate()+1);
   call('task_update',{id:id,due:ymd(base)}).then(function(){toast('延到 '+md(ymd(base)));load()}).catch(function(e){toast(e.message)})}
@@ -663,6 +690,73 @@ function submit(){
   p.then(function(){toast('已儲存');closeAdd();load()})
    .catch(function(e){toast(e.message)})
    .then(function(){$('fSave').disabled=false})}
+
+/* ---------------- 拖曳換欄 ----------------
+   丟到「AI 正執行工作」＝開始做；丟到今日/明日＝改到期日。
+   從執行中拖出來會一併退回待辦。滑鼠移動一點就接手，手指則要橫move或長按，
+   免得跟捲動打架。紀錄卡（AI session）沒有 data-id，不能拖。            */
+var PRESS=null,DRAG=null,NODRAG=0;
+var DROP={run:'AI 正執行工作',today:'今日工作',tmr:'明日工作'};
+
+function colOf(el){return el&&el.closest?el.closest('.col[data-drop]'):null}
+
+function press(e){
+  if(e.button)return;
+  var card=e.target.closest&&e.target.closest('.t[data-id]');
+  if(!card||e.target.closest('button')||!colOf(card))return;
+  clearPress();
+  PRESS={card:card,id:card.dataset.id,x:e.clientX,y:e.clientY,touch:e.pointerType!=='mouse'};
+  if(PRESS.touch)PRESS.timer=setTimeout(function(){if(PRESS)lift(e.clientX,e.clientY)},380)}
+
+function clearPress(){if(PRESS&&PRESS.timer)clearTimeout(PRESS.timer);PRESS=null}
+
+function lift(x,y){
+  var card=PRESS.card,r=card.getBoundingClientRect();
+  var g=card.cloneNode(true);
+  g.className='t ghost';g.style.width=r.width+'px';g.style.left=r.left+'px';g.style.top=r.top+'px';
+  document.body.appendChild(g);
+  DRAG={id:PRESS.id,card:card,ghost:g,dx:x-r.left,dy:y-r.top,from:colOf(card).dataset.drop,over:null};
+  card.classList.add('lift');document.body.classList.add('dragging');
+  clearPress();over(x,y)}
+
+function over(x,y){
+  DRAG.ghost.style.left=(x-DRAG.dx)+'px';DRAG.ghost.style.top=(y-DRAG.dy)+'px';
+  var c=colOf(document.elementFromPoint(x,y));
+  if(c===DRAG.over)return;
+  if(DRAG.over)DRAG.over.classList.remove('drop');
+  DRAG.over=c;if(c&&c.dataset.drop!==DRAG.from)c.classList.add('drop');else DRAG.over=null}
+
+function move(e){
+  if(DRAG){over(e.clientX,e.clientY);return}
+  if(!PRESS)return;
+  var dx=e.clientX-PRESS.x,dy=e.clientY-PRESS.y;
+  if(Math.abs(dx)+Math.abs(dy)<8)return;
+  if(!PRESS.touch)return lift(e.clientX,e.clientY);
+  if(Math.abs(dx)>Math.abs(dy)*1.4)return lift(e.clientX,e.clientY);
+  clearPress()}                       // 手指往上下滑＝想捲動，放手
+
+function drop(){
+  clearPress();
+  if(!DRAG)return;
+  var to=DRAG.over&&DRAG.over.dataset.drop,id=DRAG.id;
+  DRAG.ghost.remove();DRAG.card.classList.remove('lift');
+  if(DRAG.over)DRAG.over.classList.remove('drop');
+  document.body.classList.remove('dragging');
+  var from=DRAG.from;DRAG=null;NODRAG=Date.now();
+  if(to)toCol(id,to,from)}
+
+document.addEventListener('pointerdown',press);
+document.addEventListener('pointermove',move);
+document.addEventListener('pointerup',drop);
+document.addEventListener('pointercancel',drop);
+// 拖曳中要擋掉捲動；平常不擋，所以這個監聽器不能是 passive
+document.addEventListener('touchmove',function(e){if(DRAG)e.preventDefault()},{passive:false});
+
+// 卡片點一下展開動作列；剛拖完那一下不算
+$('view').addEventListener('click',function(e){
+  if(Date.now()-NODRAG<250)return;
+  var card=e.target.closest&&e.target.closest('.t[data-id]');
+  if(card&&!e.target.closest('button'))card.classList.toggle('open')});
 
 document.addEventListener('click',function(){$('menu').classList.remove('on')});
 document.addEventListener('keydown',function(e){

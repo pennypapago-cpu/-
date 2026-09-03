@@ -33,6 +33,12 @@
 
 存取權設「所有人」是為了讓 curl（Claude Code hook）能打得進來；網頁與 API 都靠 TOKEN 擋。TOKEN 外洩就到 Apps Script「專案設定 → 指令碼屬性」改 `TOKEN`，重跑 `setup`，手機重新貼一次。
 
+## 卡片移動
+
+桌機直接把卡片拖到別欄：丟進「AI 正執行工作」＝狀態改進行中，丟進「今日」「明日」＝改到期日；從執行中拖出來會一併退回待辦。
+
+手機三欄是上下堆疊的，垂直拖曳會跟頁面捲動打架，所以那邊改點卡片展開動作列，用「移到今日」「移到明日」按鈕，走的是同一段邏輯。
+
 ## 優先級
 
 A 高產值（直接帶來結果）、B 推進型（讓事情往前走）、C 維護型（不做會出事）。
@@ -102,7 +108,7 @@ Cowork 的沙盒有兩個限制，決定了兩個 skill 的寫法：
 ## 測試
 
 ```bash
-node test/board.test.js && node test/migrate.test.js
+node test/board.test.js && node test/migrate.test.js && node test/drag.test.js
 ```
 
 改 `Code.gs` 之前先看 `test/README.md`。
