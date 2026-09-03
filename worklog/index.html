@@ -288,6 +288,14 @@
   .foot button{flex:1;padding:11px;border-radius:10px;font-size:18.0px;font-weight:600;
     background:var(--card);border:1px solid var(--line2);color:var(--mute)}
   .foot button.pri{background:var(--acc2);border-color:var(--acc2);color:#fff}
+  .foot button#fDel{flex:0 0 auto;padding:11px 15px;color:var(--bad);border-color:rgba(240,85,109,.32)}
+  .foot button#fDel:hover{background:rgba(240,85,109,.12)}
+  .confirm{background:var(--card2);border:1px solid var(--bad);border-radius:10px;padding:11px 12px;margin-bottom:11px}
+  .confirm p{margin:0 0 9px;font-size:13.5px;color:var(--mute)}
+  .confirm div{display:flex;gap:8px}
+  .confirm button{flex:1;padding:8px;border-radius:8px;border:1px solid var(--line2);
+    background:var(--card);color:var(--mute);font-size:13.5px}
+  .confirm button.yes{background:var(--bad);border-color:var(--bad);color:#fff;font-weight:600}
   #toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:30;
     background:#e9ecf2;color:#111;padding:9px 16px;border-radius:9px;font-size:16.0px;font-weight:600;display:none}
   .spin{padding:56px;text-align:center;color:var(--dim)}
@@ -404,7 +412,8 @@
       <div class="f"><label>連結</label><input id="fL" placeholder="https://"></div>
     </div>
     <div class="foot">
-      <button onclick="closeAdd()">取消</button>
+      <button id="fDel" onclick="del()" style="display:none">刪除</button>
+      <button onclick="closeAdd()">關閉</button>
       <button class="pri" id="fSave" onclick="submit()">儲存</button>
     </div>
   </div>
@@ -867,12 +876,29 @@ function findTask(id){
   for(var i=0;i<a.length;i++)if(a[i]&&a[i].id===id)return a[i];return null}
 function edit(id){event.stopPropagation();
   var t=findTask(id);if(!t)return;
-  EDIT=id;openAdd('task');$('shTitle').textContent='編輯任務';
+  EDIT=id;openAdd('task');$('shTitle').textContent='編輯任務';$('fDel').style.display='';
   $('fT').value=t.title;$('fP').value=t.project;$('fN').value=t.next;
   $('fD').value=t.due;$('fPr').value=t.priority;$('fW').value=t.waiting}
 
 /** col 決定新任務的預設日期與狀態：今日欄＝今天、明日欄＝明天、
     正執行欄＝今天且直接標進行中。從別的地方叫就預設今天。 */
+function del(){
+  if(document.getElementById('confirmBox'))return;
+  var box=document.createElement('div');
+  box.className='confirm';box.id='confirmBox';
+  box.innerHTML='<p>要刪掉「'+esc($('fT').value.trim()||'這筆任務')+'」嗎？'+
+    '它會從所有頁面消失，但試算表裡的那一列會留著。</p>'+
+    '<div><button onclick="this.closest(\'.confirm\').remove()">不要</button>'+
+    '<button class="yes" onclick="doDel()">確定刪除</button></div>';
+  $('fSave').closest('.sheet').insertBefore(box,$('fSave').closest('.foot'))}
+
+function doDel(){
+  if(!EDIT)return;
+  var id=EDIT;
+  mutate('task_update',{id:id,status:'取消'})
+    .then(function(){toast('已刪除');closeAdd()})
+    .catch(function(e){toast(e.message)})}
+
 function openAdd(k,col){
   $('menu').classList.remove('on');$('veil').classList.add('on');kind(k||'task');
   if(!EDIT&&(k||'task')==='task'){
@@ -880,7 +906,10 @@ function openAdd(k,col){
     var d=new Date();if(COL==='tmr')d.setDate(d.getDate()+1);
     $('fD').value=ymd(d)}
   setTimeout(function(){$('fT').focus()},60)}
-function closeAdd(){$('veil').classList.remove('on');EDIT=null;COL='';
+function closeAdd(){
+  $('veil').classList.remove('on');EDIT=null;COL='';
+  $('fDel').style.display='none';
+  var c=document.getElementById('confirmBox');if(c)c.remove();
   ['fT','fP','fN','fD','fW','fS','fL'].forEach(function(i){$(i).value=''});$('fPr').value='B'}
 function kind(k){KIND=k;
   $('sgT').classList.toggle('on',k==='task');$('sgL').classList.toggle('on',k==='log');

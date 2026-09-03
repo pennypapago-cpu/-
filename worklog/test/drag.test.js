@@ -106,6 +106,13 @@ assert(/height:2[0-9.]+px/.test(live),'執行中畫 30 分鐘高');
 // 超出時間軸範圍的不畫
 assert.strictEqual(ctx.lay([L('03:00','04:00','早')],8*60,19*60,44),'','範圍外不畫');
 
+// ---- 刪除：軟刪除成「取消」，不是真的移除那一列 ----
+ctx.EDIT='T9';sent=null;ctx.doDel();
+assert.strictEqual(JSON.stringify(sent),
+  want0({action:'task_update',params:{id:'T9',status:'取消'}}),'刪除＝把狀態設成取消');
+ctx.EDIT=null;sent=null;ctx.doDel();
+assert.strictEqual(sent,null,'沒在編輯任何任務時，刪除不做事');
+
 console.log('toasts   ',toasts.join(' / '));
 console.log('DROP     ',JSON.stringify(ctx.DROP));
 console.log('\nDRAG PASS');
