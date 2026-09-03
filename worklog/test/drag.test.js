@@ -114,6 +114,18 @@ assert.strictEqual(JSON.stringify(sent),
 ctx.EDIT=null;sent=null;ctx.doDel();
 assert.strictEqual(sent,null,'沒在編輯任何任務時，刪除不做事');
 
+// ---- 統計列開關 ----
+// 預設收起來；早晨簡報改放頂部橫幅，所以不會跟著一起消失
+assert.strictEqual(ctx.STATS,0,'統計列預設不顯示');
+const R={running:[],today:[],tomorrow:[],unscheduled:[],liveLogs:[],note:'今天必做：甲',
+  stats:{doneToday:0,totalToday:3,highValuePct:33,focusHours:0,focusHoursPrev:0,weekDone:0,weekTotal:4,overdue:0}};
+assert(!ctx.board(R,'').includes('優先任務占比'),'關掉時看板不含統計列');
+ctx.toggleStats();
+assert.strictEqual(ctx.STATS,1);
+assert(ctx.board(R,'').includes('優先任務占比'),'打開就回來');
+ctx.toggleStats();
+assert.strictEqual(ctx.STATS,0,'可以再關掉');
+
 // ---- 字級縮放 ----
 assert.strictEqual(ctx.Z,2,'預設放大到兩倍');
 ctx.zoom(1);assert.strictEqual(ctx.Z,2.1,'A＋ 每次加一成');
