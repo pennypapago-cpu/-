@@ -136,10 +136,19 @@ Cowork 的沙盒有兩個限制，決定了兩個 skill 的寫法：
 ## 測試
 
 ```bash
-node test/board.test.js && node test/migrate.test.js && node test/drag.test.js
+node test/board.test.js && node test/migrate.test.js && node test/drag.test.js && node test/perf.test.js
 ```
 
 改 `Code.gs` 之前先看 `test/README.md`。
+
+## 效能
+
+Apps Script 每讀一次試算表都是一趟慢的 API 呼叫，所以：
+
+- 同一次請求內每張表只讀一次（`CACHE_`）。`board` 原本要讀五次——任務兩次、紀錄三次——現在兩次。
+- 寫入時帶 `board=1`，回應直接附上更新後的看板，前端不用再送第二趟。按一個動作從兩趟網路變一趟。
+
+`test/perf.test.js` 把讀表次數釘住，改壞了會被抓到。
 
 ## 之後
 
