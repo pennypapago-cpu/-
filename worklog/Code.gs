@@ -13,8 +13,16 @@ var SHEET_LOG = '紀錄';
 var SHEET_TASK = '任務';
 var SHEET_CFG = '設定';
 var SHEET_BRIEF = '簡報';
+var SHEET_SECT = '分區';
+var SHEET_DATA = '資料';
 var TZ = 'Asia/Taipei';
 var BRIEF_HEADERS = ['日期', '產生時間', '內容'];
+// 資料區：分區是使用者自己開的欄位，資料是欄位裡的卡片
+var SECT_HEADERS = ['id', '名稱', '顏色', '順序'];
+var SECT_KEYS    = ['id', 'name', 'color', 'order'];
+var DATA_HEADERS = ['id', '分區', '標題', '內容', '順序', '建立時間'];
+var DATA_KEYS    = ['id', 'section', 'title', 'body', 'order', 'created'];
+var SECT_COLORS  = ['acc', 'a', 'b', 'c', 'ok', 'tmr'];
 
 // 表頭（中文，給人看）與欄位鍵（英文，給 API 用）一一對應
 var LOG_HEADERS = ['id', '開始時間', '結束時間', '來源', '專案', '標題', '狀態', '摘要', '產出連結', 'session_id', '任務id', '檔案位置'];
@@ -42,6 +50,8 @@ function setup() {
   migrateTask_(ss);
   ensureSheet_(ss, SHEET_TASK, TASK_HEADERS);
   ensureSheet_(ss, SHEET_BRIEF, BRIEF_HEADERS);
+  ensureSheet_(ss, SHEET_SECT, SECT_HEADERS);
+  ensureSheet_(ss, SHEET_DATA, DATA_HEADERS);
   var cfg = ensureSheet_(ss, SHEET_CFG, ['項目', '值']);
 
   var props = PropertiesService.getScriptProperties();
@@ -55,7 +65,7 @@ function setup() {
   cfg.autoResizeColumns(1, 2);
 
   var defaultSheet = ss.getSheetByName('工作表1') || ss.getSheetByName('Sheet1');
-  if (defaultSheet && ss.getSheets().length > 4) ss.deleteSheet(defaultSheet);
+  if (defaultSheet && ss.getSheets().length > 6) ss.deleteSheet(defaultSheet);
 
   Logger.log('TOKEN = ' + token);
   return token;
@@ -146,6 +156,11 @@ function handle_(action, p, token) {
       case 'outputs':     return Object.assign({ ok: true }, outputs_(p.source, p.all));
       case 'pool':        return Object.assign({ ok: true }, pool_(p.date));
       case 'done':        return Object.assign({ ok: true }, done_(p.range, p.date));
+      case 'data':        return Object.assign({ ok: true }, data_());
+      case 'sect_save':   return { ok: true, row: sectSave_(p), data: data_() };
+      case 'sect_del':    return { ok: true, moved: sectDel_(p), data: data_() };
+      case 'item_save':   return { ok: true, row: itemSave_(p), data: data_() };
+      case 'item_del':    return { ok: true, removed: itemDel_(p), data: data_() };
       case 'brief':       return Object.assign({ ok: true }, brief_(p.date));
       case 'brief_save':  return { ok: true, row: saveBrief_(p) };
       default:            return { ok: false, error: '不認識的 action: ' + action };
@@ -159,10 +174,7 @@ function handle_(action, p, token) {
 
 /** 帶 board=1 的寫入，回應裡直接附上更新後的看板，省掉前端的第二趟請求 */
 function withBoard_(res, p) {
-  if (p.board) {
-    CACHE_ = {};                       // 剛寫過，快取要作廢，不然讀到舊的
-    res.board = board_(p.date);
-  }
+  if (p.board) res.board = board_(p.date);   // 寫入點已經用 dirty_ 作廢過快取
   return res;
 }
 
@@ -204,6 +216,7 @@ function upsertLog_(p) {
       row[col.task_id] = p.task_id || '';
       row[col.path] = p.path || '';
       sh.appendRow(fill_(row, LOG_KEYS.length));
+      dirty_(SHEET_LOG);
       return toObj_(LOG_KEYS, row);
     }
 
@@ -218,6 +231,7 @@ function upsertLog_(p) {
     }
     if (p.status === '完成') row[col.end] = now_();
     sh.getRange(rowNum, 1, 1, LOG_KEYS.length).setValues([row]);
+    dirty_(SHEET_LOG);
     return toObj_(LOG_KEYS, row);
   } finally {
     lock.releaseLock();
@@ -273,6 +287,7 @@ function addTask_(p) {
     row[col.note] = p.note || '';
     row[col.done_at] = '';
     sh.appendRow(fill_(row, TASK_KEYS.length));
+    dirty_(SHEET_TASK);
     return toObj_(TASK_KEYS, row);
   } finally {
     lock.releaseLock();
@@ -295,6 +310,7 @@ function updateTask_(p) {
     if (p.status === '完成' && !row[col.done_at]) row[col.done_at] = now_();
     if (p.status && p.status !== '完成') row[col.done_at] = '';
     sh.getRange(rowNum, 1, 1, TASK_KEYS.length).setValues([row]);
+    dirty_(SHEET_TASK);
     return toObj_(TASK_KEYS, row);
   } finally {
     lock.releaseLock();
@@ -591,6 +607,131 @@ function shiftDays_(d, n) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
 }
 
+// ---------------------------------------------------------------- 資料區
+
+/**
+ * 資料區：自己開欄位、自己放卡片，用來存日常會回頭查的東西——連結、片段、參考。
+ * 跟任務與紀錄是不同性質的資料，所以獨立兩張表。
+ * 卡片的分區若對不到任何一個分區（例如分區被刪了），前端會歸到「未分類」。
+ */
+function data_() {
+  return {
+    sections: byOrder_(readAll_(SHEET_SECT, SECT_KEYS)),
+    items: byOrder_(readAll_(SHEET_DATA, DATA_KEYS))
+  };
+}
+
+function byOrder_(rows) {
+  return rows.sort(function (a, b) { return (+a.order || 0) - (+b.order || 0); });
+}
+
+/** 下一個順序值：接在最後面 */
+function nextOrder_(rows) {
+  var m = 0;
+  rows.forEach(function (r) { m = Math.max(m, +r.order || 0); });
+  return m + 1;
+}
+
+/** 有 id 就更新，沒有就新增 */
+function sectSave_(p) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    var sh = ensureSheet_(SpreadsheetApp.getActive(), SHEET_SECT, SECT_HEADERS);
+    var col = index_(SECT_KEYS);
+    if (p.id) {
+      var rowNum = findRow_(sh, col.id, p.id);
+      if (!rowNum) throw new Error('找不到分區 ' + p.id);
+      var row = sh.getRange(rowNum, 1, 1, SECT_KEYS.length).getValues()[0];
+      ['name', 'color', 'order'].forEach(function (k) {
+        if (p[k] !== undefined && p[k] !== '') row[col[k]] = p[k];
+      });
+      sh.getRange(rowNum, 1, 1, SECT_KEYS.length).setValues([row]);
+      dirty_(SHEET_SECT);
+      return toObj_(SECT_KEYS, row);
+    }
+    if (!p.name) throw new Error('name 必填');
+    var all = readAll_(SHEET_SECT, SECT_KEYS);
+    var fresh = [];
+    fresh[col.id] = 'S' + Utilities.getUuid().slice(0, 8);
+    fresh[col.name] = p.name;
+    fresh[col.color] = p.color || SECT_COLORS[all.length % SECT_COLORS.length];
+    fresh[col.order] = p.order || nextOrder_(all);
+    sh.appendRow(fill_(fresh, SECT_KEYS.length));
+    dirty_(SHEET_SECT);
+    return toObj_(SECT_KEYS, fresh);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/** 刪分區。裡面的卡片不刪，留著讓前端歸到「未分類」，免得誤刪一整欄的東西。 */
+function sectDel_(p) {
+  if (!p.id) throw new Error('id 必填');
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    var sh = sheet_(SHEET_SECT);
+    var rowNum = findRow_(sh, index_(SECT_KEYS).id, p.id);
+    if (!rowNum) throw new Error('找不到分區 ' + p.id);
+    sh.deleteRow(rowNum);
+    dirty_(SHEET_SECT);
+    return readAll_(SHEET_DATA, DATA_KEYS).filter(function (i) { return i.section === p.id; }).length;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function itemSave_(p) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    var sh = ensureSheet_(SpreadsheetApp.getActive(), SHEET_DATA, DATA_HEADERS);
+    var col = index_(DATA_KEYS);
+    if (p.id) {
+      var rowNum = findRow_(sh, col.id, p.id);
+      if (!rowNum) throw new Error('找不到卡片 ' + p.id);
+      var row = sh.getRange(rowNum, 1, 1, DATA_KEYS.length).getValues()[0];
+      ['section', 'title', 'body', 'order'].forEach(function (k) {
+        if (p[k] !== undefined) row[col[k]] = p[k];
+      });
+      sh.getRange(rowNum, 1, 1, DATA_KEYS.length).setValues([row]);
+      dirty_(SHEET_DATA);
+      return toObj_(DATA_KEYS, row);
+    }
+    if (!p.title && !p.body) throw new Error('標題或內容至少要有一個');
+    var all = readAll_(SHEET_DATA, DATA_KEYS);
+    var fresh = [];
+    fresh[col.id] = 'D' + Utilities.getUuid().slice(0, 8);
+    fresh[col.section] = p.section || '';
+    fresh[col.title] = p.title || clip_(p.body, 60);
+    fresh[col.body] = p.body || '';
+    fresh[col.order] = nextOrder_(all);
+    fresh[col.created] = now_();
+    sh.appendRow(fill_(fresh, DATA_KEYS.length));
+    dirty_(SHEET_DATA);
+    return toObj_(DATA_KEYS, fresh);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function itemDel_(p) {
+  if (!p.id) throw new Error('id 必填');
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    var sh = sheet_(SHEET_DATA);
+    var rowNum = findRow_(sh, index_(DATA_KEYS).id, p.id);
+    if (!rowNum) throw new Error('找不到卡片 ' + p.id);
+    sh.deleteRow(rowNum);
+    dirty_(SHEET_DATA);
+    return true;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 // ---------------------------------------------------------------- 今日簡報
 
 function brief_(date) {
@@ -622,6 +763,7 @@ function saveBrief_(p) {
     var row = [date, now_(), String(p.content)];
     if (rowNum) sh.getRange(rowNum, 1, 1, 3).setValues([row]);
     else sh.appendRow(row);
+    dirty_(SHEET_BRIEF);
     return { date: date, time: row[1], content: row[2] };
   } finally {
     lock.releaseLock();
@@ -665,6 +807,11 @@ function findRow_(sh, colIdx, value) {
   var vals = sh.getRange(2, colIdx + 1, last - 1, 1).getValues();
   for (var i = 0; i < vals.length; i++) if (String(vals[i][0]) === String(value)) return i + 2;
   return 0;
+}
+
+/** 寫過某張表就把它的快取丟掉，不然同一次請求裡接著讀會拿到舊資料 */
+function dirty_(name) {
+  if (CACHE_) delete CACHE_[name];
 }
 
 function readAll_(name, keys) {

@@ -1,6 +1,7 @@
 const path=require('path');
 const SRC=process.argv[2]||path.join(__dirname,'..','Code.gs');
 const fs=require('fs'),vm=require('vm'),assert=require('assert');
+let UUID=0;
 const pad=n=>String(n).padStart(2,'0');
 const f=(d,tz,fmt)=>fmt.includes('HH')
   ?`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
@@ -9,6 +10,10 @@ const f=(d,tz,fmt)=>fmt.includes('HH')
 // --- fake sheet ---
 function Sheet(name,rows){this.name=name;this.rows=rows}
 Sheet.prototype.appendRow=function(r){this.rows.push(r.slice())};
+Sheet.prototype.deleteRow=function(n){this.rows.splice(n-1,1)};
+Sheet.prototype.setFrozenRows=function(){return this};
+Sheet.prototype.deleteRow=function(n){this.rows.splice(n-1,1)};
+Sheet.prototype.setFrozenRows=function(){return this};
 Sheet.prototype.getLastRow=function(){return this.rows.length};
 Sheet.prototype.getLastColumn=function(){return this.rows[0]?this.rows[0].length:0};
 Sheet.prototype.getRange=function(r,c,nr,nc){const s=this;return{
@@ -35,7 +40,7 @@ log('L2',T+' 10:40','','Cowork','起士公爵','FB 廣告週報','進行中','�
 log('L3',Y+' 14:00',Y+' 15:00','Cowork','起士公爵','昨天的事','完成');
 
 const sheets={'任務':new Sheet('任務',TASKS),'紀錄':new Sheet('紀錄',LOGS),'簡報':new Sheet('簡報',[['日期','產生時間','內容'],[T,T+' 07:30','昨天：完成 board API。\n今天必做：吳若樺貼文定稿。\n建議：先清逾期那件。']])};
-const ctx={Utilities:{formatDate:f,getUuid:()=>'aaaaaaaa-bbbb'},Logger:{log(){}},
+const ctx={Utilities:{formatDate:f,getUuid:()=>'u'+String(++UUID).padStart(7,'0')+'-'+UUID},Logger:{log(){}},
   SpreadsheetApp:{getActive:()=>({getSheetByName:n=>sheets[n]||null})},
   PropertiesService:{getScriptProperties:()=>({getProperty:()=>'tok',setProperty(){}})},
   LockService:{getScriptLock:()=>({waitLock(){},releaseLock(){}})}};
@@ -165,6 +170,51 @@ ctx.handle_('log',{source:'Cowork',title:'替 T2 做的',status:'完成',task_id
 const dn2=ctx.handle_('done',{range:'week',date:T},'tok');
 assert(dn2.items.some(x=>x.title==='替 T2 做的'&&x.path==='/Users/penny/報告'),'檔案位置存得進去');
 
+// ---- 資料區 ----
+sheets['分區']=new Sheet('分區',[['id','名稱','顏色','順序']]);
+sheets['資料']=new Sheet('資料',[['id','分區','標題','內容','順序','建立時間']]);
+const d0=ctx.handle_('data',{},'tok');
+assert(d0.ok,'data: '+d0.error);
+assert.deepStrictEqual([d0.sections.length,d0.items.length],[0,0],'一開始是空的');
+
+const s1=ctx.handle_('sect_save',{name:'渠道'},'tok');
+assert(s1.ok,'sect_save: '+s1.error);
+assert.strictEqual(s1.row.name,'渠道');
+assert.strictEqual(+s1.row.order,1,'第一個分區順序為 1');
+const s2=ctx.handle_('sect_save',{name:'素材'},'tok');
+assert.strictEqual(+s2.row.order,2,'新分區接在最後面');
+assert.notStrictEqual(s1.row.color,s2.row.color,'預設顏色會輪替');
+assert.strictEqual(s2.data.sections.length,2,'回應直接帶新的資料，前端不用再要一次');
+
+const rn=ctx.handle_('sect_save',{id:s1.row.id,name:'投放渠道'},'tok');
+assert.strictEqual(rn.row.name,'投放渠道','分區可以改名');
+assert.strictEqual(rn.row.color,s1.row.color,'改名不動顏色');
+
+const i1=ctx.handle_('item_save',{section:s1.row.id,body:'https://qrcd.org/8rKu'},'tok');
+assert(i1.ok,'item_save: '+i1.error);
+assert.strictEqual(i1.row.title,'https://qrcd.org/8rKu','沒給標題就拿內容當標題');
+const i2=ctx.handle_('item_save',{section:s1.row.id,title:'官網商品',body:'備註'},'tok');
+assert.strictEqual(+i2.row.order,2);
+assert.strictEqual(ctx.handle_('item_save',{},'tok').ok,false,'標題與內容都空要擋下來');
+
+const mv=ctx.handle_('item_save',{id:i1.row.id,section:s2.row.id},'tok');
+assert.strictEqual(mv.row.section,s2.row.id,'卡片可以換分區');
+assert.strictEqual(mv.row.title,'https://qrcd.org/8rKu','換分區不動內容');
+
+// 刪分區：卡片留著，前端歸「未分類」，免得誤刪一整欄
+const del=ctx.handle_('sect_del',{id:s2.row.id},'tok');
+assert(del.ok,'sect_del: '+del.error);
+assert.strictEqual(del.moved,1,'回報有幾張卡片被留下');
+assert.strictEqual(del.data.sections.length,1,'分區少一個');
+assert.strictEqual(del.data.items.length,2,'卡片一張都沒少');
+assert(del.data.items.some(x=>x.section===s2.row.id),'孤兒卡片的分區還指著已刪的 id');
+
+assert.strictEqual(ctx.handle_('item_del',{id:i2.row.id},'tok').data.items.length,1);
+assert.strictEqual(ctx.handle_('item_del',{id:'不存在'},'tok').ok,false);
+assert.strictEqual(ctx.handle_('sect_del',{},'tok').ok,false,'沒帶 id 要擋');
+
+console.log('資料區    分區 '+del.data.sections.map(x=>x.name).join(' ')+
+  ' · 卡片 '+ctx.handle_('data',{},'tok').items.length+' 張');
 console.log('週專案    ', wk.projects.map(p=>`${p.name}:${p.done}/${p.count}`).join(' '));
 console.log('建議順序  ', pl.order.slice(0,4).map((o,i)=>`${i+1}.${o.task.title}(${o.reason})`).join(' '));
 console.log('產出      ', out.rows.map(r=>r.title+'→'+r.link).join(' '));
