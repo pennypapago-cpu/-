@@ -32,20 +32,28 @@ const tomorrow=(()=>{const d=new Date();d.setDate(d.getDate()+1);return ctx.ymd(
 
 // vm 裡建的物件跟外面不同 realm，deepStrictEqual 會失敗，改比 JSON
 function move(id,to,from){sent=null;ctx.toCol(id,to,from);return sent?JSON.stringify(sent):null}
+// 看板頁的寫入會多帶 board:1，請伺服器把新看板一起回來，省一趟請求
+function want0(o){o.params.board=1;return JSON.stringify(o)}
 function want(o){return JSON.stringify(o)}
 
 // 移到執行中：只改狀態，不動日期
-assert.strictEqual(move('T1','run','today'),want({action:'task_update',params:{id:'T1',status:'進行中'}}));
+assert.strictEqual(move('T1','run','today'),want0({action:'task_update',params:{id:'T1',status:'進行中'}}));
 // 移到今日：設今天，狀態不動（本來就是待辦）
-assert.strictEqual(move('T2','today','tmr'),want({action:'task_update',params:{id:'T2',due:T}}));
+assert.strictEqual(move('T2','today','tmr'),want0({action:'task_update',params:{id:'T2',due:T}}));
 // 移到明日：設明天
-assert.strictEqual(move('T3','tmr','today'),want({action:'task_update',params:{id:'T3',due:tomorrow}}));
+assert.strictEqual(move('T3','tmr','today'),want0({action:'task_update',params:{id:'T3',due:tomorrow}}));
 // 從執行中拖出來：改日期並退回待辦
-assert.strictEqual(move('T4','today','run'),want({action:'task_update',params:{id:'T4',due:T,status:'待辦'}}));
-assert.strictEqual(move('T5','tmr','run'),want({action:'task_update',params:{id:'T5',due:tomorrow,status:'待辦'}}));
+assert.strictEqual(move('T4','today','run'),want0({action:'task_update',params:{id:'T4',due:T,status:'待辦'}}));
+assert.strictEqual(move('T5','tmr','run'),want0({action:'task_update',params:{id:'T5',due:tomorrow,status:'待辦'}}));
 // 丟回原欄：什麼都不做
 assert.strictEqual(move('T6','today','today'),null,'同一欄不送 API');
 assert.strictEqual(move('T7','run','run'),null);
+
+// 只有看板頁才需要順便回看板；其他頁的寫入不該帶這個旗標
+ctx.VIEW='pool';
+assert.strictEqual(move('T9','run','today'),want({action:'task_update',params:{id:'T9',status:'進行中'}}),
+  '非看板頁不帶 board 旗標');
+ctx.VIEW='board';
 
 // 動作列按鈕：目前所在那一欄不該出現自己的「移到」按鈕
 const t={id:'X',title:'t',priority:'A',status:'待辦',due:T,project:'',next:'',waiting:''};

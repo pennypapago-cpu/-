@@ -30,6 +30,10 @@ var PRIORITY_RANK = { A: 0, B: 1, C: 2 };
 var PRIORITY_LEGACY = { 高: 'A', 中: 'B', 低: 'C' };
 var TASK_EDITABLE = ['title', 'project', 'due', 'priority', 'status', 'next', 'waiting', 'estimate', 'note'];
 
+// 同一次請求內的工作表快取。一個 board 請求本來會讀任務兩次、紀錄三次，
+// 每次 getValues() 都是一趟慢的試算表 API，是介面卡頓的主因。
+var CACHE_ = null;
+
 // ---------------------------------------------------------------- setup
 
 function setup() {
@@ -127,15 +131,16 @@ function uiCall(token, action, params) {
 }
 
 function handle_(action, p, token) {
+  CACHE_ = {};
   try {
     checkToken_(token);
     switch (action) {
       case 'ping':        return { ok: true, time: now_() };
-      case 'log':         return { ok: true, row: upsertLog_(p) };
+      case 'log':         return withBoard_({ ok: true, row: upsertLog_(p) }, p);
       case 'logs':        return { ok: true, rows: readLogs_(p.range || 'day', p.date) };
       case 'tasks':       return { ok: true, rows: readTasks_(p.status) };
-      case 'task_add':    return { ok: true, row: addTask_(p) };
-      case 'task_update': return { ok: true, row: updateTask_(p) };
+      case 'task_add':    return withBoard_({ ok: true, row: addTask_(p) }, p);
+      case 'task_update': return withBoard_({ ok: true, row: updateTask_(p) }, p);
       case 'board':       return Object.assign({ ok: true }, board_(p.date));
       case 'projects':    return Object.assign({ ok: true }, projects_(p.range, p.date));
       case 'outputs':     return Object.assign({ ok: true }, outputs_(p.source, p.all));
@@ -147,7 +152,18 @@ function handle_(action, p, token) {
     }
   } catch (err) {
     return { ok: false, error: String((err && err.message) || err) };
+  } finally {
+    CACHE_ = null;
   }
+}
+
+/** 帶 board=1 的寫入，回應裡直接附上更新後的看板，省掉前端的第二趟請求 */
+function withBoard_(res, p) {
+  if (p.board) {
+    CACHE_ = {};                       // 剛寫過，快取要作廢，不然讀到舊的
+    res.board = board_(p.date);
+  }
+  return res;
 }
 
 function checkToken_(token) {
@@ -231,6 +247,7 @@ function readTasks_(status) {
   var rows = readAll_(SHEET_TASK, TASK_KEYS);
   if (status === 'open') rows = rows.filter(function (r) { return TASK_OPEN.indexOf(r.status) >= 0; });
   else if (status) rows = rows.filter(function (r) { return r.status === status; });
+  else rows = rows.slice();            // 不要就地排序快取那一份
   return sortTasks_(rows);
 }
 
@@ -299,9 +316,8 @@ function board_(date) {
   var open = readTasks_('open');
 
   var runningTasks = open.filter(function (t) { return t.status === '進行中'; });
-  var runningLogs = readLogs_('day', today).filter(function (l) { return l.status === '進行中'; });
-
   var logsToday = readLogs_('day', today);
+  var runningLogs = logsToday.filter(function (l) { return l.status === '進行中'; });
   var week = span_('week', today);
 
   return {
@@ -447,6 +463,7 @@ function pool_(date) {
   var projects = projectPool_(open, today);
   projects.forEach(function (p) { p.tasks = byName[p.name] || []; });
 
+  var yLogs = readLogs_('day', yesterday);
   var ranked = open.map(function (t) {
     return { task: t, score: urgency_(t, today), reason: whyNow_(t, today) };
   }).sort(function (a, b) { return a.score - b.score; });
@@ -455,8 +472,8 @@ function pool_(date) {
     date: today,
     projects: projects,
     order: ranked.slice(0, 10),
-    yesterday: readLogs_('day', yesterday),
-    yesterdayHours: focusHours_(readLogs_('day', yesterday)),
+    yesterday: yLogs,
+    yesterdayHours: focusHours_(yLogs),
     backlog: open.length,
     overdue: open.filter(function (t) { return t.due && t.due < today; }).length
   };
@@ -637,6 +654,13 @@ function findRow_(sh, colIdx, value) {
 }
 
 function readAll_(name, keys) {
+  if (CACHE_ && CACHE_[name]) return CACHE_[name];
+  var rows = readSheet_(name, keys);
+  if (CACHE_) CACHE_[name] = rows;
+  return rows;
+}
+
+function readSheet_(name, keys) {
   var sh = sheet_(name);
   var last = sh.getLastRow();
   if (last < 2) return [];
