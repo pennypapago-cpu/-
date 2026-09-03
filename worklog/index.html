@@ -184,8 +184,8 @@
   .chead>div{padding:7px 4px 8px;text-align:center;border-left:1px solid var(--line)}
   .chead>div:first-child{border-left:0;font-size:12.5px;color:var(--dim);display:flex;
     align-items:flex-end;justify-content:center;padding-bottom:10px}
-  .wd{font-size:14.0px;color:var(--dim)}
-  .dn{font-size:23.0px;font-weight:600;line-height:1.5;margin-top:1px}
+  .chead .wd{font-size:14.0px;color:var(--dim)}
+  .chead .dn{font-size:23.0px;font-weight:600;line-height:1.5;margin-top:1px}
   .chead .today .wd{color:var(--acc)}
   .chead .today .dn{background:var(--acc2);color:#fff;border-radius:50%;
     width:34px;height:34px;line-height:34px;margin:1px auto 0;font-weight:700;font-size:18.0px}
@@ -216,8 +216,8 @@
   .ev.cw2{background:rgba(224,160,58,.17);border-color:var(--b);color:#eec27a}
   .ev.mn{background:rgba(78,163,245,.17);border-color:var(--c);color:#9ccdff}
   .ev.run{border-style:dashed}
-  .now{position:absolute;left:0;right:0;height:0;border-top:2px solid var(--bad);z-index:5;pointer-events:none}
-  .now::before{content:"";position:absolute;left:-4px;top:-5px;width:8px;height:8px;
+  .nowline{position:absolute;left:0;right:0;height:0;border-top:2px solid var(--bad);z-index:5;pointer-events:none}
+  .nowline::before{content:"";position:absolute;left:-4px;top:-5px;width:8px;height:8px;
     border-radius:50%;background:var(--bad)}
   .mgrid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:1px;background:var(--line)}
   .mgrid>.mh{background:var(--panel);text-align:center;font-size:14.0px;color:var(--dim);padding:7px 0}
@@ -721,7 +721,7 @@ function lay(logs,lo,hi,H){
 function nowLine(lo,hi,H){
   var d=new Date(),m=d.getHours()*60+d.getMinutes();
   if(m<lo||m>hi)return '';
-  return '<div class="now" style="top:'+((m-lo)/60*H).toFixed(1)+'px"></div>'}
+  return '<div class="nowline" style="top:'+((m-lo)/60*H).toFixed(1)+'px"></div>'}
 
 /* ---- 月：格子裡放任務，附當天紀錄筆數 ---- */
 function monthCal(r,f){
