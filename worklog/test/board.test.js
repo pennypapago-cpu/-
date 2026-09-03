@@ -78,4 +78,36 @@ assert.strictEqual(added.priority,'B');assert.strictEqual(added.next,'先寫規�
 const upRes=ctx.handle_('task_update',{id:'T5',priority:'高',next:'確認金流'},'tok');
 assert(upRes.ok,'task_update: '+upRes.error);const up=upRes.row;
 assert.strictEqual(up.priority,'A');assert.strictEqual(up.next,'確認金流');
+
+// ---- 專注時間要跟昨天比 ----
+const b2=ctx.handle_('board',{date:T},'tok');
+assert.strictEqual(b2.stats.focusHoursPrev,1,'昨天 14:00-15:00 = 1 小時');
+assert.strictEqual(b2.stats.overdue,1,'鈴鐺數＝逾期任務數');
+
+// ---- 任務日曆 ----
+const cal=ctx.handle_('calendar',{month:'2026-09'},'tok');
+assert(cal.ok,'calendar: '+cal.error);
+assert.strictEqual(cal.month,'2026-09');
+assert.strictEqual(cal.days[T].length,3,'9/3 當天三件：兩件待辦＋一件已完成');
+assert.strictEqual(cal.days[T][0].priority,'A','同一天 A 排最前');
+assert(!cal.days['2026-08-20'],'不是這個月的不會出現');
+const calAug=ctx.handle_('calendar',{month:'2026-08'},'tok');
+assert.strictEqual(calAug.days['2026-08-20'].length,1,'切到上個月看得到逾期那件');
+assert.strictEqual(ctx.handle_('calendar',{},'tok').month,ctx.fmtDate_(new Date()).slice(0,7),'沒帶月份就用當月');
+
+// ---- 目標追蹤 ----
+const g=ctx.handle_('goals',{date:T},'tok');
+assert(g.ok,'goals: '+g.error);
+assert.strictEqual(g.weeks.length,6,'六週');
+assert.strictEqual(g.weeks[5].from,'2026-08-31','最後一週是本週');
+assert.strictEqual(g.weeks[5].focusHours,2.5,'本週專注時間＝今天 1.5h＋昨天 1h');
+assert.strictEqual(g.weeks[5].done,1,'本週完成一件');
+assert.strictEqual(g.weeks[5].highDone,1,'那件是 A 級');
+assert.strictEqual(g.overdue,1);
+assert.strictEqual(g.byPriority.map(x=>x.priority+':'+x.open).join(' '),'A:4 B:3 C:1');
+assert.strictEqual(g.backlog,8,'未完成任務數');
+console.log('calendar  ', Object.keys(cal.days).sort().join(' '));
+console.log('goals wk  ', g.weeks.map(w=>`${w.from}:${w.done}/${w.total}@${w.focusHours}h`).join(' '));
+console.log('byPriority', g.byPriority.map(x=>x.priority+':'+x.open).join(' '));
+
 console.log('\nALL PASS');

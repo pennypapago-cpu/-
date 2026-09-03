@@ -137,6 +137,8 @@ function handle_(action, p, token) {
       case 'task_add':    return { ok: true, row: addTask_(p) };
       case 'task_update': return { ok: true, row: updateTask_(p) };
       case 'board':       return Object.assign({ ok: true }, board_(p.date));
+      case 'calendar':    return Object.assign({ ok: true }, calendar_(p.month));
+      case 'goals':       return Object.assign({ ok: true }, goals_(p.date));
       case 'brief':       return Object.assign({ ok: true }, brief_(p.date));
       case 'brief_save':  return { ok: true, row: saveBrief_(p) };
       default:            return { ok: false, error: '不認識的 action: ' + action };
@@ -346,20 +348,86 @@ function stats_(today, week, open, logsToday) {
     return d >= weekFrom && d <= weekTo && t.status !== '取消';
   });
 
-  var minutes = 0;
-  logsToday.forEach(function (l) {
-    var a = parseDate_(l.start), b = parseDate_(l.end);
-    if (a && b && b > a) minutes += (b - a) / 60000;
-  });
+  var yesterday = fmtDate_(shiftDays_(parseDate_(today), -1));
 
   return {
     doneToday: doneToday,
     totalToday: doneToday + scope.length,
     highValuePct: scope.length ? Math.round(high * 100 / scope.length) : 0,
-    focusHours: Math.round(minutes / 6) / 10,
+    focusHours: focusHours_(logsToday),
+    focusHoursPrev: focusHours_(readLogs_('day', yesterday)),
+    overdue: open.filter(function (t) { return t.due && t.due < today; }).length,
     weekDone: inWeek.filter(function (t) { return t.status === '完成'; }).length,
     weekTotal: inWeek.length
   };
+}
+
+/** 任務日曆：某個月每天有哪些任務（依到期日），含已完成的，方便回頭看 */
+function calendar_(month) {
+  var m = /^\d{4}-\d{2}$/.test(String(month || '')) ? String(month) : fmtDate_(new Date()).slice(0, 7);
+  var days = {};
+  readAll_(SHEET_TASK, TASK_KEYS).forEach(function (t) {
+    if (String(t.due).slice(0, 7) !== m) return;
+    (days[t.due] = days[t.due] || []).push({
+      id: t.id, title: t.title, project: t.project,
+      priority: t.priority, status: t.status, next: t.next, waiting: t.waiting
+    });
+  });
+  Object.keys(days).forEach(function (d) {
+    days[d].sort(function (a, b) { return PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority]; });
+  });
+  return { month: m, days: days };
+}
+
+/** 目標追蹤：最近 6 週的完成數、A 級占比與專注時間 */
+function goals_(date) {
+  var today = date ? fmtDate_(parseDate_(date)) : fmtDate_(new Date());
+  var tasks = readAll_(SHEET_TASK, TASK_KEYS);
+  var logs = readAll_(SHEET_LOG, LOG_KEYS);
+  var thisWeek = span_('week', today);
+  var weeks = [];
+
+  for (var i = 5; i >= 0; i--) {
+    var from = shiftDays_(thisWeek.from, -7 * i);
+    var to = shiftDays_(from, 6);
+    var f = fmtDate_(from), t = fmtDate_(to);
+    var inWeek = tasks.filter(function (x) {
+      var d = x.due || String(x.done_at).slice(0, 10);
+      return d >= f && d <= t && x.status !== '取消';
+    });
+    var done = inWeek.filter(function (x) { return x.status === '完成'; });
+    weeks.push({
+      from: f, to: t,
+      done: done.length,
+      total: inWeek.length,
+      highDone: done.filter(function (x) { return x.priority === 'A'; }).length,
+      focusHours: focusHours_(logs.filter(function (l) {
+        var d = String(l.start).slice(0, 10);
+        return d >= f && d <= t;
+      }))
+    });
+  }
+
+  var open = tasks.filter(function (t) { return TASK_OPEN.indexOf(t.status) >= 0; });
+  return {
+    date: today,
+    weeks: weeks,
+    byPriority: ['A', 'B', 'C'].map(function (p) {
+      return { priority: p, open: open.filter(function (t) { return t.priority === p; }).length };
+    }),
+    backlog: open.length,
+    overdue: open.filter(function (t) { return t.due && t.due < today; }).length
+  };
+}
+
+/** 一組紀錄累計的專注時數，取一位小數 */
+function focusHours_(logs) {
+  var minutes = 0;
+  logs.forEach(function (l) {
+    var a = parseDate_(l.start), b = parseDate_(l.end);
+    if (a && b && b > a) minutes += (b - a) / 60000;
+  });
+  return Math.round(minutes / 6) / 10;
 }
 
 function normPriority_(v) {
