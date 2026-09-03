@@ -114,6 +114,27 @@ assert.strictEqual(JSON.stringify(sent),
 ctx.EDIT=null;sent=null;ctx.doDel();
 assert.strictEqual(sent,null,'沒在編輯任何任務時，刪除不做事');
 
+// ---- 資料區：就地編輯 ----
+// 第一行當標題，整段存進 body
+assert.strictEqual(ctx.head1('官網商品\n備註第二行'),'官網商品');
+assert.strictEqual(ctx.head1('\n\n  前面空白  \n第二行'),'前面空白','跳過空行、去頭尾空白');
+assert.strictEqual(ctx.head1('x'.repeat(80)).length,60,'標題截到 60 字');
+assert.strictEqual(ctx.head1(''),'');
+
+// 卡片不再用 onclick，改走委派，才吃得到拖曳後的保護
+const nc=ctx.noteCard({id:'D1',title:'官網商品',body:'官網商品\n第二行'});
+assert(!/onclick="editItem/.test(nc),'卡片不該再掛 onclick');
+assert(nc.includes('data-item="D1"'));
+assert(nc.includes('第二行'),'第一行是標題，其餘顯示在下面');
+assert(!/<div class="b">官網商品/.test(nc),'標題不要重複顯示一次');
+assert(nc.includes('delItem'),'卡片要有刪除鈕');
+// 單行網址顯示成連結
+const link=ctx.noteCard({id:'D2',title:'https://qrcd.org/8rKu',body:'https://qrcd.org/8rKu'});
+assert(link.includes('<a class="u" href="https://qrcd.org/8rKu"'),'網址要能點');
+assert(!/class="b"/.test(link),'網址卡片不再重複顯示一次內容');
+// 介面不該再有瀏覽器的 prompt
+assert(!/\bprompt\(/.test(src),'不要再用 prompt 輸入');
+
 // ---- 每個側欄項目都要有對應的渲染函式 ----
 // 這條是補課：先前把 goals() 連同一整段程式碼刪掉，但 paint() 裡的呼叫還留著，
 // 「目標追蹤」那頁點下去就是空白，沒有任何測試發現。
