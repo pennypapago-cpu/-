@@ -48,4 +48,40 @@ assert.strictEqual(t1.next,'','新欄位是空的');
 // 再跑一次 setup 不應該重複插欄
 const before=old.rows[0].length;ctx.setup();
 assert.strictEqual(old.rows[0].length,before,'setup 可重複執行');
+
+// ---- setup 不准動到到期日 ----
+// 已經是新版表頭、優先級也已是 A/B/C 的情況：setup 應該完全不寫任何資料列
+const dueCol=Array.from(ctx.TASK_HEADERS).indexOf('到期日');
+const settled=new Sheet([
+  Array.from(ctx.TASK_HEADERS),
+  ['T1','2026-09-01','甲','起士公爵','2026-09-03','A','待辦','審核','', '2','',''],
+  ['T2','2026-09-01','乙','電腦舖','2026-09-04','C','完成','','PN','1','','2026-09-02 10:00'],
+]);
+sheets['任務']=settled;
+const snapshot=settled.rows.map(r=>r.join('|'));
+let writes=0;
+const realRange=Sheet.prototype.getRange;
+Sheet.prototype.getRange=function(r,c,nr,nc){
+  const rng=realRange.call(this,r,c,nr,nc),sh=this,setV=rng.setValues;
+  rng.setValues=function(v){if(sh===settled&&r>1)writes++;return setV.call(this,v)};
+  return rng};
+ctx.setup();
+Sheet.prototype.getRange=realRange;
+assert.strictEqual(writes,0,'表已是新版時，setup 不該寫任何資料列');
+assert.deepStrictEqual(settled.rows.map(r=>r.join('|')),snapshot,'setup 前後每一列都一樣');
+assert.strictEqual(settled.rows[1][dueCol],'2026-09-03','到期日沒被改');
+assert.strictEqual(settled.rows[2][dueCol],'2026-09-04');
+
+// 舊版表升級時也一樣：只有優先級那一欄會變
+const legacy=new Sheet([
+  ['id','建立時間','標題','專案','到期日','優先','狀態','預估時數','備註','完成時間'],
+  ['T3','2026-09-01','丙','起士公爵','2026-09-03','高','待辦','2','備註丙',''],
+]);
+sheets['任務']=legacy;
+ctx.setup();
+const after=ctx.handle_('tasks',{},'tok').rows.find(x=>x.id==='T3');
+assert.strictEqual(after.due,'2026-09-03','升級後到期日不變');
+assert.strictEqual(after.priority,'A','只有優先級被換掉');
+console.log('到期日     升級前後皆為 2026-09-03，setup 未寫任何資料列');
+
 console.log('\nMIGRATION PASS');
