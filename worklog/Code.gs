@@ -210,13 +210,19 @@ function upsertLog_(p) {
 /** range: day | week | month ；date: yyyy-MM-dd（預設今天） */
 function readLogs_(range, date) {
   var span = span_(range, date);
-  var col = index_(LOG_KEYS);
+  return readLogsBetween_(fmtDate_(span.from), fmtDate_(shiftDays_(span.to, -1)), true);
+}
+
+/** 起始日在 [from, to] 之間的紀錄。desc=true 新的在前（清單用），否則舊的在前（日曆用）。 */
+function readLogsBetween_(from, to, desc) {
   var rows = readAll_(SHEET_LOG, LOG_KEYS).filter(function (r) {
-    var t = parseDate_(r.start);
-    return t && t >= span.from && t < span.to;
+    var d = String(r.start).slice(0, 10);
+    return d >= from && d <= to;
   });
-  rows.sort(function (a, b) { return String(b.start).localeCompare(String(a.start)); });
-  return rows;
+  return rows.sort(function (a, b) {
+    var c = String(a.start).localeCompare(String(b.start));
+    return desc ? -c : c;
+  });
 }
 
 // ---------------------------------------------------------------- 任務
@@ -396,6 +402,8 @@ function projects_(range, date) {
 
   return {
     range: r, from: from, to: to,
+    tasks: inRange,                       // 扁平一份，日曆用
+    logs: readLogsBetween_(from, to),     // 實際做了什麼，放到時間軸上
     projects: projects,
     unscheduled: sortTasks_(all.filter(function (t) {
       return !t.due && TASK_OPEN.indexOf(t.status) >= 0;
