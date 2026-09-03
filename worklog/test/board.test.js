@@ -145,6 +145,23 @@ assert(pl.order.indexOf(waiting)>pl.order.indexOf(doing),'卡在別人身上的�
 assert(pl.projects.every(p=>Array.isArray(p.tasks)),'每個專案帶著自己的任務');
 assert.strictEqual(pl.order.length,Math.min(8,10),'最多十件');
 
+// ---- 手改紀錄 ----
+// 日曆上點時間區塊改的就是這個。hook 寫進來的標題常常只是當下的 prompt。
+const someLog=ctx.handle_('logs',{range:'all'},'tok').rows[0]
+  ||ctx.handle_('outputs',{all:'1'},'tok').rows[0];
+const lu=ctx.handle_('log_update',
+  {id:someLog.id,title:'改過的標題',summary:'補上的摘要',project:'個人'},'tok');
+assert(lu.ok,'log_update: '+lu.error);
+assert.strictEqual(lu.row.title,'改過的標題');
+assert.strictEqual(lu.row.summary,'補上的摘要');
+assert.strictEqual(lu.row.start,someLog.start,'時間不能被改掉');
+assert.strictEqual(lu.row.source,someLog.source,'來源不能被改掉');
+// 空字串是「清掉」，不是「略過」——不然改錯了就再也刪不掉
+assert.strictEqual(ctx.handle_('log_update',{id:someLog.id,summary:''},'tok').row.summary,'');
+assert(!ctx.handle_('log_update',{id:'沒這筆',title:'x'},'tok').ok,'找不到就要報錯');
+assert(!ctx.handle_('log_update',{title:'x'},'tok').ok,'沒給 id 就要報錯');
+console.log('改紀錄     '+lu.row.id+' → '+lu.row.title);
+
 // ---- 完成項目 ----
 const dn=ctx.handle_('done',{range:'week',date:T},'tok');
 assert(dn.ok,'done: '+dn.error);

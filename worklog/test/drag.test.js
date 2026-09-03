@@ -11,12 +11,15 @@ function El(cls,drop){this.className=cls;this.dataset=drop?{drop:drop}:{};this.c
   toggle(c){this._s.has(c)?this._s.delete(c):this._s.add(c)}, contains(c){return this._s.has(c)}}}
 const cols={run:new El('col c-run','run'),today:new El('col c-today','today'),tmr:new El('col c-tmr','tmr')};
 
-const stub={className:'',dataset:{},style:{},classList:{add(){},remove(){},toggle(){}},
+function mkStub(){return{className:'',dataset:{},style:{},classList:{add(){},remove(){},toggle(){}},
   addEventListener(){},appendChild(){},remove(){},cloneNode(){return this},
   getBoundingClientRect(){return{left:0,top:0,width:100}},focus(){},querySelectorAll(){return[]},
-  closest(){return null},value:'',innerHTML:'',textContent:'',disabled:false};
+  closest(){return null},value:'',innerHTML:'',textContent:'',disabled:false}}
+const stub=mkStub();
+// 每個 id 給自己的節點，才驗得出「編輯紀錄時 seg 藏起來、標題換成編輯紀錄」這種跨節點的狀態
+const els={};
 const ctx={
-  document:{addEventListener(){},getElementById(){return stub},querySelectorAll(){return[]},
+  document:{addEventListener(){},getElementById(i){return els[i]||(els[i]=mkStub())},querySelectorAll(){return[]},
     documentElement:{style:{setProperty(){},fontSize:''}},
     elementFromPoint(){return null},body:{classList:{add(){},remove(){}},appendChild(){}},createElement(){return stub}},
   window:{},localStorage:{getItem(){return 'tok'},setItem(){},removeItem(){}},
@@ -203,3 +206,36 @@ console.log('CSS 類別  卡片用 '+emitted.size+' 個，絕對定位的裸類�
 console.log('toasts   ',toasts.join(' / '));
 console.log('DROP     ',JSON.stringify(ctx.DROP));
 console.log('\nDRAG PASS');
+
+// ---- 日曆的時間區塊點下去要能編輯那筆紀錄 ----
+// 這些區塊是 hook 自動寫進來的，標題常常只是當下的 prompt，得能事後補。
+const evHtml=ctx.lay([{id:'L1',start:'2026-09-03 15:00',end:'2026-09-03 16:00',
+  title:'工作看板更新到第 5 版',source:'Claude Code',project:'個人'}],540,1200,40);
+assert(evHtml.includes('data-log="L1"'),'時間區塊要帶紀錄 id 才點得動');
+
+const clickH=src.split("$('view').addEventListener('click'")[1].split('});')[0];
+assert(clickH.includes('edit(card.dataset.id)'),'點卡片就直接開編輯');
+assert(!/toggle\('open'\)/.test(src),'不要再用展開動作列那套');
+assert(clickH.includes('editLog(ev.dataset.log)'),'點時間區塊就開編輯紀錄');
+assert(!/id="fL"/.test(src),'手動紀錄不要連結欄位');
+assert(/id="fS"[^>]*class="big"|class="big"[^>]*id="fS"/.test(src),'摘要要用放大的那格');
+
+ctx.paint=function(){};
+ctx.RAW={logs:[{id:'L1',title:'工作看板更新到第 5 版',project:'個人',summary:''}]};
+ctx.editLog('L1');
+assert.strictEqual(ctx.$('fT').value,'工作看板更新到第 5 版','標題帶進表單');
+assert.strictEqual(ctx.$('shTitle').textContent,'編輯紀錄');
+// 這是使用者遇到的那個 bug：視窗寫「編輯任務」卻停在「手動紀錄」那張表單
+assert.strictEqual(ctx.$('seg').style.display,'none','編輯時不給切換表單');
+
+ctx.$('fS').value='補一句摘要';
+sent=null;ctx.submit();
+assert.strictEqual(sent.action,'log_update','改的是既有那筆，不是又新增一筆');
+assert.strictEqual(sent.params.id,'L1');
+assert.strictEqual(sent.params.summary,'補一句摘要');
+assert.strictEqual(ctx.RAW.logs[0].summary,'補一句摘要','就地更新，日曆不用等重抓');
+
+ctx.closeAdd();ctx.openAdd('task');
+assert.strictEqual(ctx.$('seg').style.display,'flex','新增時切換鈕要回來');
+assert.strictEqual(ctx.$('shTitle').textContent,'新增任務');
+console.log('編輯      點卡片＝編輯任務，點時間區塊＝編輯紀錄');
