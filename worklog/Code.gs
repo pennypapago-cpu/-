@@ -17,8 +17,8 @@ var TZ = 'Asia/Taipei';
 var BRIEF_HEADERS = ['日期', '產生時間', '內容'];
 
 // 表頭（中文，給人看）與欄位鍵（英文，給 API 用）一一對應
-var LOG_HEADERS = ['id', '開始時間', '結束時間', '來源', '專案', '標題', '狀態', '摘要', '產出連結', 'session_id', '任務id'];
-var LOG_KEYS    = ['id', 'start',    'end',     'source', 'project', 'title', 'status', 'summary', 'link', 'session_id', 'task_id'];
+var LOG_HEADERS = ['id', '開始時間', '結束時間', '來源', '專案', '標題', '狀態', '摘要', '產出連結', 'session_id', '任務id', '檔案位置'];
+var LOG_KEYS    = ['id', 'start',    'end',     'source', 'project', 'title', 'status', 'summary', 'link', 'session_id', 'task_id', 'path'];
 var TASK_HEADERS = ['id', '建立時間', '標題', '專案', '到期日', '優先', '狀態', '下一步', '等待者', '預估時數', '備註', '完成時間'];
 var TASK_KEYS    = ['id', 'created', 'title', 'project', 'due', 'priority', 'status', 'next', 'waiting', 'estimate', 'note', 'done_at'];
 
@@ -145,7 +145,7 @@ function handle_(action, p, token) {
       case 'projects':    return Object.assign({ ok: true }, projects_(p.range, p.date));
       case 'outputs':     return Object.assign({ ok: true }, outputs_(p.source, p.all));
       case 'pool':        return Object.assign({ ok: true }, pool_(p.date));
-      case 'goals':       return Object.assign({ ok: true }, goals_(p.date));
+      case 'done':        return Object.assign({ ok: true }, done_(p.range, p.date));
       case 'brief':       return Object.assign({ ok: true }, brief_(p.date));
       case 'brief_save':  return { ok: true, row: saveBrief_(p) };
       default:            return { ok: false, error: '不認識的 action: ' + action };
@@ -202,12 +202,13 @@ function upsertLog_(p) {
       row[col.link] = p.link || '';
       row[col.session_id] = p.session_id || '';
       row[col.task_id] = p.task_id || '';
+      row[col.path] = p.path || '';
       sh.appendRow(fill_(row, LOG_KEYS.length));
       return toObj_(LOG_KEYS, row);
     }
 
     row = sh.getRange(rowNum, 1, 1, LOG_KEYS.length).getValues()[0];
-    ['project', 'status', 'summary', 'link', 'task_id'].forEach(function (k) {
+    ['project', 'status', 'summary', 'link', 'task_id', 'path'].forEach(function (k) {
       if (p[k] !== undefined && p[k] !== '') row[col[k]] = p[k];
     });
     if (p.title) row[col.title] = p.title;
@@ -516,44 +517,57 @@ function sortTasks_(rows) {
   });
 }
 
-/** 目標追蹤：最近 6 週的完成數、A 級占比與專注時間 */
-function goals_(date) {
-  var today = date ? fmtDate_(parseDate_(date)) : fmtDate_(new Date());
-  var tasks = readAll_(SHEET_TASK, TASK_KEYS);
-  var logs = readAll_(SHEET_LOG, LOG_KEYS);
-  var thisWeek = span_('week', today);
-  var weeks = [];
-
-  for (var i = 5; i >= 0; i--) {
-    var from = shiftDays_(thisWeek.from, -7 * i);
-    var to = shiftDays_(from, 6);
-    var f = fmtDate_(from), t = fmtDate_(to);
-    var inWeek = tasks.filter(function (x) {
-      var d = x.due || String(x.done_at).slice(0, 10);
-      return d >= f && d <= t && x.status !== '取消';
-    });
-    var done = inWeek.filter(function (x) { return x.status === '完成'; });
-    weeks.push({
-      from: f, to: t,
-      done: done.length,
-      total: inWeek.length,
-      highDone: done.filter(function (x) { return x.priority === 'A'; }).length,
-      focusHours: focusHours_(logs.filter(function (l) {
-        var d = String(l.start).slice(0, 10);
-        return d >= f && d <= t;
-      }))
-    });
+/**
+ * 完成項目：那段期間實際做完了什麼，附產出連結與檔案位置。
+ * 兩個來源合在一起：狀態為完成的「任務」，以及 Claude Code / Cowork 送進來的「紀錄」。
+ * 紀錄若掛在某個任務底下（task_id），就不重複列那個任務，以紀錄為準——它有連結。
+ */
+function done_(range, date) {
+  var r = ['day', 'week', 'month', 'all'].indexOf(String(range)) >= 0 ? String(range) : 'week';
+  var from, to;
+  if (r === 'all') { from = '0000-00-00'; to = '9999-99-99'; }
+  else {
+    var span = span_(r, date);
+    from = fmtDate_(span.from);
+    to = fmtDate_(shiftDays_(span.to, -1));
   }
 
-  var open = tasks.filter(function (t) { return TASK_OPEN.indexOf(t.status) >= 0; });
+  var logs = readAll_(SHEET_LOG, LOG_KEYS).filter(function (l) {
+    if (l.status !== '完成') return false;
+    var d = String(l.end || l.start).slice(0, 10);
+    return d >= from && d <= to;
+  });
+  var covered = {};
+  logs.forEach(function (l) { if (l.task_id) covered[l.task_id] = true; });
+
+  var items = logs.map(function (l) {
+    return {
+      kind: 'log', id: l.id, title: l.title, project: l.project, source: l.source,
+      at: String(l.end || l.start), summary: l.summary, link: l.link, path: l.path, priority: ''
+    };
+  });
+
+  readAll_(SHEET_TASK, TASK_KEYS).forEach(function (t) {
+    if (t.status !== '完成' || covered[t.id]) return;
+    var d = String(t.done_at || t.due).slice(0, 10);
+    if (!d || d < from || d > to) return;
+    items.push({
+      kind: 'task', id: t.id, title: t.title, project: t.project, source: '任務',
+      at: String(t.done_at || t.due), summary: t.note, link: '', path: '', priority: t.priority
+    });
+  });
+
+  items.sort(function (a, b) { return String(b.at).localeCompare(String(a.at)); });
+
+  var bySource = {};
+  items.forEach(function (x) { bySource[x.source] = (bySource[x.source] || 0) + 1; });
   return {
-    date: today,
-    weeks: weeks,
-    byPriority: ['A', 'B', 'C'].map(function (p) {
-      return { priority: p, open: open.filter(function (t) { return t.priority === p; }).length };
-    }),
-    backlog: open.length,
-    overdue: open.filter(function (t) { return t.due && t.due < today; }).length
+    range: r, from: from, to: to,
+    items: items.slice(0, 300),
+    total: items.length,
+    withLink: items.filter(function (x) { return x.link || x.path; }).length,
+    hours: focusHours_(logs),
+    bySource: bySource
   };
 }
 

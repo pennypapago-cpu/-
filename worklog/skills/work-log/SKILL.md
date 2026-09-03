@@ -36,7 +36,8 @@ WORKLOG_TOKEN = 你的TOKEN
 | project | 任務所屬的品牌或專案，例如 `起士公爵`、`電腦舖`、`個人`。判斷不出來就留空 |
 | title | 一句話說做了什麼，30 字內，例如「產出 8 月 FB 廣告成效週報」 |
 | summary | 兩三句結果摘要：關鍵數字、做了哪些決定、有沒有待辦 |
-| link | 產出檔的 Google Drive 連結；沒有就留空 |
+| link | 產出檔的 Google Drive 連結或可點的網址；沒有就留空 |
+| path | 檔案歸檔後的位置（auto-file-organizer 放到哪個資料夾），本機路徑就寫路徑；沒有產檔就留空 |
 | status | 做完 `完成`；中途喊停或還要接續 `進行中` |
 
 ## 送出方式
@@ -44,7 +45,7 @@ WORKLOG_TOKEN = 你的TOKEN
 把每個值做 URL 編碼（中文、空白、換行都要編），組成這樣一個網址，用瀏覽器開啟：
 
 ```
-<WORKLOG_URL>?action=log&token=<WORKLOG_TOKEN>&source=Cowork&status=%E5%AE%8C%E6%88%90&project=<...>&title=<...>&summary=<...>&link=<...>
+<WORKLOG_URL>?action=log&token=<WORKLOG_TOKEN>&source=Cowork&status=%E5%AE%8C%E6%88%90&project=<...>&title=<...>&summary=<...>&link=<...>&path=<...>
 ```
 
 頁面出現 `{"ok":true,...}` 才算成功。
@@ -58,3 +59,6 @@ WORKLOG_TOKEN = 你的TOKEN
 ## 給使用者的回覆
 
 紀錄成功後在最後回覆末尾加一行：`已記到工作看板：<title>`。不要另外解釋流程。
+
+`link` 和 `path` 盡量都填。看板的「完成項目」頁就是靠這兩欄，讓你事後找得到當初做出來的東西——
+連結點得開，路徑點一下複製。有產檔卻兩欄都空，那筆紀錄事後就只剩一行標題。
