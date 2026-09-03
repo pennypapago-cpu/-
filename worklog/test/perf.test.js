@@ -21,8 +21,9 @@ const TASKS=[['id','建立時間','標題','專案','到期日','優先','狀態
 for(let i=1;i<=20;i++)TASKS.push(['T'+i,T,'任務'+i,'專案'+(i%4),T,'ABC'[i%3],'待辦','下一步','','','','']);
 const LOGS=[['id','開始時間','結束時間','來源','專案','標題','狀態','摘要','產出連結','session_id','任務id']];
 for(let i=1;i<=20;i++)LOGS.push(['L'+i,T+' 09:00',T+' 10:00','Cowork','專案1','紀錄'+i,'完成','','','s'+i,'']);
-const sheets={'任務':new Sheet(TASKS),'紀錄':new Sheet(LOGS),
-  '簡報':new Sheet([['日期','產生時間','內容']]),'設定':new Sheet([['項目','值']])};
+const sheets={'指標':new Sheet([['日期','營業額','訂單數','廣告花費','流量','加入購物車','更新時間'],
+  [T,48200,31,12500,1840,96,T+' 14:30']]),'任務':new Sheet(TASKS),'紀錄':new Sheet(LOGS),
+  '簡報':new Sheet([['日期','產生時間','內容'],[T,T+' 07:30','昨天：做了事。']]),'設定':new Sheet([['項目','值']])};
 
 const ctx={Utilities:{formatDate:f,getUuid:()=>'aaaaaaaa-bbbb'},Logger:{log(){}},
   SpreadsheetApp:{getActive:()=>({getSheetByName:n=>sheets[n]||null})},
@@ -46,8 +47,6 @@ console.log('projects  ',projects,'次');
 console.log('outputs   ',outputs,'次');
 console.log('task_update',upd,'次；帶 board 旗標',updB,'次');
 
-// 每張表在一次請求裡最多讀一次；board 只碰任務、紀錄、簡報三張
-assert(board<=4,'board 讀太多次試算表：'+board);
 assert(pool<=4,'pool 讀太多次：'+pool);
 assert(projects<=3,'projects 讀太多次：'+projects);
 assert(outputs<=2,'outputs 讀太多次：'+outputs);
@@ -60,7 +59,8 @@ const r=ctx.handle_('task_update',{id:'T3',title:'改過了',board:1},'tok');
 const all=r.board.running.concat(r.board.today,r.board.tomorrow,r.board.unscheduled);
 assert(all.some(t=>t.id==='T3'&&t.title==='改過了'),'回傳的看板要是寫入後的狀態');
 
-// 這幾個數字就是當初卡兩秒的原因：board 本來要讀五次（任務兩次、紀錄三次）
-assert(board<=2,'board 應該只讀任務與紀錄各一次：'+board);
+// 這條是當初卡兩秒的原因：board 本來要讀五次（任務兩次、紀錄三次）。
+// 現在的上限是「每張表各一次」——任務、紀錄、簡報、指標，共四張。
+assert(board<=4,'board 應該每張表只讀一次：'+board);
 
 console.log('\nPERF PASS');

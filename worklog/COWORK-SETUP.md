@@ -28,7 +28,7 @@ https://docs.google.com/spreadsheets/d/136z3S0ADQHRda3q8O_B_GFBlBlBuE-oEg0mxIeT0
 
 如果 Apps Script 專案裡還沒有名為 `index` 的 HTML 檔，先建立它；把 `index.html` 的內容貼進去。
 
-`setup` 執行完會在試算表建立「紀錄」「任務」「簡報」「設定」四個工作表，並在執行紀錄印出 TOKEN。把 TOKEN 記下來。
+`setup` 執行完會在試算表建立「紀錄」「任務」「簡報」「分區」「資料」「指標」「設定」七個工作表，並在執行紀錄印出 TOKEN。把 TOKEN 記下來。
 
 **三、部署網頁應用程式**
 
@@ -49,9 +49,9 @@ https://docs.google.com/spreadsheets/d/136z3S0ADQHRda3q8O_B_GFBlBlBuE-oEg0mxIeT0
 
 頁面要顯示 `{"ok":true,...}` 才算成功。失敗就停下來告訴我看到什麼。
 
-**五、安裝兩個 skill**
+**五、安裝三個 skill**
 
-把 `work-log` 和 `morning-brief` 兩個資料夾（各含一個 SKILL.md）放到我放其他 skill 的地方，也就是 `auto-file-organizer` 所在的同一層資料夾。
+把 `work-log`、`morning-brief`、`daily-metrics` 三個資料夾（各含一個 SKILL.md）放到我放其他 skill 的地方，也就是 `auto-file-organizer` 所在的同一層資料夾。
 
 放進去之前，把每個 SKILL.md「設定」段落裡的 `WORKLOG_URL` 和 `WORKLOG_TOKEN` 兩行換成第二、三步拿到的實際值。設定放在 skill 檔裡是刻意的——沙盒的家目錄每次對話重開就清空，存不住 `~/.claude/worklog.env`。
 
@@ -64,6 +64,12 @@ https://docs.google.com/spreadsheets/d/136z3S0ADQHRda3q8O_B_GFBlBlBuE-oEg0mxIeT0
 - 名稱：工作看板早晨簡報
 - 時間：週一到週五 早上 07:30
 - 內容：`執行 morning-brief skill`
+
+再建一個：
+
+- 名稱：今日營運數字
+- 時間：每天每小時，10:00 到 21:00
+- 內容：`執行 daily-metrics skill`
 
 **最後**
 

@@ -102,6 +102,23 @@
   .menu button:hover{background:var(--card2);color:var(--ink)}
 
   /* ---------------- columns ---------------- */
+  /* 生意數字：Shopline 營業額、FB 廣告花費，還有兩者換算出來的比率 */
+  .mx{display:flex;gap:10px;flex-wrap:wrap;align-items:stretch;margin:12px 24px 0}
+  .mx .m{flex:1 1 150px;min-width:0;background:var(--card);border:1px solid var(--line);
+    border-radius:11px;padding:9px 12px}
+  .mx .m u{display:block;text-decoration:none;color:var(--dim);font-size:0.8125rem;margin-bottom:3px}
+  .mx .m b{display:block;font-size:1.375rem;font-weight:700;letter-spacing:-.02em;line-height:1.2}
+  .mx .m s{display:block;text-decoration:none;color:var(--mute);font-size:0.8125rem;margin-top:2px}
+  .mx .m.good b{color:#4ade9e}
+  .mx .m.bad b{color:#ff8b8b}
+  .mx .m.na b{color:var(--dim);font-weight:600}
+  .mx .up{flex:0 0 auto;align-self:center;color:var(--dim);font-size:0.8125rem;padding:0 2px}
+  .mx .miss{flex:1 1 100%;color:var(--mute);font-size:0.875rem;padding:9px 12px;
+    background:var(--card);border:1px dashed var(--line2);border-radius:11px}
+  @media(max-width:980px){.mx{margin:10px 14px 0;gap:8px}.mx .m{flex:1 1 42%}}
+  .brief .x{margin-left:auto;flex:0 0 auto;background:none;border:0;color:var(--dim);
+    font-size:1.0625rem;line-height:1;padding:0 2px;cursor:pointer}
+  .brief .x:hover{color:var(--ink)}
   .brief{display:flex;gap:9px;align-items:flex-start;margin:12px 24px 0;padding:10px 13px;
     background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--acc);
     border-radius:11px;font-size:0.8125rem;color:var(--mute);line-height:1.6}
@@ -449,6 +466,7 @@
         </div>
       </div>
     </div>
+    <div id="mx" class="mx" style="display:none"></div>
     <div id="brief" class="brief" style="display:none"></div>
     <div id="view"><div class="spin">載入中…</div></div>
   </div>
@@ -508,6 +526,7 @@ var $=function(i){return document.getElementById(i)};
 /** 字級縮放。所有字級都是 rem，改 html 的 font-size 就整份跟著縮放。
     存在這台裝置，手機和桌機可以各自設不同大小。 */
 var STATS=0,Z=2,DRANGE='week',VC={};
+var BOPEN=localStorage.getItem('briefOpen')!=='0';
 try{Z=parseFloat(localStorage.getItem('worklog_zoom'))||2;
     STATS=localStorage.getItem('worklog_stats')==='1'?1:0}catch(e){}
 function toggleStats(){
@@ -637,7 +656,8 @@ function header(){
   if(VIEW==='done')ex=[['week','本週'],['month','本月'],['all','全部']].map(function(r){
     return '<button class="chip'+(DRANGE===r[0]?' on':'')+'" onclick="DRANGE=\''+r[0]+'\';load()">'+
       r[1]+'</button>'}).join(' ');
-  if(VIEW==='board'&&RAW&&RAW.note)ex='<span class="chip">早晨簡報已產生</span>';
+  if(VIEW==='board'&&RAW&&RAW.note)
+    ex='<button class="chip'+(BOPEN?' on':'')+'" onclick="toggleBrief()">早晨簡報 '+(BOPEN?'▴':'▾')+'</button>';
   $('extra').innerHTML=ex;
 
   var od=RAW&&(RAW.stats?RAW.stats.overdue:RAW.overdue);
@@ -652,6 +672,7 @@ function hit(o,q){return !q||[o.title,o.project,o.next,o.waiting,o.summary,o.sou
 function paint(){
   header();
   var q=$('q').value.trim().toLowerCase();
+  if(VIEW!=='board'){mx(null);brief('')}   // 這兩條只屬於每日看板
   if(VIEW==='settings')return $('view').innerHTML=settings();
   if(!RAW)return;
   if(VIEW==='board')return $('view').innerHTML=board(RAW,q);
@@ -663,7 +684,7 @@ function paint(){
 
 /* ---------------- board ---------------- */
 function board(r,q){
-  brief(r.note);
+  brief(r.note);mx(r.metrics);
   var f=function(a,c){return a.filter(function(x){return hit(x,q)}).map(function(t){return taskCard(t,c)})};
   var run=f(r.running,'run').concat(r.liveLogs.filter(function(l){return hit(l,q)}).map(logCard));
   return '<div class="cols">'+
@@ -672,11 +693,49 @@ function board(r,q){
     col('c-tmr','🕐','明日工作',f(r.tomorrow,'tmr').concat(f(r.unscheduled.slice(0,3),'tmr')),'明天空著')+
     '</div>'+(STATS?stats(r):'')}
 
-/** 早晨簡報：統計列收起來之後，它就沒地方擺了，改成日期列下面一行 */
+/** 早晨簡報：統計列收起來之後，它就沒地方擺了，改成日期列下面一行。
+    可以按 ✕ 收起來，收起後從標題列那顆「早晨簡報」鈕叫回來，選擇會記住。 */
 function brief(note){
-  var el=$('brief');
-  el.innerHTML=note?'<i>🎯</i><span>'+esc(note.split('\n').filter(function(x){return x.trim()}).join('　')) +'</span>':'';
-  el.style.display=note?'':'none'}
+  var el=$('brief'),show=note&&BOPEN;
+  el.innerHTML=show?'<i>🎯</i><span>'+esc(note.split('\n').filter(function(x){return x.trim()}).join('　'))+
+    '</span><button class="x" onclick="toggleBrief()" title="收起">✕</button>':'';
+  el.style.display=show?'':'none'}
+
+function toggleBrief(){
+  BOPEN=!BOPEN;localStorage.setItem('briefOpen',BOPEN?'1':'0');
+  brief(RAW&&RAW.note);header()}
+
+/** 千分位；整數不補小數，有小數才留兩位（單次成本才看得出差別） */
+function n2(v){
+  if(v===null||v===undefined||v==='')return '—';
+  var n=Number(v);if(!isFinite(n))return '—';
+  return n.toLocaleString('zh-TW',{maximumFractionDigits:n%1?2:0})}
+function money(v){return v===null||v===undefined||v===''?'—':'$'+n2(v)}
+
+/**
+ * 生意數字列。看板連不到 Shopline 和 FB 廣告管理員，數字是 Cowork 的
+ * daily-metrics skill 抓好寫進「指標」工作表的，這裡只負責顯示。
+ */
+function mx(m){
+  var el=$('mx');
+  if(!m){el.style.display='none';el.innerHTML='';return}
+  el.style.display='';
+  if(!m.has){
+    el.innerHTML='<div class="miss">今日還沒有營運數字。在 Cowork 說「更新今日數據」，'+
+      '它會去 Shopline 和 FB 廣告管理員抓一次填進來。</div>';
+    return}
+  var roas=m.roas,rc=roas===null?'na':(roas>=3?'good':(roas<1.5?'bad':''));
+  el.innerHTML=
+    tile('今日營業額',money(m.revenue),m.orders===null?'':n2(m.orders)+' 筆訂單')+
+    tile('廣告花費',money(m.spend),'')+
+    tile('ROAS',roas===null?'—':n2(roas)+'x','花一元換回來的',rc)+
+    tile('流量',n2(m.clicks),m.cpc===null?'':'一次 '+money(m.cpc))+
+    tile('加入購物車',n2(m.carts),m.cpaCart===null?'':'一次 '+money(m.cpaCart))+
+    (m.updated?'<div class="up">'+esc(String(m.updated).slice(11,16))+' 更新</div>':'')}
+
+function tile(label,val,sub,cls){
+  return '<div class="m'+(cls?' '+cls:'')+'"><u>'+esc(label)+'</u><b>'+esc(val)+'</b>'+
+    (sub?'<s>'+esc(sub)+'</s>':'')+'</div>'}
 
 function col(cls,icon,title,cards,empty){
   return '<section class="col '+cls+'" data-drop="'+cls.slice(2)+'"><h3><i>'+icon+'</i>'+title+'<b>'+cards.length+'</b></h3>'+
@@ -1126,7 +1185,7 @@ function settings(){
   return '<div class="wrap">'+
     '<div class="panelbox"><h3>資料來源</h3>'+
       '<div class="kv"><span>Google 試算表</span><b><a href="'+SHEET+'" target="_blank" rel="noopener">開啟</a></b></div>'+
-      '<div class="kv"><span>工作表</span><b>紀錄 · 任務 · 簡報 · 設定</b></div></div>'+
+      '<div class="kv"><span>工作表</span><b>紀錄 · 任務 · 簡報 · 分區 · 資料 · 指標 · 設定</b></div></div>'+
     '<div class="panelbox"><h3>這台裝置</h3>'+
       '<div class="kv"><span>字級</span><b>'+Math.round(Z*100)+'% '+
         '<button class="chip" onclick="zoom(-1);load()">A−</button> '+
@@ -1137,7 +1196,8 @@ function settings(){
     '<div class="panelbox"><h3>自動記錄</h3>'+
       '<div class="kv"><span>Claude Code</span><b>SessionStart / Stop hook</b></div>'+
       '<div class="kv"><span>Cowork</span><b>work-log skill</b></div>'+
-      '<div class="kv"><span>早晨簡報</span><b>morning-brief skill，平日 07:30</b></div></div>'+
+      '<div class="kv"><span>早晨簡報</span><b>morning-brief skill，平日 07:30</b></div>'+
+      '<div class="kv"><span>營運數字</span><b>daily-metrics skill，每小時</b></div></div>'+
     '<div class="panelbox"><h3>手動寫入一筆（API）</h3>'+
       '<div class="code">?action=log&amp;token=…&amp;source=Cowork&amp;title=…&amp;status=完成</div>'+
       '<p class="u" style="margin-top:8px;-webkit-line-clamp:3">同一個網址加上 ?action= 參數就是 API，不加就是這個看板。</p></div>'+
