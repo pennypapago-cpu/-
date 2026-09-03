@@ -113,6 +113,32 @@ assert.strictEqual(JSON.stringify(sent),
 ctx.EDIT=null;sent=null;ctx.doDel();
 assert.strictEqual(sent,null,'沒在編輯任何任務時，刪除不做事');
 
+// ---- CSS 類別撞名 ----
+// 「今天到期」的卡片日期是 class="dd now"，日曆的現在時間線本來也叫 .now，
+// 結果那條 position:absolute;left:0;right:0 的紅線套到卡片上，橫貫整個畫面。
+// 這裡不只釘那一個，而是通則：會脫離文件流的裸類別，不能跟卡片用的修飾類別同名。
+const css=src.split('<style>')[1].split('</style>')[0];
+const emitted=new Set();
+[ctx.taskCard({id:'a',title:'t',priority:'A',status:'待辦',due:T,project:'p',next:'n',waiting:''},'today'),
+ ctx.taskCard({id:'b',title:'t',priority:'C',status:'進行中',due:'2020-01-01',project:'',next:'',waiting:'W'},'run'),
+ ctx.logCard({title:'l',source:'Cowork',start:'2026-09-03 10:00',project:'p',summary:'s'}),
+ ctx.outRow({title:'o',source:'Claude Code',start:'2026-09-03 10:00',end:'2026-09-03 11:00',
+             status:'完成',project:'p',summary:'s',link:'https://x'})
+].forEach(h=>{(h.match(/class="([^"]+)"/g)||[]).forEach(m=>
+  m.slice(7,-1).split(/\s+/).forEach(c=>c&&emitted.add(c)))});
+
+const floating=new Set();
+css.replace(/(^|\})\s*\.([a-z][\w-]*)\s*(::[\w-]+)?\s*\{([^}]*)\}/gi,(m,_,cls,pseudo,body)=>{
+  if(/position:\s*(absolute|fixed)/.test(body))floating.add(cls);return m});
+
+const clash=[...emitted].filter(c=>floating.has(c));
+assert.deepStrictEqual(clash,[],
+  '卡片用的類別跟會脫離文件流的裸 CSS 規則撞名了：'+clash.join(', ')+
+  '\n（卡片用到：'+[...emitted].join(' ')+'）');
+assert(floating.has('nowline'),'現在時間線本身還是絕對定位');
+assert(emitted.has('now'),'今天到期的卡片仍帶 now 修飾類別');
+console.log('CSS 類別  卡片用 '+emitted.size+' 個，絕對定位的裸類別 '+floating.size+' 個，沒有撞名');
+
 console.log('toasts   ',toasts.join(' / '));
 console.log('DROP     ',JSON.stringify(ctx.DROP));
 console.log('\nDRAG PASS');
