@@ -529,7 +529,8 @@ function sortTasks_(rows) {
   return rows.sort(function (a, b) {
     var da = a.due || '9999-99-99', db = b.due || '9999-99-99';
     if (da !== db) return da < db ? -1 : 1;
-    return PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority];
+    if (a.priority !== b.priority) return PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority];
+    return a.id < b.id ? -1 : (a.id > b.id ? 1 : 0);   // 平手時用 id 定序，前端才排得出一樣的結果
   });
 }
 

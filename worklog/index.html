@@ -67,6 +67,8 @@
   .icon{width:2.375rem;height:2.375rem;border-radius:9px;color:var(--mute);display:grid;place-items:center;
     font-size:1.125rem;position:relative}
   .icon:hover{background:var(--card);color:var(--ink)}
+  #busy{color:var(--acc);animation:spin 1s linear infinite;pointer-events:none}
+  @keyframes spin{to{transform:rotate(360deg)}}
   .icon b{position:absolute;top:2px;right:2px;min-width:1.125rem;height:1.125rem;border-radius:9px;background:var(--bad);
     color:#fff;font-size:0.75rem;font-weight:700;display:grid;place-items:center;padding:0 4px}
   .srch{display:flex;align-items:center;gap:7px;background:var(--card);border:1px solid var(--line);
@@ -418,6 +420,7 @@
       <div class="tools">
         <div class="srch" id="srchBox"><span style="color:var(--dim)">🔍</span>
           <input id="q" placeholder="搜尋" oninput="paint()"></div>
+        <span class="icon" id="busy" style="display:none" title="更新中">◌</span>
         <button class="icon" onclick="zoom(-1)" title="字小一點">A−</button>
         <button class="icon" onclick="zoom(1)" title="字大一點">A＋</button>
         <button class="icon" onclick="go('pool')" title="逾期任務">🔔<b id="bell" style="display:none">0</b></button>
@@ -440,7 +443,7 @@
           <button onclick="openAdd('task')">新增任務</button>
           <button onclick="openAdd('log')">手動補一筆紀錄</button>
           <button id="mStats" onclick="toggleStats()">顯示統計列</button>
-          <button onclick="load(1)">重新整理</button>
+          <button onclick="load()">重新整理</button>
           <button onclick="openSheet()">開啟 Google 試算表</button>
         </div>
       </div>
@@ -503,7 +506,7 @@ var $=function(i){return document.getElementById(i)};
 
 /** 字級縮放。所有字級都是 rem，改 html 的 font-size 就整份跟著縮放。
     存在這台裝置，手機和桌機可以各自設不同大小。 */
-var STATS=0,Z=2,DRANGE='week';
+var STATS=0,Z=2,DRANGE='week',VC={};
 try{Z=parseFloat(localStorage.getItem('worklog_zoom'))||2;
     STATS=localStorage.getItem('worklog_stats')==='1'?1:0}catch(e){}
 function toggleStats(){
@@ -557,25 +560,48 @@ function go(v){
   $('dates').style.display=(v==='board'||v==='projects')?'':'none';
   if(v!=='board')$('brief').style.display='none';
   $('q').value='';
-  load(1)}
+  load()}
 
-function load(force){
-  if(force)$('view').innerHTML='<div class="spin">載入中…</div>';
+/** 每個頁面（含它的參數）各自一份快取的鍵 */
+function vkey(){
+  if(VIEW==='board')return 'board:'+(DATE||today());
+  if(VIEW==='projects')return 'projects:'+PJRANGE+':'+(PJDATE||today());
+  if(VIEW==='done')return 'done:'+DRANGE;
+  if(VIEW==='outputs')return 'outputs:'+SRC+':'+ALL;
+  return VIEW}
+
+function fetchView(){
+  if(VIEW==='projects')return call('projects',{range:PJRANGE,date:PJDATE||today()});
+  if(VIEW==='pool')return call('pool',{});
+  if(VIEW==='outputs')return call('outputs',{source:SRC,all:ALL?'1':''});
+  if(VIEW==='done')return call('done',{range:DRANGE});
+  if(VIEW==='notes')return call('data',{});
+  return call('board',DATE?{date:DATE}:{})}
+
+/** 拿到資料之後要做的事：看板資料留一份給卡片動作用，側欄專案池也跟著更新 */
+function settle(r){
+  RAW=r;
+  if(r.stats)D=r;
+  if(r.projects&&(r.stats||r.order))renderPool(r.projects);
+  paint()}
+
+function busy(on){$('busy').style.display=on?'':'none'}
+
+/**
+ * 有快取就先畫舊的，再去背景更新——切回看過的頁面是即時的，不會閃一下「載入中」。
+ * 沒看過的頁面才顯示載入中。
+ */
+function load(){
   if(VIEW==='settings'){RAW=null;paint();return}
-  var p;
-  if(VIEW==='projects')p=call('projects',{range:PJRANGE,date:PJDATE||today()});
-  else if(VIEW==='pool')p=call('pool',{});
-  else if(VIEW==='outputs')p=call('outputs',{source:SRC,all:ALL?'1':''});
-  else if(VIEW==='done')p=call('done',{range:DRANGE});
-  else if(VIEW==='notes')p=call('data',{});
-  else p=call('board',DATE?{date:DATE}:{});
-  p.then(function(r){
-    RAW=r;
-    if(r.stats)D=r;                                  // 看板資料，卡片動作要用
-    if(r.projects&&(r.stats||r.order))renderPool(r.projects);
-    paint()})
+  var k=vkey(),had=VC[k];
+  if(had)settle(had);
+  else $('view').innerHTML='<div class="spin">載入中…</div>';
+  busy(1);
+  fetchView().then(function(r){VC[k]=r;settle(r);busy(0)})
    .catch(function(e){
-     $('view').innerHTML='<div class="spin">錯誤：'+esc(e.message)+'</div>';
+     busy(0);
+     if(!had)$('view').innerHTML='<div class="spin">錯誤：'+esc(e.message)+'</div>';
+     else toast(e.message);
      if(/token/.test(e.message))logout()})}
 
 function shift(n){
@@ -587,9 +613,9 @@ function shift(n){
     PJDATE=ymd(d)}
   else if(VIEW==='board'){var b=parse(DATE||today());b.setDate(b.getDate()+n);DATE=ymd(b)}
   else return;
-  load(1)}
-function goToday(){DATE=null;PJDATE=null;load(1)}
-function pjRange(r){PJRANGE=r;load(1)}
+  load()}
+function goToday(){DATE=null;PJDATE=null;load()}
+function pjRange(r){PJRANGE=r;load()}
 
 /* ---------------- header bits ---------------- */
 var RNAME={day:'日',week:'週',month:'月'};
@@ -608,7 +634,7 @@ function header(){
     return '<button class="chip'+(PJRANGE===r?' on':'')+'" onclick="pjRange(\''+r+'\')">'+RNAME[r]+'</button>'}).join(' ');
   if(VIEW==='outputs'&&RAW)ex=srcChips(RAW);
   if(VIEW==='done')ex=[['week','本週'],['month','本月'],['all','全部']].map(function(r){
-    return '<button class="chip'+(DRANGE===r[0]?' on':'')+'" onclick="DRANGE=\''+r[0]+'\';load(1)">'+
+    return '<button class="chip'+(DRANGE===r[0]?' on':'')+'" onclick="DRANGE=\''+r[0]+'\';load()">'+
       r[1]+'</button>'}).join(' ');
   if(VIEW==='board'&&RAW&&RAW.note)ex='<span class="chip">早晨簡報已產生</span>';
   $('extra').innerHTML=ex;
@@ -944,8 +970,14 @@ function findItem(id){
   var a=(RAW&&RAW.items)||[];
   for(var i=0;i<a.length;i++)if(a[i].id===id)return a[i];return null}
 
-function afterData(r){if(r.data){RAW=r.data;paint()}else load(1)}
-function noteErr(e){toast(e.message);load(1)}
+/** 資料區的本地改動：找到那張卡片就地改，畫面立刻反應 */
+function localItem(id,patch){
+  if(!RAW||!RAW.items)return false;
+  for(var i=0;i<RAW.items.length;i++)if(RAW.items[i].id===id){
+    if(patch===null)RAW.items.splice(i,1);
+    else Object.keys(patch).forEach(function(k){RAW.items[i][k]=patch[k]});
+    return true}
+  return false}
 
 function newSect(){
   var wrap=document.querySelector('.notes');
@@ -956,13 +988,14 @@ function newSect(){
   wrap.insertBefore(el,wrap.querySelector('.addsec'));
   inline(el.querySelector('b'),function(t){
     if(!t)return el.remove();
-    call('sect_save',{name:t}).then(afterData).catch(noteErr)},
+    mutate('sect_save',{name:t})},
     function(){el.remove()})}
 
 function renameSect(el){
   var n=el.textContent.trim(),id=el.dataset.id,cur=findSect(id);
   if(!n||!cur||n===cur.name){if(cur)el.textContent=cur.name;return}
-  call('sect_save',{id:id,name:n}).then(afterData).catch(noteErr)}
+  mutate('sect_save',{id:id,name:n},function(){
+    var sc=findSect(id);if(!sc)return false;sc.name=n;return true})}
 
 function findSect(id){
   var a=(RAW&&RAW.sections)||[];
@@ -970,7 +1003,8 @@ function findSect(id){
 
 function delSect(id,name,n){
   if(!confirm('刪掉分區「'+name+'」？'+(n?'裡面的 '+n+' 張卡片不會被刪，會移到「未分類」。':'')))return;
-  call('sect_del',{id:id}).then(afterData).catch(noteErr)}
+  mutate('sect_del',{id:id},function(){
+    RAW.sections=RAW.sections.filter(function(x){return x.id!==id});return true})}
 
 function newItem(sect,btn){
   var col=btn.closest('.ncol');
@@ -981,7 +1015,10 @@ function newItem(sect,btn){
   col.insertBefore(el,btn);
   inline(el.querySelector('textarea'),function(t){
     if(!t)return el.remove();
-    call('item_save',{section:sect,body:t,title:head1(t)}).then(afterData).catch(noteErr)},
+    el.remove();
+    mutate('item_save',{section:sect,body:t,title:head1(t)},function(){
+      RAW.items.push({id:'tmp'+Date.now(),section:sect,title:head1(t),body:t,order:9e9});
+      return true})},
     function(){el.remove()})}
 
 function editItem(id,card){
@@ -992,18 +1029,19 @@ function editItem(id,card){
   var ta=card.querySelector('textarea');ta.value=was;
   inline(ta,function(t){
     if(!t||t===was)return paint();
-    call('item_save',{id:id,body:t,title:head1(t)}).then(afterData).catch(noteErr)},
+    mutate('item_save',{id:id,body:t,title:head1(t)},function(){
+      return localItem(id,{body:t,title:head1(t)})})},
     paint)}
 
 function delItem(e,id){
   e.stopPropagation();
   var x=findItem(id);
   if(!confirm('刪掉「'+((x&&x.title)||'這張卡片')+'」？'))return;
-  call('item_del',{id:id}).then(afterData).catch(noteErr)}
+  mutate('item_del',{id:id},function(){return localItem(id,null)})}
 
 function moveItem(id,sect){
-  call('item_save',{id:id,section:sect}).then(function(r){
-    afterData(r);toast('已移動')}).catch(noteErr)}
+  mutate('item_save',{id:id,section:sect},function(){return localItem(id,{section:sect})})
+    .then(function(){toast('已移動')})}
 
 /* ---------------- 完成項目 ---------------- */
 function done(r,q){
@@ -1046,11 +1084,11 @@ function copyPath(el){
 /* ---------------- 產出資料庫 ---------------- */
 function srcChips(r){
   var ks=Object.keys(r.bySource);
-  return '<button class="chip'+(SRC?'':' on')+'" onclick="SRC=\'\';load(1)">全部 '+r.linked+'</button> '+
+  return '<button class="chip'+(SRC?'':' on')+'" onclick="SRC=\'\';load()">全部 '+r.linked+'</button> '+
     ks.map(function(k){
-      return '<button class="chip'+(SRC===k?' on':'')+'" onclick="SRC=\''+k+'\';load(1)">'+
+      return '<button class="chip'+(SRC===k?' on':'')+'" onclick="SRC=\''+k+'\';load()">'+
         esc(k)+' '+r.bySource[k]+'</button>'}).join(' ')+
-    ' <button class="chip'+(ALL?' on':'')+'" onclick="ALL=ALL?0:1;load(1)">含無連結</button>'}
+    ' <button class="chip'+(ALL?' on':'')+'" onclick="ALL=ALL?0:1;load()">含無連結</button>'}
 
 function outputs(r,q){
   var rows=r.rows.filter(function(l){return hit(l,q)});
@@ -1090,8 +1128,8 @@ function settings(){
       '<div class="kv"><span>工作表</span><b>紀錄 · 任務 · 簡報 · 設定</b></div></div>'+
     '<div class="panelbox"><h3>這台裝置</h3>'+
       '<div class="kv"><span>字級</span><b>'+Math.round(Z*100)+'% '+
-        '<button class="chip" onclick="zoom(-1);load(1)">A−</button> '+
-        '<button class="chip" onclick="zoom(1);load(1)">A＋</button></b></div>'+
+        '<button class="chip" onclick="zoom(-1);load()">A−</button> '+
+        '<button class="chip" onclick="zoom(1);load()">A＋</button></b></div>'+
       '<div class="kv"><span>TOKEN</span><b>已儲存於本機</b></div>'+
       '<div class="kv"><span>換一組 TOKEN</span><b><button class="chip" onclick="logout()">登出並重新輸入</button></b></div>'+
       '<p class="u" style="margin-top:10px;-webkit-line-clamp:4">TOKEN 存在這個瀏覽器的 localStorage，換裝置要重貼一次。要作廢舊的，到 Apps Script「專案設定 → 指令碼屬性」改掉 TOKEN 再重跑 setup。</p></div>'+
@@ -1106,15 +1144,49 @@ function settings(){
 
 /* ---------------- actions ---------------- */
 /** 寫入用這個：在看板頁時請伺服器把新的看板一起回來，一趟就完成，不用先更新再重抓 */
-function mutate(action,params){
+/**
+ * 寫入。opt 是「先在本地把畫面改好」的函式，回傳 true 表示有改到，
+ * 這樣按下去是即時的；伺服器回來的權威資料再覆蓋一次，有出入會自動修正。
+ */
+function mutate(action,params,opt){
   if(VIEW==='board')params.board=1;
+  if(opt&&opt())paint();
+  busy(1);
   return call(action,params).then(function(r){
-    if(r.board){RAW=r.board;D=r.board;renderPool(r.board.projects);paint()}
-    else load();
-    return r})}
+    busy(0);
+    if(r.board){VC['board:'+(DATE||today())]=r.board;settle(r.board)}
+    else if(r.data){VC.notes=r.data;settle(r.data)}
+    else{VC={};load()}
+    return r})
+   .catch(function(e){busy(0);toast(e.message);VC={};load()})}
+
+/**
+ * 把一筆任務的改動就地套進看板資料，分欄規則跟後端 board_ 一致
+ * （drag.test.js 會拿同一批資料比對兩邊的分欄結果，避免這裡跟後端走鐘）。
+ */
+function applyTask(b,id,patch){
+  if(!b||!b.running)return false;
+  var all=b.running.concat(b.today,b.tomorrow,b.unscheduled),t=null;
+  all.forEach(function(x){if(x.id===id)t=x});
+  if(!t)return false;
+  Object.keys(patch).forEach(function(k){if(patch[k]!==undefined)t[k]=patch[k]});
+  var td=b.date,tm=ymd(new Date(parse(b.date).getTime()+864e5));
+  var open=all.filter(function(x){return x.status==='待辦'||x.status==='進行中'});
+  open.sort(function(a,c){                     // 跟後端 sortTasks_ 同一套規則
+    var da=a.due||'9999-99-99',dc=c.due||'9999-99-99';
+    if(da!==dc)return da<dc?-1:1;
+    if(a.priority!==c.priority)return 'ABC'.indexOf(a.priority)-'ABC'.indexOf(c.priority);
+    return a.id<c.id?-1:(a.id>c.id?1:0)});
+  b.running=open.filter(function(x){return x.status==='進行中'});
+  var rest=open.filter(function(x){return x.status!=='進行中'});
+  b.today=rest.filter(function(x){return x.due&&x.due<=td});
+  b.tomorrow=rest.filter(function(x){return x.due===tm});
+  b.unscheduled=rest.filter(function(x){return !x.due});
+  return true}
 
 function st(id,s){event.stopPropagation();
-  mutate('task_update',{id:id,status:s}).then(function(){toast('已更新')}).catch(function(e){toast(e.message)})}
+  mutate('task_update',{id:id,status:s},function(){return applyTask(RAW,id,{status:s})})
+    .then(function(){toast('已更新')})}
 
 /** 把任務移到某一欄。拖曳與動作列按鈕都走這裡。
     run＝開始做；today/tmr＝改到期日，若原本在執行中就一併退回待辦。 */
@@ -1127,12 +1199,12 @@ function toCol(id,to,from){
     p.due=ymd(d);
     if(from==='run')p.status='待辦';
   }
-  return mutate('task_update',p)
-    .then(function(){toast('移到「'+DROP[to]+'」')})
-    .catch(function(e){toast(e.message);load()})}
+  return mutate('task_update',p,function(){return applyTask(RAW,id,p)})
+    .then(function(){toast('移到「'+DROP[to]+'」')})}
 function bump(id){event.stopPropagation();
   var t=findTask(id),base=t&&t.due?parse(t.due):new Date();base.setDate(base.getDate()+1);
-  mutate('task_update',{id:id,due:ymd(base)}).then(function(){toast('延到 '+md(ymd(base)))}).catch(function(e){toast(e.message)})}
+  mutate('task_update',{id:id,due:ymd(base)},function(){return applyTask(RAW,id,{due:ymd(base)})})
+    .then(function(){toast('延到 '+md(ymd(base)))})}
 function findTask(id){
   var a=allTasks(RAW).concat(allTasks(D));
   for(var i=0;i<a.length;i++)if(a[i]&&a[i].id===id)return a[i];return null}
@@ -1157,9 +1229,9 @@ function del(){
 function doDel(){
   if(!EDIT)return;
   var id=EDIT;
-  mutate('task_update',{id:id,status:'取消'})
-    .then(function(){toast('已刪除');closeAdd()})
-    .catch(function(e){toast(e.message)})}
+  closeAdd();
+  mutate('task_update',{id:id,status:'取消'},function(){return applyTask(RAW,id,{status:'取消'})})
+    .then(function(){toast('已刪除')})}
 
 function openAdd(k,col){
   $('menu').classList.remove('on');$('veil').classList.add('on');kind(k||'task');
@@ -1187,7 +1259,8 @@ function submit(){
       due:$('fD').value,priority:$('fPr').value,waiting:$('fW').value.trim()};
     if(EDIT)d.id=EDIT;
     else if(COL==='run')d.status='進行中';       // 在「AI 正執行」那欄新增＝直接開工
-    p=mutate(EDIT?'task_update':'task_add',d)}
+    var eid=EDIT;
+    p=mutate(EDIT?'task_update':'task_add',d,eid?function(){return applyTask(RAW,eid,d)}:null)}
   else p=mutate('log',{title:t,project:$('fP').value.trim(),summary:$('fS').value.trim(),
       link:$('fL').value.trim(),source:'手動',status:'完成'});
   p.then(function(){toast('已儲存');closeAdd()})
