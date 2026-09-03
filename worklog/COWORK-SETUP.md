@@ -39,28 +39,23 @@ https://docs.google.com/spreadsheets/d/136z3S0ADQHRda3q8O_B_GFBlBlBuE-oEg0mxIeT0
 
 複製 `/exec` 結尾的網址記下來。
 
-**四、寫設定檔**
+**四、驗證連線**
 
-在我的家目錄建立 `~/.claude/worklog.env`，內容兩行（用第二步的 TOKEN 和第三步的網址）：
+用瀏覽器（不要用 shell 的 curl，沙盒的代理會擋掉 script.google.com）開啟：
 
 ```
-WORKLOG_URL=<那個 /exec 網址>
-WORKLOG_TOKEN=<那個 TOKEN>
+<那個 /exec 網址>?action=ping&token=<那個 TOKEN>
 ```
 
-然後驗證連線：
-
-```bash
-. ~/.claude/worklog.env
-curl -sS -m 20 -L -X POST -H 'Content-Type: application/json' "$WORKLOG_URL" \
-  -d '{"action":"ping","token":"'"$WORKLOG_TOKEN"'"}'
-```
-
-要回 `{"ok":true,...}` 才算成功。失敗就停下來告訴我錯誤內容。
+頁面要顯示 `{"ok":true,...}` 才算成功。失敗就停下來告訴我看到什麼。
 
 **五、安裝兩個 skill**
 
-把 `work-log` 和 `morning-brief` 兩個資料夾（各含一個 SKILL.md）放到我放其他 skill 的地方，也就是 `auto-file-organizer` 所在的同一層資料夾。放好後確認你能在 skill 清單裡看到它們。
+把 `work-log` 和 `morning-brief` 兩個資料夾（各含一個 SKILL.md）放到我放其他 skill 的地方，也就是 `auto-file-organizer` 所在的同一層資料夾。
+
+放進去之前，把每個 SKILL.md「設定」段落裡的 `WORKLOG_URL` 和 `WORKLOG_TOKEN` 兩行換成第二、三步拿到的實際值。設定放在 skill 檔裡是刻意的——沙盒的家目錄每次對話重開就清空，存不住 `~/.claude/worklog.env`。
+
+放好後確認 skill 清單裡看得到它們。
 
 **六、建立排程**
 

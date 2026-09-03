@@ -5,51 +5,55 @@ description: 工作看板自動記錄。每次 Cowork 完成一個任務時，�
 
 # work-log：任務結束就記一筆
 
+## 設定
+
+安裝後把下面兩行換成實際值再存檔。這兩個值就住在這個檔案裡，因為沙盒的家目錄
+每次對話重開就清空，`~/.claude/worklog.env` 存不住。
+
+```
+WORKLOG_URL  = https://script.google.com/macros/s/XXXX/exec
+WORKLOG_TOKEN = 你的TOKEN
+```
+
+還是 `XXXX` 就代表沒設定完，提醒使用者一次「工作看板還沒填 URL 和 TOKEN」，然後跳過。
+
+## 一定要用瀏覽器，不要用 curl
+
+沙盒的網路代理擋掉 `script.google.com`（403），所以 shell 的 `curl` 一定失敗，
+不要浪費時間重試。改用瀏覽器開一個網址，Apps Script 的 `doGet` 收得到 query 參數，
+回應就是純 JSON 顯示在頁面上，直接讀那段文字判斷成功與否。
+
 ## 何時執行
 
 每個任務的最後一步。順序是：任務本體完成 → auto-file-organizer 歸檔（若有產檔）→ 本 skill 送紀錄。
 純聊天、純問答（沒有產出、沒有動作）不記。
 
-## 設定來源
-
-讀 `~/.claude/worklog.env`，裡面有兩行：
-
-```
-WORKLOG_URL=https://script.google.com/macros/s/XXXX/exec
-WORKLOG_TOKEN=xxxxxxxx
-```
-
-沒有這個檔就跳過，並提醒使用者一次「工作看板還沒設定」。
-
 ## 要送的內容
 
-| 欄位 | 怎麼填 |
+| 參數 | 怎麼填 |
 |---|---|
 | source | 固定 `Cowork` |
 | project | 任務所屬的品牌或專案，例如 `起士公爵`、`電腦舖`、`個人`。判斷不出來就留空 |
 | title | 一句話說做了什麼，30 字內，例如「產出 8 月 FB 廣告成效週報」 |
 | summary | 兩三句結果摘要：關鍵數字、做了哪些決定、有沒有待辦 |
-| link | 產出檔的 Google Drive 連結或本機路徑；沒有就留空 |
-| status | 做完 `完成`；使用者中途喊停或還要接續 `進行中` |
+| link | 產出檔的 Google Drive 連結；沒有就留空 |
+| status | 做完 `完成`；中途喊停或還要接續 `進行中` |
 
 ## 送出方式
 
-用 shell 執行：
+把每個值做 URL 編碼（中文、空白、換行都要編），組成這樣一個網址，用瀏覽器開啟：
 
-```bash
-. ~/.claude/worklog.env
-curl -sS -m 20 -L -X POST -H 'Content-Type: application/json' "$WORKLOG_URL" -d '{
-  "action":"log","token":"'"$WORKLOG_TOKEN"'",
-  "source":"Cowork","project":"起士公爵",
-  "title":"產出 8 月 FB 廣告成效週報",
-  "summary":"ROAS 3.2，建議把再行銷預算提高 20%。報告已歸檔。",
-  "link":"https://drive.google.com/...","status":"完成"
-}'
+```
+<WORKLOG_URL>?action=log&token=<WORKLOG_TOKEN>&source=Cowork&status=%E5%AE%8C%E6%88%90&project=<...>&title=<...>&summary=<...>&link=<...>
 ```
 
-回應 `{"ok":true,...}` 才算成功。失敗就在最後回覆裡提一句「工作看板寫入失敗：原因」，不要重試超過一次。
+頁面出現 `{"ok":true,...}` 才算成功。
 
-如果這個環境不能執行 shell，改成直接開啟「工作看板」試算表，在「紀錄」工作表最後一列依表頭順序填入：id 留空、開始時間填現在、來源 Cowork、專案、標題、狀態、摘要、產出連結。
+網址不要超過 8000 字元，摘要控制在 200 字內就不會有問題。
+
+失敗處理：頁面出現 `{"ok":false,...}` 或整頁載入不了，就重開一次同一個網址（POST 在這個
+環境偶發失敗，重試一次通常會過）。第二次還失敗就在最後回覆裡寫一句
+「工作看板寫入失敗：<原因>」，不要再試第三次。
 
 ## 給使用者的回覆
 
