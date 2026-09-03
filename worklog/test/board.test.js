@@ -20,7 +20,7 @@ const TASKS=[['id','建立時間','標題','專案','到期日','優先','狀態
 const LOGS=[['id','開始時間','結束時間','來源','專案','標題','狀態','摘要','產出連結','session_id','任務id']];
 const T='2026-09-03', Y='2026-09-02', TM='2026-09-04';
 function task(id,title,pj,due,pri,st,next,wait,done){TASKS.push([id,T,title,pj,due,pri,st,next||'',wait||'','','',done||''])}
-function log(id,s,e,src,pj,title,st,sum){LOGS.push([id,s,e,src,pj,title,st,sum||'','','sid'+id,''])}
+function log(id,s,e,src,pj,title,st,sum,link){LOGS.push([id,s,e,src,pj,title,st,sum||'',link||'','sid'+id,''])}
 
 task('T1','Claude SEO 優化','Claude SEO','2026-09-10','B','進行中','優化內頁標題');
 task('T2','吳若樺貼文完成定稿','行銷構圖',T,'A','待辦','審核發佈');
@@ -30,7 +30,7 @@ task('T5','測試訂單完成','Shopline',TM,'A','待辦');
 task('T6','早就該做的事','行銷構圖','2026-08-20','A','待辦','補做');   // 逾期
 task('T7','已完成的','Shopline',T,'A','完成','','', T+' 11:15');
 task('T8','沒排日期','食品開發 AI','','B','待辦','等排程');
-log('L1',T+' 09:00',T+' 10:30','Claude Code','工作看板','建立 board API','完成','加了 board_');
+log('L1',T+' 09:00',T+' 10:30','Claude Code','工作看板','建立 board API','完成','加了 board_','https://drive.google.com/file/d/abc/view');
 log('L2',T+' 10:40','','Cowork','起士公爵','FB 廣告週報','進行中','抓數據中');
 log('L3',Y+' 14:00',Y+' 15:00','Cowork','起士公爵','昨天的事','完成');
 
@@ -84,16 +84,53 @@ const b2=ctx.handle_('board',{date:T},'tok');
 assert.strictEqual(b2.stats.focusHoursPrev,1,'昨天 14:00-15:00 = 1 小時');
 assert.strictEqual(b2.stats.overdue,1,'鈴鐺數＝逾期任務數');
 
-// ---- 任務日曆 ----
-const cal=ctx.handle_('calendar',{month:'2026-09'},'tok');
-assert(cal.ok,'calendar: '+cal.error);
-assert.strictEqual(cal.month,'2026-09');
-assert.strictEqual(cal.days[T].length,3,'9/3 當天三件：兩件待辦＋一件已完成');
-assert.strictEqual(cal.days[T][0].priority,'A','同一天 A 排最前');
-assert(!cal.days['2026-08-20'],'不是這個月的不會出現');
-const calAug=ctx.handle_('calendar',{month:'2026-08'},'tok');
-assert.strictEqual(calAug.days['2026-08-20'].length,1,'切到上個月看得到逾期那件');
-assert.strictEqual(ctx.handle_('calendar',{},'tok').month,ctx.fmtDate_(new Date()).slice(0,7),'沒帶月份就用當月');
+// ---- 專案總覽：日/週/月 ----
+const wk=ctx.handle_('projects',{range:'week',date:T},'tok');
+assert(wk.ok,'projects: '+wk.error);
+assert.strictEqual(wk.from+'~'+wk.to,'2026-08-31~2026-09-06','週區間');
+assert.strictEqual(wk.total,5,'本週五件（含已完成；8/20 那件與未排日期的都不在區間）');
+assert.strictEqual(wk.done,1);
+const day=ctx.handle_('projects',{range:'day',date:T},'tok');
+assert.strictEqual(day.from,day.to,'單日區間頭尾同一天');
+assert.strictEqual(day.total,3,'9/3 三件');
+const mo=ctx.handle_('projects',{range:'month',date:T},'tok');
+assert.strictEqual(mo.from+'~'+mo.to,'2026-09-01~2026-09-30','月區間');
+assert(mo.total>wk.total,'月比週多');
+assert.strictEqual(ctx.handle_('projects',{range:'亂寫',date:T},'tok').range,'week','區間亂給就當週');
+assert(wk.unscheduled.every(t=>!t.due),'未排日期另外裝一袋');
+assert(wk.unscheduled.some(t=>t.title==='沒排日期'));
+assert(!wk.projects.some(p=>p.tasks.some(t=>t.status==='取消')),'取消的不算');
+assert.strictEqual(wk.projects[0].name,'行銷構圖','未完成最多的排最前');
+
+// ---- 產出資料庫 ----
+const out=ctx.handle_('outputs',{},'tok');
+assert(out.ok,'outputs: '+out.error);
+assert.strictEqual(out.rows.length,1,'預設只列有產出連結的');
+assert.strictEqual(out.rows[0].title,'建立 board API');
+assert.strictEqual(out.linked,1);
+assert.strictEqual(ctx.handle_('outputs',{all:'1'},'tok').rows.length,3,'all=1 連沒連結的一起列');
+assert.strictEqual(ctx.handle_('outputs',{source:'Cowork',all:'1'},'tok').rows.length,2,'依來源過濾');
+assert.strictEqual(ctx.handle_('outputs',{source:'沒這個',all:'1'},'tok').rows.length,0);
+const cnt=ctx.handle_('outputs',{all:'1'},'tok').bySource;
+assert.strictEqual(cnt['Claude Code']+cnt['Cowork'],3,'來源統計不受過濾影響');
+assert(out.rows.length===0||out.rows.every(r=>r.link),'列出來的都有連結');
+
+// ---- AI 專案池 ----
+const pl=ctx.handle_('pool',{date:T},'tok');
+assert(pl.ok,'pool: '+pl.error);
+assert.strictEqual(pl.backlog,8);
+assert.strictEqual(pl.overdue,1);
+assert.strictEqual(pl.yesterday.length,1,'昨天一筆紀錄');
+assert.strictEqual(pl.yesterdayHours,1);
+assert.strictEqual(pl.order[0].task.title,'早就該做的事','逾期最急');
+assert(/逾期 14 天/.test(pl.order[0].reason),'理由要講逾期幾天：'+pl.order[0].reason);
+const doing=pl.order.find(o=>o.task.status==='進行中');
+assert.strictEqual(doing.reason,'已經在做，收掉它');
+const waiting=pl.order.find(o=>o.task.waiting);
+assert.strictEqual(waiting.reason,'等 PN，先去催');
+assert(pl.order.indexOf(waiting)>pl.order.indexOf(doing),'卡在別人身上的往後排');
+assert(pl.projects.every(p=>Array.isArray(p.tasks)),'每個專案帶著自己的任務');
+assert.strictEqual(pl.order.length,Math.min(8,10),'最多十件');
 
 // ---- 目標追蹤 ----
 const g=ctx.handle_('goals',{date:T},'tok');
@@ -106,7 +143,9 @@ assert.strictEqual(g.weeks[5].highDone,1,'那件是 A 級');
 assert.strictEqual(g.overdue,1);
 assert.strictEqual(g.byPriority.map(x=>x.priority+':'+x.open).join(' '),'A:4 B:3 C:1');
 assert.strictEqual(g.backlog,8,'未完成任務數');
-console.log('calendar  ', Object.keys(cal.days).sort().join(' '));
+console.log('週專案    ', wk.projects.map(p=>`${p.name}:${p.done}/${p.count}`).join(' '));
+console.log('建議順序  ', pl.order.slice(0,4).map((o,i)=>`${i+1}.${o.task.title}(${o.reason})`).join(' '));
+console.log('產出      ', out.rows.map(r=>r.title+'→'+r.link).join(' '));
 console.log('goals wk  ', g.weeks.map(w=>`${w.from}:${w.done}/${w.total}@${w.focusHours}h`).join(' '));
 console.log('byPriority', g.byPriority.map(x=>x.priority+':'+x.open).join(' '));
 
