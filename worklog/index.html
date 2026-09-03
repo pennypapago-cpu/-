@@ -169,6 +169,65 @@
   .panelbox{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin-bottom:14px}
   .panelbox h3{margin:0 0 12px;font-size:15px}
 
+  /* ---------------- 日曆（參考 Google 日曆） ---------------- */
+  .cw{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  .crow{display:grid;grid-template-columns:var(--gut) repeat(var(--n),minmax(0,1fr))}
+  .chead{border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--panel);z-index:4}
+  .chead>div{padding:7px 4px 8px;text-align:center;border-left:1px solid var(--line)}
+  .chead>div:first-child{border-left:0;font-size:10.5px;color:var(--dim);display:flex;
+    align-items:flex-end;justify-content:center;padding-bottom:10px}
+  .wd{font-size:11.5px;color:var(--dim)}
+  .dn{font-size:19px;font-weight:600;line-height:1.5;margin-top:1px}
+  .chead .today .wd{color:var(--acc)}
+  .chead .today .dn{background:var(--acc2);color:#fff;border-radius:50%;
+    width:30px;height:30px;line-height:30px;margin:1px auto 0;font-weight:700;font-size:15px}
+  .allday{border-bottom:1px solid var(--line);background:rgba(255,255,255,.012)}
+  .allday>div{border-left:1px solid var(--line);padding:4px 3px;min-height:30px}
+  .allday>div:first-child{border-left:0;font-size:10.5px;color:var(--dim);text-align:right;padding:6px 6px 0 0}
+  .chip2{display:block;width:100%;text-align:left;font-size:11px;line-height:1.35;padding:2.5px 6px;
+    border-radius:4px;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    border-left:3px solid}
+  .chip2.A{background:rgba(240,85,109,.16);border-color:var(--a);color:#ff97a9}
+  .chip2.B{background:rgba(224,160,58,.16);border-color:var(--b);color:#e8b45c}
+  .chip2.C{background:rgba(78,163,245,.16);border-color:var(--c);color:#8cc4ff}
+  .chip2.dn2{opacity:.4;text-decoration:line-through}
+  .cbody{max-height:min(62vh,660px);overflow-y:auto;position:relative}
+  .cbody .crow{position:relative}
+  .gut{border-right:0}
+  .gut div{height:var(--h);font-size:10.5px;color:var(--dim);text-align:right;
+    padding-right:6px;transform:translateY(-7px)}
+  .dcol{border-left:1px solid var(--line);position:relative}
+  .dcol.wknd{background:rgba(255,255,255,.015)}
+  .dcol.tdy{background:rgba(59,130,246,.05)}
+  .hr{height:var(--h);border-bottom:1px solid var(--line)}
+  .ev{position:absolute;border-radius:5px;padding:2px 5px;font-size:10.5px;line-height:1.3;
+    overflow:hidden;border-left:3px solid;z-index:2}
+  .ev b{display:block;font-weight:600;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ev s{display:block;text-decoration:none;opacity:.75;font-size:10px}
+  .ev.cc{background:rgba(52,211,153,.17);border-color:#34d399;color:#7ee7b4}
+  .ev.cw2{background:rgba(224,160,58,.17);border-color:var(--b);color:#eec27a}
+  .ev.mn{background:rgba(78,163,245,.17);border-color:var(--c);color:#9ccdff}
+  .ev.run{border-style:dashed}
+  .now{position:absolute;left:0;right:0;height:0;border-top:2px solid var(--bad);z-index:5;pointer-events:none}
+  .now::before{content:"";position:absolute;left:-4px;top:-5px;width:8px;height:8px;
+    border-radius:50%;background:var(--bad)}
+  .mgrid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:1px;background:var(--line)}
+  .mgrid>.mh{background:var(--panel);text-align:center;font-size:11.5px;color:var(--dim);padding:7px 0}
+  .mc{background:var(--panel);min-height:104px;padding:5px 5px 6px}
+  .mc.out{background:rgba(0,0,0,.22)}
+  .mc.tdy{background:rgba(59,130,246,.06)}
+  .mc .d{font-size:12px;color:var(--dim);font-weight:600;margin-bottom:3px;text-align:right}
+  .mc.tdy .d{color:#fff;background:var(--acc2);border-radius:50%;width:21px;height:21px;
+    line-height:21px;text-align:center;margin:0 0 3px auto;font-size:11.5px}
+  .mc .more{font-size:10.5px;color:var(--dim);padding-left:2px}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;padding:9px 4px 0;font-size:11.5px;color:var(--dim)}
+  .legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+  @media(max-width:980px){
+    .cbody{max-height:none}
+    .chead .dn{font-size:16px} .chead .today .dn{width:26px;height:26px;line-height:26px;font-size:13px}
+    .mc{min-height:74px;padding:3px} .chip2{font-size:10px;padding:2px 4px}
+    .mc .d{font-size:11px}
+  }
   .rank{display:flex;align-items:center;gap:11px;padding:9px 6px;border-bottom:1px solid var(--line)}
   .rank:last-child{border-bottom:0}
   .rank>b{width:22px;height:22px;border-radius:6px;background:var(--card2);color:var(--mute);
@@ -544,27 +603,131 @@ function renderPool(ps){
 
 function allTasks(r){
   r=r||{};
-  var a=(r.running||[]).concat(r.today||[],r.tomorrow||[],r.unscheduled||[]);
+  var a=(r.running||[]).concat(r.today||[],r.tomorrow||[],r.unscheduled||[],r.tasks||[]);
   (r.projects||[]).forEach(function(p){if(p.tasks)a=a.concat(p.tasks)});
   (r.order||[]).forEach(function(o){a.push(o.task)});
   return a}
 function projects(r,q){
-  var f=function(a,c){return a.filter(function(x){return hit(x,q)}).map(function(t){return taskCard(t,c)})};
-  if(!r.projects.length&&!r.unscheduled.length)
-    return '<div class="wrap"><div class="none">這段期間沒有任務</div></div>';
-  var h='<div class="wrap"><div class="panelbox" style="display:flex;gap:26px;flex-wrap:wrap">'+
-    kpi('區間',RNAME[r.range]+' · '+r.from+(r.range==='day'?'':' 起'))+
-    kpi('任務',r.done+' / '+r.total+' 完成')+
-    kpi('專案',r.projects.length+' 個')+
-    kpi('未排日期',r.unscheduled.length+' 件')+
+  var f=function(a){return a.filter(function(x){return hit(x,q)})};
+  var head='<div class="wrap">'+
+    '<div class="panelbox" style="display:flex;gap:26px;flex-wrap:wrap">'+
+      kpi('區間',RNAME[r.range]+(r.range==='day'?'':' · '+r.from+' – '+r.to))+
+      kpi('任務',r.done+' / '+r.total+' 完成')+
+      kpi('實際紀錄',r.logs.length+' 筆 · '+logHours(r.logs)+' 小時')+
+      kpi('未排日期',r.unscheduled.length+' 件')+
     '</div>';
-  r.projects.forEach(function(p){
-    var cards=f(p.tasks,'');
-    if(!cards.length)return;
-    h+='<div class="sec">'+esc(p.name)+' · '+p.done+'/'+p.count+' 完成'+
-      (p.overdue?' · <span style="color:var(--bad)">逾期 '+p.overdue+'</span>':'')+'</div>'+cards.join('')});
-  var un=f(r.unscheduled,'');
-  if(un.length)h+='<div class="sec">未排日期 '+un.length+'</div>'+un.join('');
+  var body=r.range==='month'?monthCal(r,f):timeCal(r,f);
+  return head+body+
+    '<div class="legend">'+
+      '<span><i style="background:#34d399"></i>Claude Code</span>'+
+      '<span><i style="background:#e0a03a"></i>Cowork</span>'+
+      '<span><i style="background:#4ea3f5"></i>手動</span>'+
+      '<span>上方全天列是排定的任務，時間軸是實際跑過的紀錄</span>'+
+    '</div>'+
+    (r.unscheduled.length?'<div class="sec">未排日期 '+r.unscheduled.length+'</div>'+
+      f(r.unscheduled).map(function(t){return taskCard(t,'')}).join(''):'')+
+    '</div>'}
+
+function logHours(logs){
+  var m=0;logs.forEach(function(l){var a=tmin(l.start),b=tmin(l.end);
+    if(a!=null&&b!=null&&b>a)m+=b-a});
+  return Math.round(m/6)/10}
+
+/** 'yyyy-MM-dd HH:mm' → 當天的第幾分鐘；沒有時間就回 null */
+function tmin(s){var m=String(s||'').match(/ (\d{2}):(\d{2})/);return m?+m[1]*60+ +m[2]:null}
+function days(from,to){var a=[],d=parse(from),e=parse(to);
+  while(d<=e){a.push(ymd(d));d.setDate(d.getDate()+1)}return a}
+function srcCls(s){return s==='Claude Code'?'cc':(s==='Cowork'?'cw2':'mn')}
+
+/* ---- 日／週：上方全天列放任務，下方時間軸放紀錄 ---- */
+function timeCal(r,f){
+  var ds=days(r.from,r.to),td=today(),H=44;
+  var tasks=f(r.tasks),logs=f(r.logs);
+
+  // 時間軸範圍跟著實際紀錄伸縮，預設 8–19 點
+  var lo=8*60,hi=19*60;
+  logs.forEach(function(l){var a=tmin(l.start),b=tmin(l.end);
+    if(a!=null){lo=Math.min(lo,a);hi=Math.max(hi,b==null?a+60:b)}});
+  lo=Math.floor(lo/60)*60;hi=Math.min(24*60,Math.ceil(hi/60)*60);
+  if(hi<=lo)hi=lo+60;
+  var hrs=(hi-lo)/60;
+
+  var byDay={},tByDay={};
+  logs.forEach(function(l){(byDay[String(l.start).slice(0,10)]=byDay[String(l.start).slice(0,10)]||[]).push(l)});
+  tasks.forEach(function(t){if(t.due)(tByDay[t.due]=tByDay[t.due]||[]).push(t)});
+
+  var style='--n:'+ds.length+';--gut:52px;--h:'+H+'px';
+  var h='<div class="cw" style="'+style+'">'+
+    '<div class="crow chead"><div>GMT+8</div>'+ds.map(function(d){
+      var x=parse(d);
+      return '<div class="'+(d===td?'today':'')+'"><div class="wd">週'+'日一二三四五六'[x.getDay()]+
+        '</div><div class="dn">'+x.getDate()+'</div></div>'}).join('')+'</div>'+
+    '<div class="crow allday"><div>全天</div>'+ds.map(function(d){
+      var ts=tByDay[d]||[];
+      return '<div>'+ts.map(function(t){
+        return '<button class="chip2 '+t.priority+(t.status==='完成'?' dn2':'')+
+          '" onclick="edit(\''+t.id+'\')" title="'+esc(t.title)+'">'+esc(t.title)+'</button>'}).join('')+
+        '</div>'}).join('')+'</div>'+
+    '<div class="cbody"><div class="crow">'+
+      '<div class="gut">'+Array.apply(null,{length:hrs}).map(function(_,i){
+        return '<div>'+(lo/60+i)+':00</div>'}).join('')+'</div>'+
+      ds.map(function(d){
+        var x=parse(d),wknd=x.getDay()===0||x.getDay()===6;
+        var slots=Array.apply(null,{length:hrs}).map(function(){return '<div class="hr"></div>'}).join('');
+        return '<div class="dcol'+(wknd?' wknd':'')+(d===td?' tdy':'')+'">'+slots+
+          lay(byDay[d]||[],lo,hi,H)+(d===td?nowLine(lo,hi,H):'')+'</div>'}).join('')+
+    '</div></div></div>';
+  return h}
+
+/** 同一天的紀錄鋪到時間軸上；時間重疊的並排，不要互相蓋住 */
+function lay(logs,lo,hi,H){
+  var evs=logs.map(function(l){
+    var a=tmin(l.start),b=tmin(l.end);
+    if(a==null)return null;
+    if(b==null||b<=a)b=Math.min(a+30,hi);       // 還在跑的畫 30 分鐘
+    return {l:l,a:Math.max(a,lo),b:Math.min(b,hi),live:tmin(l.end)==null}
+  }).filter(function(e){return e&&e.b>lo&&e.a<hi}).sort(function(p,q){return p.a-q.a});
+
+  var out='',i=0;
+  while(i<evs.length){
+    var g=[evs[i]],end=evs[i].b,j=i+1;
+    while(j<evs.length&&evs[j].a<end){g.push(evs[j]);end=Math.max(end,evs[j].b);j++}
+    g.forEach(function(e,k){
+      var w=100/g.length,top=(e.a-lo)/60*H,ht=Math.max(18,(e.b-e.a)/60*H-2);
+      out+='<div class="ev '+srcCls(e.l.source)+(e.live?' run':'')+'" style="top:'+top.toFixed(1)+
+        'px;height:'+ht.toFixed(1)+'px;left:calc('+(w*k)+'% + 2px);width:calc('+w+'% - 4px)" title="'+
+        esc(e.l.title)+'"><b>'+esc(e.l.title)+'</b>'+
+        (ht>32?'<s>'+String(e.l.start).slice(11,16)+(e.live?' 起 · 執行中':'–'+String(e.l.end).slice(11,16))+
+          (e.l.project?' · '+esc(e.l.project):'')+'</s>':'')+'</div>'});
+    i=j}
+  return out}
+
+function nowLine(lo,hi,H){
+  var d=new Date(),m=d.getHours()*60+d.getMinutes();
+  if(m<lo||m>hi)return '';
+  return '<div class="now" style="top:'+((m-lo)/60*H).toFixed(1)+'px"></div>'}
+
+/* ---- 月：格子裡放任務，附當天紀錄筆數 ---- */
+function monthCal(r,f){
+  var first=parse(r.from),td=today(),m=first.getMonth();
+  var start=new Date(first);start.setDate(1-((first.getDay()+6)%7));   // 補到週一
+  var last=parse(r.to),end=new Date(last);end.setDate(last.getDate()+(7-((last.getDay()+6)%7)-1));
+
+  var tByDay={},nByDay={};
+  f(r.tasks).forEach(function(t){if(t.due)(tByDay[t.due]=tByDay[t.due]||[]).push(t)});
+  f(r.logs).forEach(function(l){var d=String(l.start).slice(0,10);nByDay[d]=(nByDay[d]||0)+1});
+
+  var h='<div class="mgrid">'+['一','二','三','四','五','六','日'].map(function(w){
+    return '<div class="mh">週'+w+'</div>'}).join('');
+  for(var d=new Date(start);d<=end;d.setDate(d.getDate()+1)){
+    var k=ymd(d),ts=tByDay[k]||[],n=nByDay[k]||0;
+    h+='<div class="mc'+(d.getMonth()!==m?' out':'')+(k===td?' tdy':'')+'">'+
+      '<div class="d">'+d.getDate()+'</div>'+
+      ts.slice(0,3).map(function(t){
+        return '<button class="chip2 '+t.priority+(t.status==='完成'?' dn2':'')+
+          '" onclick="edit(\''+t.id+'\')" title="'+esc(t.title)+'">'+esc(t.title)+'</button>'}).join('')+
+      (ts.length>3?'<div class="more">還有 '+(ts.length-3)+' 件</div>':'')+
+      (n?'<div class="more">● '+n+' 筆紀錄</div>':'')+'</div>'}
   return h+'</div>'}
 
 function kpi(k,v){return '<div><div class="k" style="font-size:12px;color:var(--dim)">'+esc(k)+

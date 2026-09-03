@@ -101,6 +101,13 @@ assert(wk.unscheduled.every(t=>!t.due),'未排日期另外裝一袋');
 assert(wk.unscheduled.some(t=>t.title==='沒排日期'));
 assert(!wk.projects.some(p=>p.tasks.some(t=>t.status==='取消')),'取消的不算');
 assert.strictEqual(wk.projects[0].name,'行銷構圖','未完成最多的排最前');
+assert.strictEqual(wk.tasks.length,wk.total,'日曆用的扁平任務數＝區間總數');
+assert(wk.tasks.every(t=>t.due>=wk.from&&t.due<=wk.to||t.done_at),'扁平任務都落在區間內');
+assert.strictEqual(wk.logs.length,3,'本週三筆紀錄，日曆時間軸要用');
+assert.strictEqual(wk.logs[0].start<wk.logs[2].start,true,'日曆用的紀錄由舊到新');
+assert.strictEqual(ctx.handle_('projects',{range:'day',date:T},'tok').logs.length,2,'單日兩筆');
+assert.strictEqual(ctx.handle_('logs',{range:'week',date:T},'tok').rows[0].start>
+                   ctx.handle_('logs',{range:'week',date:T},'tok').rows[2].start,true,'清單用的仍是新的在前');
 
 // ---- 產出資料庫 ----
 const out=ctx.handle_('outputs',{},'tok');

@@ -63,6 +63,35 @@ assert(!ctx.logCard({title:'l',source:'Cowork',start:'2026-09-03 10:00',project:
 assert(ctx.col('c-today','📅','今日工作',[],'空').includes('data-drop="today"'));
 assert(ctx.col('c-run','⏰','AI','',[]).includes('data-drop="run"'));
 
+
+// ---- 日曆的純函式 ----
+assert.strictEqual(ctx.tmin('2026-09-03 09:30'),570,'09:30 = 570 分');
+assert.strictEqual(ctx.tmin('2026-09-03'),null,'沒有時間就是 null');
+assert.strictEqual(ctx.tmin(''),null);
+assert.strictEqual(ctx.days('2026-08-31','2026-09-06').length,7,'一週七天');
+assert.strictEqual(ctx.days('2026-09-03','2026-09-03').join(''),'2026-09-03','單日一格');
+assert.strictEqual(ctx.days('2026-08-31','2026-09-06')[6],'2026-09-06','跨月接得起來');
+assert.strictEqual(ctx.srcCls('Claude Code'),'cc');
+assert.strictEqual(ctx.srcCls('Cowork'),'cw2');
+assert.strictEqual(ctx.srcCls('手動'),'mn');
+assert.strictEqual(ctx.logHours([{start:'2026-09-03 09:00',end:'2026-09-03 10:30'},
+                                 {start:'2026-09-03 11:00',end:''}]),1.5,'沒結束時間的不算時數');
+
+// 時間重疊的紀錄要並排，不是互相蓋住
+const L=(a,b,t)=>({start:'2026-09-03 '+a,end:b?'2026-09-03 '+b:'',source:'Cowork',title:t,project:''});
+const two=ctx.lay([L('09:00','11:00','甲'),L('10:00','12:00','乙')],8*60,19*60,44);
+assert.strictEqual((two.match(/class="ev /g)||[]).length,2);
+assert((two.match(/width:calc\(50% - 4px\)/g)||[]).length===2,'兩個重疊各佔一半：'+two.slice(0,160));
+const apart=ctx.lay([L('09:00','10:00','甲'),L('11:00','12:00','乙')],8*60,19*60,44);
+assert((apart.match(/width:calc\(100% - 4px\)/g)||[]).length===2,'不重疊就各自佔滿');
+assert(/top:44.0px/.test(apart),'09:00 從 8 點起算是第 44px');
+// 還在跑的沒有結束時間，畫成虛線且有最小高度
+const live=ctx.lay([L('09:00','','跑'),],8*60,19*60,44);
+assert(/ev cw2 run/.test(live),'執行中要標虛線');
+assert(/height:2[0-9.]+px/.test(live),'執行中畫 30 分鐘高');
+// 超出時間軸範圍的不畫
+assert.strictEqual(ctx.lay([L('03:00','04:00','早')],8*60,19*60,44),'','範圍外不畫');
+
 console.log('toasts   ',toasts.join(' / '));
 console.log('DROP     ',JSON.stringify(ctx.DROP));
 console.log('\nDRAG PASS');
