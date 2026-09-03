@@ -193,7 +193,8 @@ Cowork 的沙盒有兩個限制，決定了兩個 skill 的寫法：
 ## 測試
 
 ```bash
-node test/board.test.js && node test/migrate.test.js && node test/drag.test.js && node test/perf.test.js
+node test/board.test.js && node test/migrate.test.js && node test/drag.test.js && \
+  node test/perf.test.js && node test/sync.test.js
 ```
 
 改 `Code.gs` 之前先看 `test/README.md`。
@@ -206,7 +207,13 @@ Apps Script 每讀一次試算表都是一趟慢的 API 呼叫，所以：
 - 寫入後用 `dirty_()` 把那張表的快取丟掉。少了這步，同一次請求裡「寫完再讀」會拿到寫入前的資料。
 - 寫入時帶 `board=1`，回應直接附上更新後的看板，前端不用再送第二趟。按一個動作從兩趟網路變一趟。
 
-`test/perf.test.js` 把讀表次數釘住，改壞了會被抓到。
+- 每個頁面的資料在前端各留一份快取。切回看過的頁面先畫舊的、再背景更新，不會閃「載入中」；
+  更新中時標題列有一個小圈圈在轉。
+- 寫入先在本地把畫面改好再送請求，按下去是即時的。伺服器回來的權威資料會覆蓋一次，
+  有出入會自動修正；失敗則提示並重新載入。
+
+`test/perf.test.js` 把讀表次數釘住，`test/sync.test.js` 確保前端就地算的分欄跟後端一致，
+改壞了都會被抓到。
 
 ## 之後
 
