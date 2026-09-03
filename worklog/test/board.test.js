@@ -135,6 +135,7 @@ const doing=pl.order.find(o=>o.task.status==='進行中');
 assert.strictEqual(doing.reason,'已經在做，收掉它');
 const waiting=pl.order.find(o=>o.task.waiting);
 assert.strictEqual(waiting.reason,'等 PN，先去催');
+assert(pl.order.some(o=>o.reason==='A 優先處理'),'A 級的理由改成「A 優先處理」');
 assert(pl.order.indexOf(waiting)>pl.order.indexOf(doing),'卡在別人身上的往後排');
 assert(pl.projects.every(p=>Array.isArray(p.tasks)),'每個專案帶著自己的任務');
 assert.strictEqual(pl.order.length,Math.min(8,10),'最多十件');
