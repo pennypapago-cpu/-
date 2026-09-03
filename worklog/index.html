@@ -265,6 +265,18 @@
   .nc{background:var(--card);border:1px solid var(--line);border-radius:10px;
     padding:9px 11px;margin-bottom:7px;cursor:grab;touch-action:pan-y}
   .nc:hover{border-color:var(--line2);background:var(--card2)}
+  .nc{position:relative}
+  .nc .x{position:absolute;top:3px;right:4px;display:none;color:var(--dim);
+    font-size:0.9375rem;line-height:1;padding:2px 4px;border-radius:5px}
+  .nc:hover .x{display:block}
+  .nc .x:hover{color:var(--bad);background:rgba(240,85,109,.12)}
+  .nc.edit{padding:5px;border-color:var(--acc);cursor:default;background:var(--card)}
+  .nc.edit .x{display:none}
+  .nc textarea{display:block;width:100%;background:var(--card2);border:1px solid var(--line2);
+    border-radius:7px;padding:7px 8px;font:inherit;font-size:0.8125rem;line-height:1.5;
+    resize:vertical;outline:0}
+  .nc textarea:focus{border-color:var(--acc)}
+  .ncol>h3 b[data-ph]:empty::before{content:attr(data-ph);color:var(--dim);font-weight:400}
   .nc .ti{font-size:0.8125rem;font-weight:600;line-height:1.45;word-break:break-word}
   .nc .b{font-size:0.75rem;color:var(--mute);margin-top:3px;line-height:1.5;
     display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word}
@@ -276,6 +288,7 @@
   .addsec:hover{color:var(--acc);border-color:var(--acc)}
   @media(max-width:980px){
     .notes{padding:12px 14px 90px}
+    .nc .x{display:block}
     .ncol{width:13rem}
   }
   .rank{display:flex;align-items:center;gap:11px;padding:9px 6px;border-bottom:1px solid var(--line)}
@@ -893,16 +906,39 @@ function sectCol(sc,items,fixed){
       (fixed?'':'<button class="x" onclick="delSect(\''+sc.id+'\',\''+esc(sc.name)+'\','+items.length+')" title="刪除分區">×</button>')+
     '</h3>'+
     items.map(noteCard).join('')+
-    '<button class="add" onclick="newItem(\''+esc(sc.id)+'\')">＋ 新增</button></section>'}
+    '<button class="add" onclick="newItem(\''+esc(sc.id)+'\',this)">＋ 新增</button></section>'}
 
 function noteCard(x){
-  var url=/^https?:\/\/\S+$/.test(String(x.body||'').trim())?String(x.body).trim():'';
-  return '<article class="nc" data-item="'+esc(x.id)+'" onclick="editItem(\''+x.id+'\')">'+
+  var body=String(x.body||''),url=/^https?:\/\/\S+$/.test(body.trim())?body.trim():'';
+  var rest=body.split('\n').slice(1).join('\n').trim();
+  return '<article class="nc" data-item="'+esc(x.id)+'">'+
+    '<button class="x" onclick="delItem(event,\''+x.id+'\')" title="刪除">×</button>'+
     '<div class="ti">'+esc(x.title)+'</div>'+
-    (url?'<a class="u" href="'+esc(url)+'" target="_blank" rel="noopener" onclick="event.stopPropagation()">'+
-        esc(url)+'</a>'
-      :(x.body?'<div class="b">'+esc(x.body)+'</div>':''))+
+    (url?'<a class="u" href="'+esc(url)+'" target="_blank" rel="noopener">'+esc(url)+'</a>'
+       :(rest?'<div class="b">'+esc(rest)+'</div>':''))+
     '</article>'}
+
+/** 第一行當標題，整段存進 body */
+function head1(t){
+  var l=String(t).split('\n').filter(function(x){return x.trim()})[0]||'';
+  return l.trim().slice(0,60)}
+
+/**
+ * 就地編輯：Enter 存檔（Shift+Enter 換行）、Esc 取消、點別處也存。
+ * done 旗標避免 Esc 移除元素後 blur 又跑一次。
+ */
+function inline(el,save,cancel){
+  var done=false;
+  function fin(ok){
+    if(done)return;done=true;
+    var t=(el.value!==undefined?el.value:el.textContent).trim();
+    ok?save(t):cancel()}
+  el.addEventListener('keydown',function(e){
+    if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();fin(1)}
+    else if(e.key==='Escape'){e.preventDefault();fin(0)}});
+  el.addEventListener('blur',function(){fin(1)});
+  el.focus();
+  if(el.value!==undefined)el.setSelectionRange(el.value.length,el.value.length)}
 
 function findItem(id){
   var a=(RAW&&RAW.items)||[];
@@ -912,8 +948,16 @@ function afterData(r){if(r.data){RAW=r.data;paint()}else load(1)}
 function noteErr(e){toast(e.message);load(1)}
 
 function newSect(){
-  var n=prompt('分區名稱');if(!n||!n.trim())return;
-  call('sect_save',{name:n.trim()}).then(afterData).catch(noteErr)}
+  var wrap=document.querySelector('.notes');
+  if(!wrap||wrap.querySelector('.ncol.new'))return;
+  var el=document.createElement('section');
+  el.className='ncol s-acc new';
+  el.innerHTML='<h3><b contenteditable="true" spellcheck="false" data-ph="分區名稱"></b></h3>';
+  wrap.insertBefore(el,wrap.querySelector('.addsec'));
+  inline(el.querySelector('b'),function(t){
+    if(!t)return el.remove();
+    call('sect_save',{name:t}).then(afterData).catch(noteErr)},
+    function(){el.remove()})}
 
 function renameSect(el){
   var n=el.textContent.trim(),id=el.dataset.id,cur=findSect(id);
@@ -928,16 +972,34 @@ function delSect(id,name,n){
   if(!confirm('刪掉分區「'+name+'」？'+(n?'裡面的 '+n+' 張卡片不會被刪，會移到「未分類」。':'')))return;
   call('sect_del',{id:id}).then(afterData).catch(noteErr)}
 
-function newItem(sect){
-  var b=prompt('內容或網址');if(!b||!b.trim())return;
-  call('item_save',{section:sect,body:b.trim()}).then(afterData).catch(noteErr)}
+function newItem(sect,btn){
+  var col=btn.closest('.ncol');
+  if(col.querySelector('.nc.edit'))return;
+  var el=document.createElement('article');
+  el.className='nc edit';
+  el.innerHTML='<textarea rows="2" placeholder="輸入內容或貼上網址　Enter 存檔"></textarea>';
+  col.insertBefore(el,btn);
+  inline(el.querySelector('textarea'),function(t){
+    if(!t)return el.remove();
+    call('item_save',{section:sect,body:t,title:head1(t)}).then(afterData).catch(noteErr)},
+    function(){el.remove()})}
 
-function editItem(id){
-  var x=findItem(id);if(!x)return;
-  var t=prompt('標題',x.title);if(t===null)return;
-  var b=prompt('內容或網址',x.body);if(b===null)return;
-  if(t===x.title&&b===x.body)return;
-  call('item_save',{id:id,title:t,body:b}).then(afterData).catch(noteErr)}
+function editItem(id,card){
+  var x=findItem(id);if(!x||card.classList.contains('edit'))return;
+  var was=String(x.body||x.title);
+  card.classList.add('edit');
+  card.innerHTML='<textarea rows="3"></textarea>';
+  var ta=card.querySelector('textarea');ta.value=was;
+  inline(ta,function(t){
+    if(!t||t===was)return paint();
+    call('item_save',{id:id,body:t,title:head1(t)}).then(afterData).catch(noteErr)},
+    paint)}
+
+function delItem(e,id){
+  e.stopPropagation();
+  var x=findItem(id);
+  if(!confirm('刪掉「'+((x&&x.title)||'這張卡片')+'」？'))return;
+  call('item_del',{id:id}).then(afterData).catch(noteErr)}
 
 function moveItem(id,sect){
   call('item_save',{id:id,section:sect}).then(function(r){
@@ -1204,8 +1266,11 @@ document.addEventListener('touchmove',function(e){if(DRAG)e.preventDefault()},{p
 // 卡片點一下展開動作列；剛拖完那一下不算
 $('view').addEventListener('click',function(e){
   if(Date.now()-NODRAG<250)return;
+  if(e.target.closest('button')||e.target.closest('a'))return;
   var card=e.target.closest&&e.target.closest('.t[data-id]');
-  if(card&&!e.target.closest('button'))card.classList.toggle('open')});
+  if(card)return card.classList.toggle('open');
+  var nc=e.target.closest&&e.target.closest('.nc[data-item]');
+  if(nc)editItem(nc.dataset.item,nc)});
 
 document.addEventListener('click',function(){$('menu').classList.remove('on')});
 document.addEventListener('keydown',function(e){
