@@ -169,20 +169,18 @@
   .panelbox{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin-bottom:14px}
   .panelbox h3{margin:0 0 12px;font-size:15px}
 
-  .cal{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
-  .cal .dow{text-align:center;font-size:11.5px;color:var(--dim);padding:4px 0;font-weight:600}
-  .cell{background:var(--card);border:1px solid var(--line);border-radius:9px;min-height:88px;padding:6px 7px}
-  .cell.pad{background:transparent;border-color:transparent}
-  .cell.today{border-color:var(--acc);background:rgba(59,130,246,.07)}
-  .cell .n{font-size:11.5px;color:var(--dim);font-weight:600;margin-bottom:4px}
-  .cell.today .n{color:#8fc4ff}
-  .ev{font-size:11px;padding:2px 5px;border-radius:5px;margin-bottom:3px;overflow:hidden;
-    text-overflow:ellipsis;white-space:nowrap;border-left:2px solid}
-  .ev.A{background:rgba(240,85,109,.13);border-color:var(--a);color:#ff97a9}
-  .ev.B{background:rgba(224,160,58,.13);border-color:var(--b);color:#e8b45c}
-  .ev.C{background:rgba(78,163,245,.13);border-color:var(--c);color:#7bbcff}
-  .ev.done{opacity:.45;text-decoration:line-through}
-
+  .rank{display:flex;align-items:center;gap:11px;padding:9px 6px;border-bottom:1px solid var(--line)}
+  .rank:last-child{border-bottom:0}
+  .rank>b{width:22px;height:22px;border-radius:6px;background:var(--card2);color:var(--mute);
+    font-size:12px;font-weight:700;display:grid;place-items:center;flex:0 0 auto}
+  .rank:nth-child(1)>b{background:rgba(240,85,109,.18);color:#ff8095}
+  .rank:nth-child(2)>b,.rank:nth-child(3)>b{background:rgba(224,160,58,.16);color:#e8b45c}
+  .rank .rt{font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .rank .rs{font-size:12px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .rank .chip{flex:0 0 auto}
+  .url{display:block;margin-top:7px;font-size:12.5px;word-break:break-all;
+    background:var(--card2);border:1px solid var(--line2);border-radius:8px;padding:7px 9px}
+  .url:hover{border-color:var(--acc)}
   .wk{display:flex;align-items:flex-end;gap:10px;height:130px;padding:4px 0}
   .wk .b{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;height:100%;justify-content:flex-end}
   .wk .bar2{width:100%;max-width:44px;background:var(--card2);border-radius:6px 6px 0 0;position:relative;
@@ -244,7 +242,6 @@
     .st.goal{grid-column:1/-1}
     .wrap{padding:12px 14px 90px}
     .acts{display:flex}
-    .cal{gap:3px} .cell{min-height:62px;padding:4px} .ev{font-size:10px}
     .fab{display:grid;place-items:center;position:fixed;right:16px;bottom:20px;z-index:15;
       width:54px;height:54px;border-radius:50%;background:var(--acc2);color:#fff;
       font-size:27px;line-height:1;box-shadow:0 6px 22px rgba(0,0,0,.5)}
@@ -291,10 +288,12 @@
       </div>
     </div>
     <div class="sub">
-      <span class="d">🕐 <span id="dateLab"></span></span>
-      <button class="step" onclick="shift(-1)" title="前一天">‹</button>
-      <button class="step" onclick="shift(1)" title="後一天">›</button>
-      <button class="chip" id="todayChip" onclick="goToday()">今天</button>
+      <span id="dates" class="d">
+        <span class="d">🕐 <span id="dateLab"></span></span>
+        <button class="step" onclick="shift(-1)" title="上一個">‹</button>
+        <button class="step" onclick="shift(1)" title="下一個">›</button>
+        <button class="chip" id="todayChip" onclick="goToday()">今天</button>
+      </span>
       <span id="extra"></span>
       <span class="grow"></span>
       <div class="split">
@@ -348,16 +347,15 @@
 <script>
 var SHEET='https://docs.google.com/spreadsheets/d/136z3S0ADQHRda3q8O_B_GFBlBlBuE-oEg0mxIeT0FVc/edit';
 var VIEWS=[
-  {v:'board',    i:'▦', n:'每日看板', t:'Penny 每日高產值工作看板', ic:'🎯'},
-  {v:'projects', i:'▤', n:'專案總覽', t:'專案總覽',       ic:'▤'},
-  {v:'calendar', i:'▥', n:'任務日曆', t:'任務日曆',       ic:'📅'},
-  {v:'logs',     i:'▤', n:'資料庫',   t:'工作紀錄資料庫', ic:'🗄️'},
-  {v:'goals',    i:'◎', n:'目標追蹤', t:'目標追蹤',       ic:'◎'},
-  {v:'flow',     i:'✦', n:'AI 工作流', t:'AI 工作流',     ic:'✦'},
-  {v:'settings', i:'⚙', n:'設定',     t:'設定',           ic:'⚙'}
+  {v:'board',    i:'▦', n:'每日看板',  t:'Penny 每日高產值工作看板', ic:'🎯'},
+  {v:'projects', i:'▤', n:'專案總覽',  t:'專案總覽',      ic:'▤'},
+  {v:'pool',     i:'✦', n:'AI 專案池', t:'AI 專案池',     ic:'✦'},
+  {v:'outputs',  i:'🗄', n:'資料庫',    t:'產出資料庫',    ic:'🗄️'},
+  {v:'goals',    i:'◎', n:'目標追蹤',  t:'目標追蹤',      ic:'◎'},
+  {v:'settings', i:'⚙', n:'設定',      t:'設定',          ic:'⚙'}
 ];
 var PN={A:'A 高產值',B:'B 推進型',C:'C 維護型'};
-var TOKEN='',VIEW='board',KIND='task',EDIT=null,DATE=null,MONTH=null,RANGE='week',D=null,RAW=null;
+var TOKEN='',VIEW='board',KIND='task',EDIT=null,DATE=null,PJDATE=null,PJRANGE='week',SRC='',ALL=0,D=null,RAW=null;
 try{TOKEN=localStorage.getItem('worklog_token')||''}catch(e){}
 
 var $=function(i){return document.getElementById(i)};
@@ -396,6 +394,7 @@ function go(v){
   [].forEach.call(document.querySelectorAll('#nav button'),function(b){b.classList.toggle('on',b.dataset.v===v)});
   $('h1').textContent=m.t;$('hIcon').textContent=m.ic;
   $('srchBox').classList.toggle('off',v==='settings'||v==='goals');
+  $('dates').style.display=(v==='board'||v==='projects')?'':'none';
   $('q').value='';
   load(1)}
 
@@ -403,48 +402,57 @@ function load(force){
   if(force)$('view').innerHTML='<div class="spin">載入中…</div>';
   if(VIEW==='settings'){RAW=null;paint();return}
   var p;
-  if(VIEW==='calendar')p=call('calendar',{month:MONTH||today().slice(0,7)});
+  if(VIEW==='projects')p=call('projects',{range:PJRANGE,date:PJDATE||today()});
+  else if(VIEW==='pool')p=call('pool',{});
+  else if(VIEW==='outputs')p=call('outputs',{source:SRC,all:ALL?'1':''});
   else if(VIEW==='goals')p=call('goals',{});
-  else if(VIEW==='logs')p=call('logs',{range:RANGE});
   else p=call('board',DATE?{date:DATE}:{});
   p.then(function(r){
     RAW=r;
-    if(r.projects){D=r;renderPool(r.projects)}
+    if(r.stats)D=r;                                  // 看板資料，卡片動作要用
+    if(r.projects&&(r.stats||r.order))renderPool(r.projects);
     paint()})
    .catch(function(e){
      $('view').innerHTML='<div class="spin">錯誤：'+esc(e.message)+'</div>';
      if(/token/.test(e.message))logout()})}
 
 function shift(n){
-  if(VIEW==='calendar'){
-    var p=(MONTH||today().slice(0,7)).split('-'),d=new Date(+p[0],+p[1]-1+n,1);
-    MONTH=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')}
-  else{var d2=parse(DATE||today());d2.setDate(d2.getDate()+n);DATE=ymd(d2);
-       if(VIEW!=='board'&&VIEW!=='projects')return}
+  if(VIEW==='projects'){
+    var d=parse(PJDATE||today());
+    if(PJRANGE==='day')d.setDate(d.getDate()+n);
+    else if(PJRANGE==='week')d.setDate(d.getDate()+7*n);
+    else d.setMonth(d.getMonth()+n);
+    PJDATE=ymd(d)}
+  else if(VIEW==='board'){var b=parse(DATE||today());b.setDate(b.getDate()+n);DATE=ymd(b)}
+  else return;
   load(1)}
-function goToday(){DATE=null;MONTH=null;load(1)}
+function goToday(){DATE=null;PJDATE=null;load(1)}
+function pjRange(r){PJRANGE=r;load(1)}
 
 /* ---------------- header bits ---------------- */
+var RNAME={day:'日',week:'週',month:'月'};
 function header(){
-  var lab,isNow;
-  if(VIEW==='calendar'){var p=(RAW&&RAW.month||today().slice(0,7)).split('-');
-    lab=p[0]+' 年 '+(+p[1])+' 月';isNow=(RAW&&RAW.month)===today().slice(0,7)}
-  else{var d=parse((RAW&&RAW.date)||DATE||today());
-    lab=d.getFullYear()+' 年 '+(d.getMonth()+1)+' 月 '+d.getDate()+' 日（星期'+'日一二三四五六'[d.getDay()]+'）';
-    isNow=ymd(d)===today()}
+  var lab='',now=true;
+  if(VIEW==='projects'&&RAW&&RAW.from){
+    lab=PJRANGE==='day'?dayLab(RAW.from):(RAW.from+' – '+RAW.to);
+    now=RAW.from<=today()&&today()<=RAW.to}
+  else{var d=parse((RAW&&RAW.date)||DATE||today());lab=dayLab(ymd(d));now=ymd(d)===today()}
   $('dateLab').textContent=lab;
-  $('todayChip').classList.toggle('on',isNow);
-  $('todayChip').textContent=VIEW==='calendar'?'本月':'今天';
+  $('todayChip').classList.toggle('on',now);
+  $('todayChip').textContent=VIEW==='projects'?{day:'今天',week:'本週',month:'本月'}[PJRANGE]:'今天';
 
   var ex='';
-  if(VIEW==='logs')ex=['week','month'].map(function(r){
-    return '<button class="chip'+(RANGE===r?' on':'')+'" onclick="RANGE=\''+r+'\';load(1)">'+
-      (r==='week'?'本週':'本月')+'</button>'}).join(' ');
+  if(VIEW==='projects')ex=['day','week','month'].map(function(r){
+    return '<button class="chip'+(PJRANGE===r?' on':'')+'" onclick="pjRange(\''+r+'\')">'+RNAME[r]+'</button>'}).join(' ');
+  if(VIEW==='outputs'&&RAW)ex=srcChips(RAW);
   if(VIEW==='board'&&RAW&&RAW.note)ex='<span class="chip">早晨簡報已產生</span>';
   $('extra').innerHTML=ex;
 
   var od=RAW&&(RAW.stats?RAW.stats.overdue:RAW.overdue);
   $('bell').style.display=od?'grid':'none';$('bell').textContent=od||0}
+
+function dayLab(s){var d=parse(s);
+  return d.getFullYear()+' 年 '+(d.getMonth()+1)+' 月 '+d.getDate()+' 日（星期'+'日一二三四五六'[d.getDay()]+'）'}
 
 function hit(o,q){return !q||[o.title,o.project,o.next,o.waiting,o.summary,o.source]
   .some(function(x){return String(x||'').toLowerCase().indexOf(q)>=0})}
@@ -456,10 +464,9 @@ function paint(){
   if(!RAW)return;
   if(VIEW==='board')return $('view').innerHTML=board(RAW,q);
   if(VIEW==='projects')return $('view').innerHTML=projects(RAW,q);
-  if(VIEW==='calendar')return $('view').innerHTML=calendar(RAW);
-  if(VIEW==='goals')return $('view').innerHTML=goals(RAW);
-  if(VIEW==='logs')return $('view').innerHTML=logsView(RAW.rows.filter(function(l){return hit(l,q)}));
-  if(VIEW==='flow')return $('view').innerHTML=flow(RAW,q)}
+  if(VIEW==='pool')return $('view').innerHTML=pool(RAW,q);
+  if(VIEW==='outputs')return $('view').innerHTML=outputs(RAW,q);
+  if(VIEW==='goals')return $('view').innerHTML=goals(RAW)}
 
 /* ---------------- board ---------------- */
 function board(r,q){
@@ -535,64 +542,97 @@ function renderPool(ps){
   }).join(''):'<div class="none">還沒有任務</div>';
   $('pjs').innerHTML=ps.map(function(p){return '<option value="'+esc(p.name)+'">'}).join('')}
 
-function allTasks(r){return (r.running||[]).concat(r.today||[],r.tomorrow||[],r.unscheduled||[])}
+function allTasks(r){
+  r=r||{};
+  var a=(r.running||[]).concat(r.today||[],r.tomorrow||[],r.unscheduled||[]);
+  (r.projects||[]).forEach(function(p){if(p.tasks)a=a.concat(p.tasks)});
+  (r.order||[]).forEach(function(o){a.push(o.task)});
+  return a}
 function projects(r,q){
-  var byPj={};allTasks(r).filter(function(t){return hit(t,q)}).forEach(function(t){
-    var k=t.project||'未分類';(byPj[k]=byPj[k]||[]).push(t)});
-  var names=r.projects.map(function(p){return p.name}).filter(function(n){return byPj[n]});
-  if(!names.length)return '<div class="wrap"><div class="none">沒有符合的任務</div></div>';
-  return '<div class="wrap">'+names.map(function(n){
-    var p=r.projects.filter(function(x){return x.name===n})[0];
-    return '<div class="sec">'+esc(n)+' · '+p.count+' 件'+(p.overdue?' · 逾期 '+p.overdue:'')+'</div>'+
-      byPj[n].map(taskCard).join('')}).join('')+'</div>'}
+  var f=function(a,c){return a.filter(function(x){return hit(x,q)}).map(function(t){return taskCard(t,c)})};
+  if(!r.projects.length&&!r.unscheduled.length)
+    return '<div class="wrap"><div class="none">這段期間沒有任務</div></div>';
+  var h='<div class="wrap"><div class="panelbox" style="display:flex;gap:26px;flex-wrap:wrap">'+
+    kpi('區間',RNAME[r.range]+' · '+r.from+(r.range==='day'?'':' 起'))+
+    kpi('任務',r.done+' / '+r.total+' 完成')+
+    kpi('專案',r.projects.length+' 個')+
+    kpi('未排日期',r.unscheduled.length+' 件')+
+    '</div>';
+  r.projects.forEach(function(p){
+    var cards=f(p.tasks,'');
+    if(!cards.length)return;
+    h+='<div class="sec">'+esc(p.name)+' · '+p.done+'/'+p.count+' 完成'+
+      (p.overdue?' · <span style="color:var(--bad)">逾期 '+p.overdue+'</span>':'')+'</div>'+cards.join('')});
+  var un=f(r.unscheduled,'');
+  if(un.length)h+='<div class="sec">未排日期 '+un.length+'</div>'+un.join('');
+  return h+'</div>'}
 
-/* ---------------- calendar ---------------- */
-function calendar(r){
-  var p=r.month.split('-'),y=+p[0],m=+p[1];
-  var first=new Date(y,m-1,1),lead=(first.getDay()+6)%7,n=new Date(y,m,0).getDate(),td=today();
-  var h='<div class="wrap"><div class="cal">'+
-    ['一','二','三','四','五','六','日'].map(function(d){return '<div class="dow">'+d+'</div>'}).join('');
-  for(var i=0;i<lead;i++)h+='<div class="cell pad"></div>';
-  for(var d=1;d<=n;d++){
-    var key=y+'-'+String(m).padStart(2,'0')+'-'+String(d).padStart(2,'0'),ev=r.days[key]||[];
-    h+='<div class="cell'+(key===td?' today':'')+'"><div class="n">'+d+'</div>'+
-      ev.slice(0,4).map(function(t){
-        return '<div class="ev '+t.priority+(t.status==='完成'||t.status==='取消'?' done':'')+'" title="'+esc(t.title)+'">'+esc(t.title)+'</div>'}).join('')+
-      (ev.length>4?'<div class="n">+'+(ev.length-4)+'</div>':'')+'</div>'}
-  return h+'</div></div>'}
+function kpi(k,v){return '<div><div class="k" style="font-size:12px;color:var(--dim)">'+esc(k)+
+  '</div><div style="font-size:17px;font-weight:700;margin-top:3px">'+esc(v)+'</div></div>'}
 
-/* ---------------- goals ---------------- */
-function goals(r){
-  var max=Math.max(1,Math.max.apply(null,r.weeks.map(function(w){return w.total||w.done})));
-  return '<div class="wrap">'+
-    '<div class="panelbox"><h3>最近 6 週完成數</h3><div class="wk">'+
-      r.weeks.map(function(w,i){
-        var hh=Math.round((w.done/max)*100),full=Math.round(((w.total||0)/max)*100);
-        return '<div class="b"><div class="num">'+w.done+'</div>'+
-          '<div class="bar2" style="height:'+Math.max(full,4)+'%"><div class="fill" style="height:'+
-            (full?Math.round(hh*100/full):0)+'%"></div></div>'+
-          '<div class="lab">'+md(w.from)+(i===r.weeks.length-1?'<br>本週':'')+'</div></div>'}).join('')+
-    '</div></div>'+
-    '<div class="panelbox"><h3>本週明細</h3>'+
-      (function(w){return '<div class="kv"><span>完成 / 應完成</span><b>'+w.done+' / '+w.total+'</b></div>'+
-        '<div class="kv"><span>其中 A 高產值</span><b>'+w.highDone+'</b></div>'+
-        '<div class="kv"><span>專注時間</span><b>'+w.focusHours+' 小時</b></div>'})(r.weeks[r.weeks.length-1])+
-    '</div>'+
-    '<div class="panelbox"><h3>待辦盤點</h3>'+
-      '<div class="kv"><span>未完成任務</span><b>'+r.backlog+'</b></div>'+
-      '<div class="kv"><span>逾期</span><b style="color:'+(r.overdue?'var(--bad)':'var(--ok)')+'">'+r.overdue+'</b></div>'+
-      r.byPriority.map(function(p){
-        return '<div class="kv"><span>'+PN[p.priority]+'</span><b>'+p.open+'</b></div>'}).join('')+
-    '</div></div>'}
+/* ---------------- AI 專案池 ---------------- */
+function pool(r,q){
+  var order=r.order.filter(function(o){return hit(o.task,q)});
+  var h='<div class="wrap">'+
+    '<div class="panelbox" style="display:flex;gap:26px;flex-wrap:wrap">'+
+      kpi('未完成',r.backlog+' 件')+
+      kpi('逾期',r.overdue+' 件')+
+      kpi('專案',r.projects.length+' 個')+
+      kpi('昨天',r.yesterday.length+' 筆 · '+r.yesterdayHours+' 小時')+
+    '</div>';
 
-/* ---------------- logs / flow ---------------- */
-function logsView(rows){
-  if(!rows.length)return '<div class="wrap"><div class="none">沒有符合的紀錄</div></div>';
+  h+='<div class="sec">建議順序</div>';
+  h+=order.length?'<div class="panelbox" style="padding:8px 10px">'+order.map(function(o,i){
+      var t=o.task;
+      return '<div class="rank"><b>'+(i+1)+'</b><div class="grow" style="min-width:0">'+
+        '<div class="rt">'+esc(t.title)+'</div>'+
+        '<div class="rs">'+esc(o.reason)+(t.project?' · '+esc(t.project):'')+
+          (t.next?' · 下一步：'+esc(t.next):'')+'</div></div>'+
+        '<span class="tag '+t.priority+'">'+t.priority+'</span>'+
+        '<button class="chip" onclick="toCol(\''+t.id+'\',\'run\',\'\')">開始</button></div>'
+    }).join('')+'</div>':'<div class="none">沒有待辦</div>';
+
+  h+='<div class="sec">昨天執行的內容</div>';
+  h+=r.yesterday.length?r.yesterday.filter(function(l){return hit(l,q)}).map(logRow).join('')
+    :'<div class="none">昨天沒有紀錄</div>';
+
+  h+='<div class="sec">各專案還剩什麼</div>';
+  r.projects.forEach(function(p){
+    var ts=p.tasks.filter(function(t){return hit(t,q)});
+    if(!ts.length)return;
+    h+='<div class="panelbox"><h3>'+esc(p.name)+' <span class="tag '+p.priority+'">'+p.priority+'</span>'+
+      (p.overdue?' <span class="tag A">逾期 '+p.overdue+'</span>':'')+'</h3>'+
+      ts.map(function(t){return taskCard(t,'')}).join('')+'</div>'});
+  return h+'</div>'}
+
+/* ---------------- 產出資料庫 ---------------- */
+function srcChips(r){
+  var ks=Object.keys(r.bySource);
+  return '<button class="chip'+(SRC?'':' on')+'" onclick="SRC=\'\';load(1)">全部 '+r.linked+'</button> '+
+    ks.map(function(k){
+      return '<button class="chip'+(SRC===k?' on':'')+'" onclick="SRC=\''+k+'\';load(1)">'+
+        esc(k)+' '+r.bySource[k]+'</button>'}).join(' ')+
+    ' <button class="chip'+(ALL?' on':'')+'" onclick="ALL=ALL?0:1;load(1)">含無連結</button>'}
+
+function outputs(r,q){
+  var rows=r.rows.filter(function(l){return hit(l,q)});
+  if(!rows.length)return '<div class="wrap"><div class="none">'+
+    (r.all?'沒有符合的紀錄':'還沒有帶產出連結的紀錄。work-log skill 在有產出檔時會把連結一起寫進來。')+'</div></div>';
   var by={},order=[];
   rows.forEach(function(l){var d=String(l.start).slice(0,10);
     if(!by[d]){by[d]=[];order.push(d)}by[d].push(l)});
   return '<div class="wrap">'+order.map(function(d){
-    return '<div class="sec">'+d+' · '+by[d].length+' 筆</div>'+by[d].map(logRow).join('')}).join('')+'</div>'}
+    return '<div class="sec">'+d+' · '+by[d].length+' 筆</div>'+by[d].map(outRow).join('')}).join('')+'</div>'}
+
+function outRow(l){
+  return '<div class="lg"><div class="ti">'+esc(l.title)+'</div>'+
+    '<div class="tags"><span class="tag src">'+esc(l.source)+'</span>'+
+    (l.project?'<span class="tag pj">'+esc(l.project)+'</span>':'')+
+    '<span class="tag pj">'+String(l.start).slice(11,16)+(l.end?'–'+String(l.end).slice(11,16):' 起')+'</span>'+
+    (l.status!=='完成'?'<span class="tag A">'+esc(l.status)+'</span>':'')+'</div>'+
+    (l.summary?'<div class="sm">'+esc(l.summary)+'</div>':'')+
+    (l.link?'<a class="url" href="'+esc(l.link)+'" target="_blank" rel="noopener">🔗 '+esc(l.link)+'</a>':'')+
+    '</div>'}
 
 function logRow(l){
   return '<div class="lg"><div class="ti">'+esc(l.title)+'</div>'+
@@ -601,23 +641,7 @@ function logRow(l){
     '<span class="tag pj">'+String(l.start).slice(11,16)+(l.end?'–'+String(l.end).slice(11,16):' 起')+'</span>'+
     (l.status!=='完成'?'<span class="tag A">'+esc(l.status)+'</span>':'')+'</div>'+
     (l.summary?'<div class="sm">'+esc(l.summary)+'</div>':'')+
-    (l.link?'<div class="sm"><a href="'+esc(l.link)+'" target="_blank" rel="noopener">產出連結</a></div>':'')+'</div>'}
-
-function flow(r,q){
-  var ai=(r.logs||[]).filter(function(l){return l.source!=='手動'&&hit(l,q)});
-  var live=ai.filter(function(l){return l.status==='進行中'});
-  var done=ai.filter(function(l){return l.status!=='進行中'});
-  var bySrc={};ai.forEach(function(l){bySrc[l.source]=(bySrc[l.source]||0)+1});
-  return '<div class="wrap">'+
-    '<div class="panelbox"><h3>今日 AI 工作</h3>'+
-      '<div class="kv"><span>總計</span><b>'+ai.length+' 筆</b></div>'+
-      Object.keys(bySrc).map(function(s){
-        return '<div class="kv"><span>'+esc(s)+'</span><b>'+bySrc[s]+'</b></div>'}).join('')+
-      '<div class="kv"><span>專注時間</span><b>'+(r.stats?r.stats.focusHours:0)+' 小時</b></div></div>'+
-    '<div class="sec">執行中 '+live.length+'</div>'+
-    (live.length?live.map(logRow).join(''):'<div class="none">現在沒有正在跑的工作</div>')+
-    '<div class="sec">今日已完成 '+done.length+'</div>'+
-    (done.length?done.map(logRow).join(''):'<div class="none">今天還沒有完成的 AI 工作</div>')+
+    (l.link?'<a class="url" href="'+esc(l.link)+'" target="_blank" rel="noopener">🔗 產出連結</a>':'')+
     '</div>'}
 
 /* ---------------- settings ---------------- */
@@ -660,8 +684,9 @@ function toCol(id,to,from){
 function bump(id){event.stopPropagation();
   var t=findTask(id),base=t&&t.due?parse(t.due):new Date();base.setDate(base.getDate()+1);
   call('task_update',{id:id,due:ymd(base)}).then(function(){toast('延到 '+md(ymd(base)));load()}).catch(function(e){toast(e.message)})}
-function findTask(id){var a=allTasks(D||{});
-  for(var i=0;i<a.length;i++)if(a[i].id===id)return a[i];return null}
+function findTask(id){
+  var a=allTasks(RAW).concat(allTasks(D));
+  for(var i=0;i<a.length;i++)if(a[i]&&a[i].id===id)return a[i];return null}
 function edit(id){event.stopPropagation();
   var t=findTask(id);if(!t)return;
   EDIT=id;openAdd('task');$('shTitle').textContent='編輯任務';

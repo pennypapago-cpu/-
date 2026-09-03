@@ -137,7 +137,9 @@ function handle_(action, p, token) {
       case 'task_add':    return { ok: true, row: addTask_(p) };
       case 'task_update': return { ok: true, row: updateTask_(p) };
       case 'board':       return Object.assign({ ok: true }, board_(p.date));
-      case 'calendar':    return Object.assign({ ok: true }, calendar_(p.month));
+      case 'projects':    return Object.assign({ ok: true }, projects_(p.range, p.date));
+      case 'outputs':     return Object.assign({ ok: true }, outputs_(p.source, p.all));
+      case 'pool':        return Object.assign({ ok: true }, pool_(p.date));
       case 'goals':       return Object.assign({ ok: true }, goals_(p.date));
       case 'brief':       return Object.assign({ ok: true }, brief_(p.date));
       case 'brief_save':  return { ok: true, row: saveBrief_(p) };
@@ -223,12 +225,7 @@ function readTasks_(status) {
   var rows = readAll_(SHEET_TASK, TASK_KEYS);
   if (status === 'open') rows = rows.filter(function (r) { return TASK_OPEN.indexOf(r.status) >= 0; });
   else if (status) rows = rows.filter(function (r) { return r.status === status; });
-  rows.sort(function (a, b) {
-    var da = a.due || '9999-99-99', db = b.due || '9999-99-99';
-    if (da !== db) return da < db ? -1 : 1;
-    return PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority];
-  });
-  return rows;
+  return sortTasks_(rows);
 }
 
 function addTask_(p) {
@@ -362,21 +359,136 @@ function stats_(today, week, open, logsToday) {
   };
 }
 
-/** 任務日曆：某個月每天有哪些任務（依到期日），含已完成的，方便回頭看 */
-function calendar_(month) {
-  var m = /^\d{4}-\d{2}$/.test(String(month || '')) ? String(month) : fmtDate_(new Date()).slice(0, 7);
-  var days = {};
-  readAll_(SHEET_TASK, TASK_KEYS).forEach(function (t) {
-    if (String(t.due).slice(0, 7) !== m) return;
-    (days[t.due] = days[t.due] || []).push({
-      id: t.id, title: t.title, project: t.project,
-      priority: t.priority, status: t.status, next: t.next, waiting: t.waiting
-    });
+/**
+ * 專案總覽：某一天／週／月裡各專案有哪些任務。含已完成的，才看得出那段時間做了多少。
+ * 沒排日期的另外裝一袋，不然它們會從所有區間裡消失。
+ */
+function projects_(range, date) {
+  var r = ['day', 'week', 'month'].indexOf(String(range)) >= 0 ? String(range) : 'week';
+  var span = span_(r, date);
+  var from = fmtDate_(span.from), to = fmtDate_(shiftDays_(span.to, -1));
+  var all = readAll_(SHEET_TASK, TASK_KEYS).filter(function (t) { return t.status !== '取消'; });
+
+  var inRange = all.filter(function (t) {
+    var d = t.due || String(t.done_at).slice(0, 10);
+    return d && d >= from && d <= to;
   });
-  Object.keys(days).forEach(function (d) {
-    days[d].sort(function (a, b) { return PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority]; });
+  sortTasks_(inRange);
+
+  var byName = {}, order = [];
+  inRange.forEach(function (t) {
+    var n = t.project || '未分類';
+    if (!byName[n]) { byName[n] = { name: n, tasks: [], done: 0, overdue: 0, priority: 'C' }; order.push(n); }
+    var p = byName[n];
+    p.tasks.push(t);
+    if (t.status === '完成') p.done++;
+    if (t.due && t.due < from) p.overdue++;   // 這區間內、但已經過了開始日還沒做完
+    if (t.status !== '完成' && PRIORITY_RANK[t.priority] < PRIORITY_RANK[p.priority]) p.priority = t.priority;
   });
-  return { month: m, days: days };
+  var projects = order.map(function (n) {
+    var p = byName[n];
+    p.count = p.tasks.length;
+    return p;
+  }).sort(function (a, b) {
+    if ((a.count - a.done) !== (b.count - b.done)) return (b.count - b.done) - (a.count - a.done);
+    return a.name < b.name ? -1 : 1;
+  });
+
+  return {
+    range: r, from: from, to: to,
+    projects: projects,
+    unscheduled: sortTasks_(all.filter(function (t) {
+      return !t.due && TASK_OPEN.indexOf(t.status) >= 0;
+    })),
+    total: inRange.length,
+    done: inRange.filter(function (t) { return t.status === '完成'; }).length
+  };
+}
+
+/**
+ * 產出資料庫：Claude Code / Cowork / 手動 做出來的東西的網址。
+ * 預設只列有產出連結的，因為那才是「做出了什麼」；all=1 才連沒連結的一起列。
+ */
+function outputs_(source, all) {
+  var withoutLink = String(all) === '1' || String(all) === 'true';
+  var rows = readAll_(SHEET_LOG, LOG_KEYS).filter(function (l) { return withoutLink || l.link; });
+  var bySource = {};
+  rows.forEach(function (l) { bySource[l.source] = (bySource[l.source] || 0) + 1; });
+  if (source) rows = rows.filter(function (l) { return l.source === source; });
+  rows.sort(function (a, b) { return String(b.start).localeCompare(String(a.start)); });
+  return {
+    source: source || '',
+    all: withoutLink,
+    bySource: bySource,
+    linked: readAll_(SHEET_LOG, LOG_KEYS).filter(function (l) { return l.link; }).length,
+    rows: rows.slice(0, 200)
+  };
+}
+
+/**
+ * AI 專案池：每個專案還有什麼沒做，建議先做哪幾件，昨天實際做了什麼。
+ * 建議順序不是照優先級硬排——逾期最急，已經開工的次之，再來才是 A/B/C。
+ */
+function pool_(date) {
+  var today = date ? fmtDate_(parseDate_(date)) : fmtDate_(new Date());
+  var yesterday = fmtDate_(shiftDays_(parseDate_(today), -1));
+  var open = readTasks_('open');
+
+  var byName = {};
+  open.forEach(function (t) { (byName[t.project || '未分類'] = byName[t.project || '未分類'] || []).push(t); });
+  var projects = projectPool_(open, today);
+  projects.forEach(function (p) { p.tasks = byName[p.name] || []; });
+
+  var ranked = open.map(function (t) {
+    return { task: t, score: urgency_(t, today), reason: whyNow_(t, today) };
+  }).sort(function (a, b) { return a.score - b.score; });
+
+  return {
+    date: today,
+    projects: projects,
+    order: ranked.slice(0, 10),
+    yesterday: readLogs_('day', yesterday),
+    yesterdayHours: focusHours_(readLogs_('day', yesterday)),
+    backlog: open.length,
+    overdue: open.filter(function (t) { return t.due && t.due < today; }).length
+  };
+}
+
+/** 越小越該先做 */
+function urgency_(t, today) {
+  var s;
+  if (t.due && t.due < today) s = -daysBetween_(t.due, today) * 10;   // 逾期越久越前面
+  else if (t.due === today) s = 100;
+  else if (t.due) s = 200 + daysBetween_(today, t.due);
+  else s = 400;                                                       // 沒排日期的排最後
+  if (t.status === '進行中') s -= 60;                                 // 已經開工的先收掉
+  s += PRIORITY_RANK[t.priority] * 12;
+  if (t.waiting) s += 40;                                             // 卡在別人身上，自己動不了
+  return s;
+}
+
+function whyNow_(t, today) {
+  if (t.waiting) return '等 ' + t.waiting + '，先去催';
+  if (t.due && t.due < today) return '逾期 ' + daysBetween_(t.due, today) + ' 天';
+  if (t.status === '進行中') return '已經在做，收掉它';
+  if (t.due === today) return '今天到期';
+  if (t.priority === 'A') return 'A 高產值';
+  if (!t.due) return '還沒排日期';
+  return t.due + ' 到期';
+}
+
+function daysBetween_(a, b) {
+  var x = parseDate_(a), y = parseDate_(b);
+  return (!x || !y) ? 0 : Math.round((y - x) / 86400000);
+}
+
+/** 依到期日、再依優先級排序，就地改動並回傳同一個陣列 */
+function sortTasks_(rows) {
+  return rows.sort(function (a, b) {
+    var da = a.due || '9999-99-99', db = b.due || '9999-99-99';
+    if (da !== db) return da < db ? -1 : 1;
+    return PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority];
+  });
 }
 
 /** 目標追蹤：最近 6 週的完成數、A 級占比與專注時間 */
