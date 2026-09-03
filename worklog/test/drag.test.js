@@ -58,6 +58,12 @@ assert(ctx.taskCard(t,'run').includes('移到今日')&&ctx.taskCard(t,'run').inc
 assert(!ctx.taskCard(Object.assign({},t,{status:'進行中'}),'run').includes('>開始<'));
 // 卡片要帶 data-id 才拖得動；紀錄卡不帶
 assert(ctx.taskCard(t,'today').includes('data-id="X"'));
+// 卡片上不再出現專案與優先標籤，改成左側色帶＋下一步那行的小字
+const card=ctx.taskCard({id:'Y',title:'標',priority:'A',status:'待辦',due:T,project:'起士公爵',next:'先寫',waiting:''},'today');
+assert(card.includes('class="t pA"'),'優先級改用左側色帶：'+card.slice(0,90));
+assert(!/class="tag /.test(card),'卡片不該再有 tag 標籤');
+assert(card.includes('<em>起士公爵</em>'),'專案縮成小字');
+assert(card.includes('title="A 優先處理"'),'色帶滑過去要看得到是什麼等級');
 assert(!ctx.logCard({title:'l',source:'Cowork',start:'2026-09-03 10:00',project:'',summary:''}).includes('data-id'));
 // 欄位要有 data-drop
 assert(ctx.col('c-today','📅','今日工作',[],'空').includes('data-drop="today"'));

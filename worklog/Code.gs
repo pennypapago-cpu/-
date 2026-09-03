@@ -25,7 +25,7 @@ var TASK_KEYS    = ['id', 'created', 'title', 'project', 'due', 'priority', 'sta
 var TASK_OPEN = ['待辦', '進行中'];
 var DATE_ONLY_KEYS = { due: true };
 
-// 優先級：A 高產值（帶來結果）、B 推進型（讓事情前進）、C 維護型（不做會出事）
+// 優先級：A 優先處理（帶來結果）、B 推進型（讓事情前進）、C 維護型（不做會出事）
 var PRIORITY_RANK = { A: 0, B: 1, C: 2 };
 var PRIORITY_LEGACY = { 高: 'A', 中: 'B', 低: 'C' };
 var TASK_EDITABLE = ['title', 'project', 'due', 'priority', 'status', 'next', 'waiting', 'estimate', 'note'];
@@ -480,7 +480,7 @@ function whyNow_(t, today) {
   if (t.due && t.due < today) return '逾期 ' + daysBetween_(t.due, today) + ' 天';
   if (t.status === '進行中') return '已經在做，收掉它';
   if (t.due === today) return '今天到期';
-  if (t.priority === 'A') return 'A 高產值';
+  if (t.priority === 'A') return 'A 優先處理';
   if (!t.due) return '還沒排日期';
   return t.due + ' 到期';
 }

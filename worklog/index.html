@@ -112,6 +112,10 @@
     transition:border-color .12s,background .12s}
   .t:hover{border-color:var(--line2);background:var(--card2)}
   .t.live{background:linear-gradient(180deg,rgba(240,85,109,.08),transparent 60%);border-color:rgba(240,85,109,.28)}
+  /* 優先級改用左側色帶，不佔一整排標籤 */
+  .t.pA{border-left:3px solid var(--a)}
+  .t.pB{border-left:3px solid var(--b)}
+  .t.pC{border-left:3px solid var(--c)}
   .t .ti{font-size:15px;font-weight:600;line-height:1.4;word-break:break-word}
   .tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
   .tag{font-size:11.5px;font-weight:600;padding:2.5px 8px;border-radius:6px;white-space:nowrap}
@@ -123,6 +127,8 @@
   .meta{display:flex;justify-content:space-between;align-items:flex-end;gap:8px;margin-top:9px}
   .nx{font-size:12.5px;color:var(--mute);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .nx b{color:var(--dim);font-weight:500}
+  .nx em{font-style:normal;color:var(--dim);margin-right:7px}
+  .nx em::after{content:" ·";opacity:.6}
   .dd{font-size:12.5px;color:var(--dim);white-space:nowrap;flex:0 0 auto;display:flex;align-items:center;gap:4px}
   .dd.over{color:var(--bad);font-weight:600} .dd.now{color:var(--warn);font-weight:600}
   /* 拖曳換欄：手指直向留給捲動，橫向與長按才由我們接手 */
@@ -386,7 +392,7 @@
       <div class="f2">
         <div class="f"><label>到期日</label><input id="fD" type="date"></div>
         <div class="f"><label>優先</label><select id="fPr">
-          <option value="A">A 高產值</option><option value="B" selected>B 推進型</option><option value="C">C 維護型</option>
+          <option value="A">A 優先處理</option><option value="B" selected>B 推進型</option><option value="C">C 維護型</option>
         </select></div>
       </div>
       <div class="f"><label>等待者（卡在誰身上，沒有就留空）</label><input id="fW" placeholder="例：PN"></div>
@@ -413,8 +419,8 @@ var VIEWS=[
   {v:'goals',    i:'◎', n:'目標追蹤',  t:'目標追蹤',      ic:'◎'},
   {v:'settings', i:'⚙', n:'設定',      t:'設定',          ic:'⚙'}
 ];
-var PN={A:'A 高產值',B:'B 推進型',C:'C 維護型'};
-var TOKEN='',VIEW='board',KIND='task',EDIT=null,DATE=null,PJDATE=null,PJRANGE='week',SRC='',ALL=0,D=null,RAW=null;
+var PN={A:'A 優先處理',B:'B 推進型',C:'C 維護型'};
+var TOKEN='',VIEW='board',KIND='task',EDIT=null,COL='',DATE=null,PJDATE=null,PJRANGE='week',SRC='',ALL=0,D=null,RAW=null;
 try{TOKEN=localStorage.getItem('worklog_token')||''}catch(e){}
 
 var $=function(i){return document.getElementById(i)};
@@ -540,7 +546,7 @@ function board(r,q){
 function col(cls,icon,title,cards,empty){
   return '<section class="col '+cls+'" data-drop="'+cls.slice(2)+'"><h3><i>'+icon+'</i>'+title+'<b>'+cards.length+'</b></h3>'+
     (cards.length?cards.join(''):'<div class="none">'+esc(empty)+'</div>')+
-    '<button class="add" onclick="openAdd(\'task\')">＋ 新增任務</button></section>'}
+    '<button class="add" onclick="openAdd(\'task\',\''+cls.slice(2)+'\')">＋ 新增任務</button></section>'}
 
 /** col 是這張卡目前在哪一欄（run/today/tmr），用來決定動作列要出現哪些「移到」按鈕。
     手機三欄是上下堆疊的，垂直拖曳會跟捲動打架，所以那邊靠這些按鈕，桌機才用拖的。 */
@@ -552,12 +558,11 @@ function taskCard(t,col){
     (col!=='today'?'<button onclick="event.stopPropagation();toCol(\''+t.id+'\',\'today\',\''+(col||'')+'\')">移到今日</button>':'')+
     (col!=='tmr'?'<button onclick="event.stopPropagation();toCol(\''+t.id+'\',\'tmr\',\''+(col||'')+'\')">移到明日</button>':'')+
     '<button onclick="edit(\''+t.id+'\')">編輯</button>';
-  return '<article class="t" data-id="'+t.id+'">'+
+  var sub=(t.project?'<em>'+esc(t.project)+'</em>':'')+
+    (t.waiting?'<b>等待者：</b>'+esc(t.waiting):(t.next?'<b>下一步：</b>'+esc(t.next):''));
+  return '<article class="t p'+t.priority+'" data-id="'+t.id+'" title="'+PN[t.priority]+'">'+
     '<div class="ti">'+esc(t.title)+'</div>'+
-    '<div class="tags"><span class="tag '+t.priority+'">'+PN[t.priority]+'</span>'+
-      (t.project?'<span class="tag pj">'+esc(t.project)+'</span>':'')+'</div>'+
-    '<div class="meta"><div class="nx">'+
-      (t.waiting?'<b>等待者：</b>'+esc(t.waiting):(t.next?'<b>下一步：</b>'+esc(t.next):''))+'</div>'+
+    '<div class="meta"><div class="nx">'+sub+'</div>'+
       '<div class="dd '+cls+'">📅 '+lbl+'</div></div>'+
     '<div class="acts">'+a+'</div></article>'}
 
@@ -577,9 +582,9 @@ function stats(r){
   return '<div class="stats">'+
     '<div class="st goal"><div class="k">🎯 今日專注目標</div><div class="u">'+
       (r.note?esc(r.note.split('\n').filter(function(x){return x.trim()}).slice(-2).join(' '))
-        :'尚未產生早晨簡報。聚焦高產值任務，完成關鍵成果。')+'</div></div>'+
+        :'尚未產生早晨簡報。先把優先處理的做掉，再談其他。')+'</div></div>'+
     '<div class="st"><div class="k">已完成任務</div><div class="v">'+s.doneToday+'<small>/ '+s.totalToday+'</small></div></div>'+
-    '<div class="st"><div class="k">高產值任務占比</div><div class="v" style="color:var(--b)">'+s.highValuePct+'%</div>'+
+    '<div class="st"><div class="k">優先任務占比</div><div class="v" style="color:var(--b)">'+s.highValuePct+'%</div>'+
       '<div class="bar"><i style="width:'+s.highValuePct+'%"></i></div></div>'+
     '<div class="st"><div class="k">專注時間</div><div class="v">'+s.focusHours+'<small>小時</small>'+dlt+'</div>'+
       '<div class="u">昨天 '+s.focusHoursPrev+' 小時</div></div>'+
@@ -856,9 +861,16 @@ function edit(id){event.stopPropagation();
   $('fT').value=t.title;$('fP').value=t.project;$('fN').value=t.next;
   $('fD').value=t.due;$('fPr').value=t.priority;$('fW').value=t.waiting}
 
-function openAdd(k){$('menu').classList.remove('on');$('veil').classList.add('on');kind(k||'task');
+/** col 決定新任務的預設日期與狀態：今日欄＝今天、明日欄＝明天、
+    正執行欄＝今天且直接標進行中。從別的地方叫就預設今天。 */
+function openAdd(k,col){
+  $('menu').classList.remove('on');$('veil').classList.add('on');kind(k||'task');
+  if(!EDIT&&(k||'task')==='task'){
+    COL=col||'today';
+    var d=new Date();if(COL==='tmr')d.setDate(d.getDate()+1);
+    $('fD').value=ymd(d)}
   setTimeout(function(){$('fT').focus()},60)}
-function closeAdd(){$('veil').classList.remove('on');EDIT=null;
+function closeAdd(){$('veil').classList.remove('on');EDIT=null;COL='';
   ['fT','fP','fN','fD','fW','fS','fL'].forEach(function(i){$(i).value=''});$('fPr').value='B'}
 function kind(k){KIND=k;
   $('sgT').classList.toggle('on',k==='task');$('sgL').classList.toggle('on',k==='log');
@@ -872,7 +884,9 @@ function submit(){
   if(KIND==='task'){
     var d={title:t,project:$('fP').value.trim(),next:$('fN').value.trim(),
       due:$('fD').value,priority:$('fPr').value,waiting:$('fW').value.trim()};
-    if(EDIT)d.id=EDIT;p=call(EDIT?'task_update':'task_add',d)}
+    if(EDIT)d.id=EDIT;
+    else if(COL==='run')d.status='進行中';       // 在「AI 正執行」那欄新增＝直接開工
+    p=call(EDIT?'task_update':'task_add',d)}
   else p=call('log',{title:t,project:$('fP').value.trim(),summary:$('fS').value.trim(),
       link:$('fL').value.trim(),source:'手動',status:'完成'});
   p.then(function(){toast('已儲存');closeAdd();load()})
