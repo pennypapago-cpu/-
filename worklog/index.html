@@ -243,6 +243,41 @@
     .mc{min-height:74px;padding:3px} .chip2{font-size:0.75rem;padding:2px 4px}
     .mc .d{font-size:0.8125rem}
   }
+  /* ---------------- 資料區 ---------------- */
+  .notes{display:flex;gap:12px;padding:16px 24px 40px;align-items:flex-start;
+    overflow-x:auto;min-height:60vh}
+  .ncol{background:var(--panel);border:1px solid var(--line);border-radius:13px;
+    padding:11px 10px 9px;width:15rem;flex:0 0 auto}
+  .ncol.drop{background:rgba(59,130,246,.08);border-color:var(--acc)}
+  .ncol>h3{display:flex;align-items:center;gap:7px;margin:0 2px 10px;font-size:0.8125rem}
+  .ncol>h3 b{font-weight:600;padding:2px 8px;border-radius:6px;outline:0;min-width:2rem}
+  .ncol>h3 b[contenteditable]:focus{background:var(--card2);box-shadow:0 0 0 1px var(--acc)}
+  .ncol>h3 span{color:var(--dim);font-weight:600}
+  .ncol>h3 .x{margin-left:auto;color:var(--dim);font-size:1rem;line-height:1;padding:0 3px}
+  .ncol>h3 .x:hover{color:var(--bad)}
+  .s-acc>h3 b{background:rgba(59,130,246,.16);color:#8fc4ff}
+  .s-a>h3 b{background:rgba(240,85,109,.16);color:#ff97a9}
+  .s-b>h3 b{background:rgba(224,160,58,.16);color:#e8b45c}
+  .s-c>h3 b{background:rgba(78,163,245,.16);color:#8cc4ff}
+  .s-ok>h3 b{background:rgba(52,211,153,.16);color:#6fe0aa}
+  .s-tmr>h3 b{background:rgba(167,139,250,.18);color:#c4b1ff}
+  .s-dim>h3 b{background:var(--card2);color:var(--mute)}
+  .nc{background:var(--card);border:1px solid var(--line);border-radius:10px;
+    padding:9px 11px;margin-bottom:7px;cursor:grab;touch-action:pan-y}
+  .nc:hover{border-color:var(--line2);background:var(--card2)}
+  .nc .ti{font-size:0.8125rem;font-weight:600;line-height:1.45;word-break:break-word}
+  .nc .b{font-size:0.75rem;color:var(--mute);margin-top:3px;line-height:1.5;
+    display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word}
+  .nc .u{display:block;font-size:0.75rem;margin-top:4px;word-break:break-all;color:var(--acc)}
+  .nc.ghost{position:fixed;z-index:40;pointer-events:none;margin:0;cursor:grabbing;
+    transform:rotate(-1.5deg);box-shadow:0 14px 34px rgba(0,0,0,.6);border-color:var(--acc)}
+  .addsec{flex:0 0 auto;width:11rem;padding:11px;border:1px dashed var(--line2);
+    border-radius:13px;color:var(--dim);font-size:0.8125rem}
+  .addsec:hover{color:var(--acc);border-color:var(--acc)}
+  @media(max-width:980px){
+    .notes{padding:12px 14px 90px}
+    .ncol{width:13rem}
+  }
   .rank{display:flex;align-items:center;gap:11px;padding:9px 6px;border-bottom:1px solid var(--line)}
   .rank:last-child{border-bottom:0}
   .rank>b{width:1.625rem;height:1.625rem;border-radius:6px;background:var(--card2);color:var(--mute);
@@ -443,6 +478,7 @@ var VIEWS=[
   {v:'projects', i:'▤', n:'專案總覽',  t:'專案總覽',      ic:'▤'},
   {v:'pool',     i:'✦', n:'AI 專案池', t:'AI 專案池',     ic:'✦'},
   {v:'outputs',  i:'🗄', n:'資料庫',    t:'產出資料庫',    ic:'🗄️'},
+  {v:'notes',    i:'▤', n:'資料區',    t:'資料區',        ic:'🗂️'},
   {v:'done',     i:'✓', n:'完成項目',  t:'完成項目',      ic:'✅'},
   {v:'settings', i:'⚙', n:'設定',      t:'設定',          ic:'⚙'}
 ];
@@ -518,6 +554,7 @@ function load(force){
   else if(VIEW==='pool')p=call('pool',{});
   else if(VIEW==='outputs')p=call('outputs',{source:SRC,all:ALL?'1':''});
   else if(VIEW==='done')p=call('done',{range:DRANGE});
+  else if(VIEW==='notes')p=call('data',{});
   else p=call('board',DATE?{date:DATE}:{});
   p.then(function(r){
     RAW=r;
@@ -581,7 +618,8 @@ function paint(){
   if(VIEW==='projects')return $('view').innerHTML=projects(RAW,q);
   if(VIEW==='pool')return $('view').innerHTML=pool(RAW,q);
   if(VIEW==='outputs')return $('view').innerHTML=outputs(RAW,q);
-  if(VIEW==='done')return $('view').innerHTML=done(RAW,q)}
+  if(VIEW==='done')return $('view').innerHTML=done(RAW,q);
+  if(VIEW==='notes')return $('view').innerHTML=notes(RAW,q)}
 
 /* ---------------- board ---------------- */
 function board(r,q){
@@ -830,6 +868,81 @@ function pool(r,q){
       ts.map(function(t){return taskCard(t,'')}).join('')+'</div>'});
   return h+'</div>'}
 
+/* ---------------- 資料區 ---------------- */
+/** 分區是使用者自己開的，標題點一下就能改。對不到分區的卡片歸「未分類」。 */
+function notes(r,q){
+  var byS={};
+  r.items.filter(function(x){return hit(x,q)||hit({title:x.title,summary:x.body},q)})
+    .forEach(function(x){(byS[x.section]||(byS[x.section]=[])).push(x)});
+  var known={};r.sections.forEach(function(s){known[s.id]=1});
+  var loose=[];Object.keys(byS).forEach(function(k){if(!known[k])loose=loose.concat(byS[k])});
+
+  var cols=(loose.length?[sectCol({id:'',name:'未分類',color:'dim'},loose,1)]:[])
+    .concat(r.sections.map(function(sc){return sectCol(sc,byS[sc.id]||[],0)}));
+
+  return '<div class="notes">'+cols.join('')+
+    '<button class="addsec" onclick="newSect()">＋ 新增分區</button></div>'}
+
+function sectCol(sc,items,fixed){
+  return '<section class="ncol s-'+esc(sc.color||'acc')+'" data-sect="'+esc(sc.id)+'">'+
+    '<h3>'+(fixed?'<b>'+esc(sc.name)+'</b>'
+      :'<b contenteditable="true" spellcheck="false" data-id="'+esc(sc.id)+'" '+
+        'onblur="renameSect(this)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();this.blur()}">'+
+        esc(sc.name)+'</b>')+
+      '<span>'+items.length+'</span>'+
+      (fixed?'':'<button class="x" onclick="delSect(\''+sc.id+'\',\''+esc(sc.name)+'\','+items.length+')" title="刪除分區">×</button>')+
+    '</h3>'+
+    items.map(noteCard).join('')+
+    '<button class="add" onclick="newItem(\''+esc(sc.id)+'\')">＋ 新增</button></section>'}
+
+function noteCard(x){
+  var url=/^https?:\/\/\S+$/.test(String(x.body||'').trim())?String(x.body).trim():'';
+  return '<article class="nc" data-item="'+esc(x.id)+'" onclick="editItem(\''+x.id+'\')">'+
+    '<div class="ti">'+esc(x.title)+'</div>'+
+    (url?'<a class="u" href="'+esc(url)+'" target="_blank" rel="noopener" onclick="event.stopPropagation()">'+
+        esc(url)+'</a>'
+      :(x.body?'<div class="b">'+esc(x.body)+'</div>':''))+
+    '</article>'}
+
+function findItem(id){
+  var a=(RAW&&RAW.items)||[];
+  for(var i=0;i<a.length;i++)if(a[i].id===id)return a[i];return null}
+
+function afterData(r){if(r.data){RAW=r.data;paint()}else load(1)}
+function noteErr(e){toast(e.message);load(1)}
+
+function newSect(){
+  var n=prompt('分區名稱');if(!n||!n.trim())return;
+  call('sect_save',{name:n.trim()}).then(afterData).catch(noteErr)}
+
+function renameSect(el){
+  var n=el.textContent.trim(),id=el.dataset.id,cur=findSect(id);
+  if(!n||!cur||n===cur.name){if(cur)el.textContent=cur.name;return}
+  call('sect_save',{id:id,name:n}).then(afterData).catch(noteErr)}
+
+function findSect(id){
+  var a=(RAW&&RAW.sections)||[];
+  for(var i=0;i<a.length;i++)if(a[i].id===id)return a[i];return null}
+
+function delSect(id,name,n){
+  if(!confirm('刪掉分區「'+name+'」？'+(n?'裡面的 '+n+' 張卡片不會被刪，會移到「未分類」。':'')))return;
+  call('sect_del',{id:id}).then(afterData).catch(noteErr)}
+
+function newItem(sect){
+  var b=prompt('內容或網址');if(!b||!b.trim())return;
+  call('item_save',{section:sect,body:b.trim()}).then(afterData).catch(noteErr)}
+
+function editItem(id){
+  var x=findItem(id);if(!x)return;
+  var t=prompt('標題',x.title);if(t===null)return;
+  var b=prompt('內容或網址',x.body);if(b===null)return;
+  if(t===x.title&&b===x.body)return;
+  call('item_save',{id:id,title:t,body:b}).then(afterData).catch(noteErr)}
+
+function moveItem(id,sect){
+  call('item_save',{id:id,section:sect}).then(function(r){
+    afterData(r);toast('已移動')}).catch(noteErr)}
+
 /* ---------------- 完成項目 ---------------- */
 function done(r,q){
   var items=r.items.filter(function(x){return hit(x,q)});
@@ -1026,14 +1139,16 @@ function submit(){
 var PRESS=null,DRAG=null,NODRAG=0;
 var DROP={run:'AI 正執行工作',today:'今日工作',tmr:'明日工作'};
 
-function colOf(el){return el&&el.closest?el.closest('.col[data-drop]'):null}
+function colOf(el){return el&&el.closest?el.closest('.col[data-drop],.ncol[data-sect]'):null}
 
 function press(e){
   if(e.button)return;
-  var card=e.target.closest&&e.target.closest('.t[data-id]');
-  if(!card||e.target.closest('button')||!colOf(card))return;
+  var card=e.target.closest&&e.target.closest('.t[data-id],.nc[data-item]');
+  if(!card||e.target.closest('button')||e.target.closest('a')||
+     e.target.isContentEditable||!colOf(card))return;
   clearPress();
-  PRESS={card:card,id:card.dataset.id,x:e.clientX,y:e.clientY,touch:e.pointerType!=='mouse'};
+  PRESS={card:card,id:card.dataset.id||card.dataset.item,note:!!card.dataset.item,
+    x:e.clientX,y:e.clientY,touch:e.pointerType!=='mouse'};
   if(PRESS.touch)PRESS.timer=setTimeout(function(){if(PRESS)lift(e.clientX,e.clientY)},380)}
 
 function clearPress(){if(PRESS&&PRESS.timer)clearTimeout(PRESS.timer);PRESS=null}
@@ -1041,9 +1156,11 @@ function clearPress(){if(PRESS&&PRESS.timer)clearTimeout(PRESS.timer);PRESS=null
 function lift(x,y){
   var card=PRESS.card,r=card.getBoundingClientRect();
   var g=card.cloneNode(true);
-  g.className='t ghost';g.style.width=r.width+'px';g.style.left=r.left+'px';g.style.top=r.top+'px';
+  g.className=(PRESS.note?'nc':'t')+' ghost';g.style.width=r.width+'px';g.style.left=r.left+'px';g.style.top=r.top+'px';
   document.body.appendChild(g);
-  DRAG={id:PRESS.id,card:card,ghost:g,dx:x-r.left,dy:y-r.top,from:colOf(card).dataset.drop,over:null};
+  var home=colOf(card);
+  DRAG={id:PRESS.id,card:card,ghost:g,dx:x-r.left,dy:y-r.top,note:PRESS.note,
+    from:PRESS.note?home.dataset.sect:home.dataset.drop,over:null};
   card.classList.add('lift');document.body.classList.add('dragging');
   clearPress();over(x,y)}
 
@@ -1052,7 +1169,9 @@ function over(x,y){
   var c=colOf(document.elementFromPoint(x,y));
   if(c===DRAG.over)return;
   if(DRAG.over)DRAG.over.classList.remove('drop');
-  DRAG.over=c;if(c&&c.dataset.drop!==DRAG.from)c.classList.add('drop');else DRAG.over=null}
+  var key=c&&(DRAG.note?c.dataset.sect:c.dataset.drop);
+  var same=!c||key===DRAG.from||(DRAG.note?c.dataset.sect===undefined:c.dataset.drop===undefined);
+  DRAG.over=c;if(!same)c.classList.add('drop');else DRAG.over=null}
 
 function move(e){
   if(DRAG){over(e.clientX,e.clientY);return}
@@ -1066,12 +1185,14 @@ function move(e){
 function drop(){
   clearPress();
   if(!DRAG)return;
-  var to=DRAG.over&&DRAG.over.dataset.drop,id=DRAG.id;
+  var note=DRAG.note,id=DRAG.id;
+  var to=DRAG.over&&(note?DRAG.over.dataset.sect:DRAG.over.dataset.drop);
   DRAG.ghost.remove();DRAG.card.classList.remove('lift');
   if(DRAG.over)DRAG.over.classList.remove('drop');
   document.body.classList.remove('dragging');
   var from=DRAG.from;DRAG=null;NODRAG=Date.now();
-  if(to)toCol(id,to,from)}
+  if(to===undefined||to===null||to===from)return;
+  note?moveItem(id,to):toCol(id,to,from)}
 
 document.addEventListener('pointerdown',press);
 document.addEventListener('pointermove',move);
