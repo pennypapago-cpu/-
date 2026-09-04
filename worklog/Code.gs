@@ -34,8 +34,8 @@ var METRIC_NUMS    = ['revenue', 'orders', 'spend', 'clicks', 'carts'];
 // 表頭（中文，給人看）與欄位鍵（英文，給 API 用）一一對應
 var LOG_HEADERS = ['id', '開始時間', '結束時間', '來源', '專案', '標題', '狀態', '摘要', '產出連結', 'session_id', '任務id', '檔案位置'];
 var LOG_KEYS    = ['id', 'start',    'end',     'source', 'project', 'title', 'status', 'summary', 'link', 'session_id', 'task_id', 'path'];
-var TASK_HEADERS = ['id', '建立時間', '標題', '專案', '到期日', '優先', '狀態', '下一步', '等待者', '預估時數', '備註', '完成時間', '執行者'];
-var TASK_KEYS    = ['id', 'created', 'title', 'project', 'due', 'priority', 'status', 'next', 'waiting', 'estimate', 'note', 'done_at', 'owner'];
+var TASK_HEADERS = ['id', '建立時間', '標題', '專案', '到期日', '優先', '狀態', '下一步', '等待者', '預估時數', '備註', '完成時間', '執行者', '重複'];
+var TASK_KEYS    = ['id', 'created', 'title', 'project', 'due', 'priority', 'status', 'next', 'waiting', 'estimate', 'note', 'done_at', 'owner', 'repeat'];
 
 var TASK_OPEN = ['待辦', '進行中'];
 var DATE_ONLY_KEYS = { due: true };
@@ -61,7 +61,53 @@ var STATUS_ALIAS = {
 };
 var STATUS_OK = { '待辦': 1, '進行中': 1, '完成': 1, '取消': 1 };
 var MONTHS_ = { JAN: 1, FEB: 2, MAR: 3, APR: 4, MAY: 5, JUN: 6, JUL: 7, AUG: 8, SEP: 9, OCT: 10, NOV: 11, DEC: 12 };
-var TASK_EDITABLE = ['title', 'project', 'due', 'priority', 'status', 'next', 'waiting', 'estimate', 'note', 'owner'];
+var TASK_EDITABLE = ['title', 'project', 'due', 'priority', 'status', 'next', 'waiting', 'estimate', 'note', 'owner', 'repeat'];
+
+// 固定每週／每月要做的事。做完的那一刻自動長出下一次，原本那筆維持完成留在紀錄裡——
+// 不是把同一筆的日期往後推。這樣「完成項目」看得到你每週都有做，
+// 而不是只剩一筆永遠做不完的東西。
+var REPEAT_OK = { '每天': 1, '每週': 7, '每兩週': 14 };
+var REPEAT_MONTHS = { '每月': 1, '每季': 3, '每年': 12 };
+var REPEAT_ALIAS = {
+  '每日': '每天', 'DAILY': '每天', '天': '每天',
+  '每周': '每週', 'WEEKLY': '每週', '週': '每週', '周': '每週', '每星期': '每週',
+  '每兩周': '每兩週', '雙週': '每兩週', '每2週': '每兩週',
+  'MONTHLY': '每月', '月': '每月',
+  '每三個月': '每季', 'QUARTERLY': '每季', '季': '每季',
+  'YEARLY': '每年', 'ANNUALLY': '每年', '年': '每年'
+};
+
+/** 認不出來就是「不重複」——寧可少長一筆，也不要莫名其妙冒出任務 */
+function normRepeat_(v) {
+  var raw = String(v === undefined || v === null ? '' : v).trim();
+  if (!raw || raw === '不重複') return '';
+  if (REPEAT_OK[raw] || REPEAT_MONTHS[raw]) return raw;
+  return REPEAT_ALIAS[raw.toUpperCase()] || '';
+}
+
+/**
+ * 下一次是哪一天。從「這次的到期日」往後推，不是從今天——
+ * 每週一的事就算你週三才做完，下一次還是下週一，不會愈飄愈後面。
+ * 但推出來的日子已經過了就繼續推，免得一完成就馬上又逾期。
+ */
+function nextDue_(due, rule, today) {
+  rule = normRepeat_(rule);
+  if (!rule) return '';
+  var base = parseDate_(due) || parseDate_(today) || new Date();
+  var stop = parseDate_(today) || new Date();
+  for (var i = 0; i < 400; i++) {
+    base = REPEAT_OK[rule] ? shiftDays_(base, REPEAT_OK[rule]) : addMonths_(base, REPEAT_MONTHS[rule]);
+    if (base > stop) break;
+  }
+  return fmtDate_(base);
+}
+
+/** 加月份要夾住月底：1/31 加一個月是 2/28，不是 3/3 */
+function addMonths_(d, n) {
+  var y = d.getFullYear(), m = d.getMonth() + n, day = d.getDate();
+  var last = new Date(y, m + 1, 0).getDate();
+  return new Date(y, m, Math.min(day, last));
+}
 
 // 誰動手做這件事。系統猜不出來——「碳標籤申報」和「Claude SEO 優化」從資料上長得一樣，
 // 只有本人知道。所以是欄位，不是推論。預設「我」：新任務和匯進來的都不用回頭整理，
@@ -393,6 +439,7 @@ function addTask_(p) {
     row[col.note] = p.note || '';
     row[col.done_at] = '';
     row[col.owner] = normOwner_(p.owner);
+    row[col.repeat] = normRepeat_(p.repeat);
     sh.appendRow(fill_(row, TASK_KEYS.length));
     dirty_(SHEET_TASK);
     return toObj_(TASK_KEYS, row);
@@ -413,13 +460,20 @@ function updateTask_(p) {
     var row = sh.getRange(rowNum, 1, 1, TASK_KEYS.length).getValues()[0];
     TASK_EDITABLE.forEach(function (k) {
       if (p[k] === undefined) return;
-      row[col[k]] = k === 'priority' ? normPriority_(p[k]) : (k === 'owner' ? normOwner_(p[k]) : p[k]);
+      row[col[k]] = k === 'priority' ? normPriority_(p[k])
+        : k === 'owner' ? normOwner_(p[k])
+        : k === 'repeat' ? normRepeat_(p[k]) : p[k];
     });
+    var wasDone = !!String(row[col.done_at]).trim();
     if (p.status === '完成' && !row[col.done_at]) row[col.done_at] = now_();
     if (p.status && p.status !== '完成') row[col.done_at] = '';
     sh.getRange(rowNum, 1, 1, TASK_KEYS.length).setValues([row]);
     dirty_(SHEET_TASK);
-    return toObj_(TASK_KEYS, row);
+
+    var out = toObj_(TASK_KEYS, row);
+    // 剛剛才變成完成，而且它是重複任務 → 長出下一次
+    if (p.status === '完成' && !wasDone) out.spawned = spawnNext_(sh, col, row);
+    return out;
   } finally {
     lock.releaseLock();
   }
@@ -441,7 +495,7 @@ function backfill_() {
     var sh = sheet_(SHEET_TASK);
     var col = index_(TASK_KEYS);
     var last = sh.getLastRow();
-    var n = { rows: 0, id: 0, created: 0, priority: 0, status: 0, owner: 0, due: 0, dueBad: 0, samples: [] };
+    var n = { rows: 0, id: 0, created: 0, priority: 0, status: 0, owner: 0, repeat: 0, due: 0, dueBad: 0, samples: [] };
     if (last < 2) return n;
     var rng = sh.getRange(2, 1, last - 1, TASK_KEYS.length);
     var vals = rng.getValues();
@@ -457,6 +511,9 @@ function backfill_() {
 
       var ow = normOwner_(row[col.owner]);
       if (ow !== String(row[col.owner]).trim()) { row[col.owner] = ow; n.owner++; }
+
+      var rp = normRepeat_(row[col.repeat]);
+      if (rp !== String(row[col.repeat]).trim()) { row[col.repeat] = rp; n.repeat++; }
 
       var st = normStatus_(row[col.status]);
       if (st !== String(row[col.status]).trim()) { row[col.status] = st; n.status++; }
@@ -480,6 +537,44 @@ function backfill_() {
   } finally {
     lock.releaseLock();
   }
+}
+
+/**
+ * 幫重複任務長出下一次。回傳新任務，沒長就回 null。
+ * 已經有一筆同名同專案的未完成任務就不長——重複按「完成」、
+ * 或手動先建好下一次的情況下，不該冒出兩筆一樣的。
+ */
+function spawnNext_(sh, col, row) {
+  var rule = normRepeat_(row[col.repeat]);
+  if (!rule) return null;
+  var today = fmtDate_(new Date());
+  var due = nextDue_(fmtDate_(parseDate_(row[col.due]) || new Date()), rule, today);
+  if (!due) return null;
+
+  var title = String(row[col.title]), project = String(row[col.project] || '');
+  var dup = readAll_(SHEET_TASK, TASK_KEYS).some(function (t) {
+    return TASK_OPEN.indexOf(t.status) >= 0 && t.title === title && String(t.project || '') === project;
+  });
+  if (dup) return null;
+
+  var next = fill_([], TASK_KEYS.length);
+  next[col.id] = 'T' + Utilities.getUuid().slice(0, 8);
+  next[col.created] = now_();
+  next[col.title] = title;
+  next[col.project] = project;
+  next[col.due] = due;
+  next[col.priority] = normPriority_(row[col.priority]);
+  next[col.status] = '待辦';
+  next[col.next] = row[col.next] || '';
+  next[col.waiting] = row[col.waiting] || '';
+  next[col.estimate] = row[col.estimate] || '';
+  next[col.note] = row[col.note] || '';
+  next[col.done_at] = '';
+  next[col.owner] = normOwner_(row[col.owner]);
+  next[col.repeat] = rule;
+  sh.appendRow(next);
+  dirty_(SHEET_TASK);
+  return toObj_(TASK_KEYS, next);
 }
 
 // ---------------------------------------------------------------- 看板

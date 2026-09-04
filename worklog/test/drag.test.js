@@ -685,3 +685,27 @@ assert.strictEqual(ctx.bodyPreview({title:'只有標題',body:'只有標題'}),'
 const inlineSrc=src.split('function inline(')[1].split('\nfunction ')[0];
 assert(/blur[\s\S]*setTimeout/.test(inlineSrc),'blur 要挪到事件之後再存檔');
 console.log('資料區    卡片點進去開整頁，blur 不再同步改 DOM');
+
+// ---- 重複任務的介面 ----
+assert.strictEqual(ctx.repeatMark(''),'','不重複的不加記號');
+assert(ctx.repeatMark('每週').includes('🔁'));
+assert(ctx.taskCard({id:'R1',title:'每週檢查',project:'Shopline',due:T,priority:'B',
+  status:'待辦',repeat:'每週'},'today').includes('🔁'),'卡片看得出這件做完還會再來');
+assert(src.includes('<option value="每兩週">'),'表單要有重複的選項');
+
+// 表單：帶得出既有值、送得出去、關掉會清乾淨
+ctx.paint=function(){};
+ctx.RAW={running:[],today:[{id:'R1',title:'每週檢查',project:'Shopline',due:T,priority:'B',
+  status:'待辦',next:'',waiting:'',owner:'我',repeat:'每週'}],tomorrow:[],unscheduled:[],date:T};
+ctx.edit('R1');
+assert.strictEqual(ctx.$('fR').value,'每週','編輯時帶出原本的重複設定');
+sent=null;ctx.submit();
+assert.strictEqual(sent.params.repeat,'每週','送出時帶上');
+ctx.closeAdd();
+assert.strictEqual(ctx.$('fR').value,'','關掉要清乾淨，不然下一筆會沿用');
+
+// 完成之後要告訴使用者下一次是哪天
+assert.strictEqual(ctx.nextToast({spawned:{due:'2026-09-14'}}),'已完成，下一次 9/14');
+assert.strictEqual(ctx.nextToast({}),'已完成');
+assert.strictEqual(ctx.nextToast(null),'已完成');
+console.log('重複      表單、卡片記號、完成後的提示都在');
