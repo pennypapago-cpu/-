@@ -522,3 +522,38 @@ console.log('專案池    昨天分 Cowork / Claude Code 兩欄，還剩什麼�
 // weekGrid 的修飾詞不能再叫 wk
 assert(ctx.overview(OV,'').includes('mgrid mweek'),'週格用 mweek，不要用被佔走的 wk');
 assert(!/class="mgrid wk"/.test(src),'wk 是統計列長條圖的類別');
+
+// ---- AI 工作時間表只畫紀錄，不畫任務 ----
+// 任務排在哪一天是「看板總覽」的事；13 筆行政任務匯進來之後，
+// 全天那列被塞爆，兩頁又互相重複。
+const PJ={range:'week',from:'2026-08-31',to:'2026-09-06',done:1,total:7,
+  tasks:[{id:'T1',title:'中秋禮盒控單程式確認',project:'中秋禮盒',due:'2026-09-03',priority:'A',status:'待辦'},
+         {id:'T2',title:'6布(愛心款) 10',project:'行政',due:'2026-09-04',priority:'B',status:'待辦'}],
+  logs:[{id:'L1',title:'工作看板更新到第 9 版',source:'Cowork',project:'個人',
+         start:'2026-09-03 15:00',end:'2026-09-03 16:20',status:'完成'},
+        {id:'L2',title:'修好週檢視的 CSS 撞名',source:'Claude Code',project:'工作看板',
+         start:'2026-09-04 10:00',end:'2026-09-04 11:30',status:'完成'}],
+  unscheduled:[{id:'T9',title:'沒排日期',project:'行政',due:'',priority:'B',status:'待辦'}],
+  projects:[]};
+
+const pj=ctx.projects(PJ,'');
+assert(!pj.includes('allday'),'全天那列整個拿掉');
+assert(!pj.includes('chip2'),'任務不該再出現在時間表上');
+assert(!pj.includes('中秋禮盒控單程式確認')&&!pj.includes('6布'),'任務標題也不該出現');
+assert(!pj.includes('沒排日期'),'未排日期的任務清單也移走');
+assert(pj.includes('工作看板更新到第 9 版')&&pj.includes('修好週檢視的 CSS 撞名'),'紀錄還是要畫');
+assert.strictEqual((pj.match(/class="ev /g)||[]).length,2,'兩筆紀錄都在時間軸上');
+// 頂端數字也跟著換成紀錄導向
+assert(!pj.includes('完成</div>')||!/任務<\/div>/.test(pj),'不要再談任務完成數');
+assert(pj.includes('Claude Code')&&pj.includes('Cowork'),'改成兩個 AI 各跑幾筆');
+assert.strictEqual(ctx.cntSrc(PJ.logs,'Cowork'),1);
+assert.strictEqual(ctx.cntSrc(PJ.logs,'Claude Code'),1);
+assert.strictEqual(ctx.cntSrc(PJ.logs,'手動'),0);
+// 月也一樣不畫任務
+const pjm=ctx.projects(Object.assign({},PJ,{range:'month',from:'2026-09-01',to:'2026-09-30'}),'');
+assert(!pjm.includes('chip2'),'月檢視也不畫任務');
+
+// 但「看板總覽」的月檢視要照常畫任務——別把它一起改壞了
+const ovm2=ctx.overview(Object.assign({},OV,{range:'month',from:'2026-09-01',to:'2026-09-30'}),'');
+assert(ovm2.includes('chip2'),'看板總覽的月還是要看得到任務');
+console.log('時間表    只畫紀錄，任務留給看板總覽');
