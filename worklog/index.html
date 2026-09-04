@@ -116,15 +116,26 @@
   .mx .miss{flex:1 1 100%;color:var(--mute);font-size:0.875rem;padding:9px 12px;
     background:var(--card);border:1px dashed var(--line2);border-radius:11px}
   @media(max-width:980px){.mx{margin:10px 14px 0;gap:8px}.mx .m{flex:1 1 42%}}
+  .brief{margin:12px 24px 0;padding:10px 13px 11px;
+    background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--acc);
+    border-radius:11px;font-size:0.875rem;color:var(--mute);line-height:1.6}
+  .brief .bh{display:flex;align-items:center;gap:7px;margin-bottom:6px}
+  .brief .bh b{font-size:0.9375rem;color:var(--ink)}
+  .brief i{font-style:normal;flex:0 0 auto}
   .brief .x{margin-left:auto;flex:0 0 auto;background:none;border:0;color:var(--dim);
     font-size:1.0625rem;line-height:1;padding:0 2px;cursor:pointer}
   .brief .x:hover{color:var(--ink)}
-  .brief{display:flex;gap:9px;align-items:flex-start;margin:12px 24px 0;padding:10px 13px;
-    background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--acc);
-    border-radius:11px;font-size:0.8125rem;color:var(--mute);line-height:1.6}
-  .brief i{font-style:normal;flex:0 0 auto}
-  .brief span{min-width:0}
-  @media(max-width:980px){.brief{margin:10px 14px 0}}
+  .brief .bs{display:flex;gap:10px;align-items:baseline;padding:2px 0}
+  .brief .bs+.bs{border-top:1px solid var(--line);margin-top:4px;padding-top:6px}
+  .brief .bs>u{flex:0 0 4.5rem;text-decoration:none;color:var(--dim);font-weight:600;font-size:0.8125rem}
+  .brief .bs>div{min-width:0;flex:1 1 auto}
+  .brief ol{margin:0;padding-left:1.35rem}
+  .brief li{margin:1px 0}
+  .brief li::marker{color:var(--dim)}
+  .brief .todo li{color:var(--ink)}
+  .brief p{margin:0}
+  @media(max-width:980px){.brief{margin:10px 14px 0}
+    .brief .bs{display:block}.brief .bs>u{display:block;margin-bottom:1px}}
   .cols{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;padding:16px 24px 8px;align-items:start}
   .col{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px 12px 10px;min-width:0}
   .col>h3{display:flex;align-items:center;gap:8px;margin:0 4px 12px;font-size:1.125rem;font-weight:700}
@@ -732,9 +743,44 @@ function board(r,q){
     可以按 ✕ 收起來，收起後從標題列那顆「早晨簡報」鈕叫回來，選擇會記住。 */
 function brief(note){
   var el=$('brief'),show=note&&BOPEN;
-  el.innerHTML=show?'<i>🎯</i><span>'+esc(note.split('\n').filter(function(x){return x.trim()}).join('　'))+
-    '</span><button class="x" onclick="toggleBrief()" title="收起">✕</button>':'';
+  el.innerHTML=show?'<div class="bh"><i>🎯</i><b>早晨簡報</b>'+
+    '<button class="x" onclick="toggleBrief()" title="收起">✕</button></div>'+
+    briefBody(note):'';
   el.style.display=show?'':'none'}
+
+/**
+ * 簡報是 morning-brief skill 寫的純文字，格式固定成「標籤：內容」四段
+ * （昨天／今天必做／進行中／建議）。以前整篇串成一行看不出結構，
+ * 這裡拆回分段，有編號的那幾段再拆成條列。
+ * 認不出標籤的行就原樣接在上一段後面，不會被吃掉。
+ */
+function briefBody(note){
+  var secs=[];
+  String(note).split('\n').forEach(function(line){
+    var t=line.trim();if(!t)return;
+    var m=t.match(/^([^：:]{1,10})[：:]\s*(.*)$/);
+    if(m)secs.push({label:m[1],body:m[2]});
+    else if(secs.length)secs[secs.length-1].body+=' '+t;
+    else secs.push({label:'',body:t})});
+  if(!secs.length)return '';
+  return secs.map(function(s){
+    var items=briefItems(s.body);
+    var body=items
+      ? '<ol'+(s.label.indexOf('必做')>=0?' class="todo"':'')+'>'+
+        items.map(function(x){return '<li>'+esc(x)+'</li>'}).join('')+'</ol>'
+      : '<p>'+esc(s.body)+'</p>';
+    return '<div class="bs">'+(s.label?'<u>'+esc(s.label)+'</u>':'')+'<div>'+body+'</div></div>'
+  }).join('')}
+
+/** 把「1. 甲 2. 乙 3. 丙」拆成陣列；沒有編號就回 null 當一段文字。
+    只認一到兩位數後面接句點再接非數字，才不會把 2026.09 或 3.5 當成編號。 */
+function briefItems(body){
+  var t=String(body).trim(),NUM=/^\d{1,2}\s*[.．]\s*[^\d\s]/;
+  var parts=t.split(/\s+(?=\d{1,2}\s*[.．]\s*[^\d\s])/);
+  // 只有一件事的那幾天也要當條列，不然「1.」會原封不動留在文字裡
+  if(parts.length<2&&!NUM.test(t))return null;
+  return parts.map(function(p){return p.trim().replace(/^\d{1,2}\s*[.．]\s*/,'')})
+    .filter(function(p){return p})}
 
 function toggleBrief(){
   BOPEN=!BOPEN;localStorage.setItem('briefOpen',BOPEN?'1':'0');
