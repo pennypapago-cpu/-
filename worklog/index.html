@@ -266,6 +266,12 @@
   .mc.tdy .d{color:#fff;background:var(--acc2);border-radius:50%;width:1.5rem;height:1.5rem;
     line-height:1.5rem;text-align:center;margin:0 0 3px auto;font-size:0.875rem}
   .mc .more{font-size:0.7812rem;color:var(--dim);padding-left:2px}
+  .mgrid.wk .mc{min-height:13rem}
+  .mgrid.wk .wd{font-size:0.8125rem;color:var(--dim);text-align:center;margin-bottom:1px}
+  .mgrid.wk .d{text-align:center;font-size:1.0625rem;color:var(--ink)}
+  .mgrid.wk .mc.tdy .d{margin:0 auto 4px}
+  @media(max-width:980px){.mgrid.wk{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .mgrid.wk .mc{min-height:6rem}}
   .legend{display:flex;gap:14px;flex-wrap:wrap;padding:9px 4px 0;font-size:0.875rem;color:var(--dim)}
   .legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:-1px}
   @media(max-width:980px){
@@ -522,7 +528,8 @@
 var SHEET='https://docs.google.com/spreadsheets/d/136z3S0ADQHRda3q8O_B_GFBlBlBuE-oEg0mxIeT0FVc/edit';
 var VIEWS=[
   {v:'board',    i:'▦', n:'每日看板',  t:'Penny 每日高產值工作看板', ic:'🎯'},
-  {v:'projects', i:'▤', n:'專案總覽',  t:'專案總覽',      ic:'▤'},
+  {v:'overview', i:'▥', n:'看板總覽',  t:'看板總覽',      ic:'▥'},
+  {v:'projects', i:'▤', n:'AI 工作時間表', t:'AI 工作時間表', ic:'▤'},
   {v:'pool',     i:'✦', n:'AI 專案池', t:'AI 專案池',     ic:'✦'},
   {v:'outputs',  i:'🗄', n:'資料庫',    t:'產出資料庫',    ic:'🗄️'},
   {v:'notes',    i:'▤', n:'資料區',    t:'資料區',        ic:'🗂️'},
@@ -530,7 +537,7 @@ var VIEWS=[
   {v:'settings', i:'⚙', n:'設定',      t:'設定',          ic:'⚙'}
 ];
 var PN={A:'A 優先處理',B:'B 推進型',C:'C 維護型'};
-var TOKEN='',VIEW='board',KIND='task',EDIT=null,EDITL=null,COL='',DATE=null,PJDATE=null,PJRANGE='week',SRC='',ALL=0,D=null,RAW=null;
+var TOKEN='',VIEW='board',KIND='task',EDIT=null,EDITL=null,COL='',DATE=null,PJDATE=null,PJRANGE='week',OVDATE=null,OVRANGE='week',SRC='',ALL=0,D=null,RAW=null;
 try{TOKEN=localStorage.getItem('worklog_token')||''}catch(e){}
 
 var $=function(i){return document.getElementById(i)};
@@ -560,6 +567,8 @@ function toast(m){var t=$('toast');t.textContent=m;t.style.display='block';
   clearTimeout(t._h);t._h=setTimeout(function(){t.style.display='none'},1900)}
 function ymd(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
 function today(){return ymd(new Date())}
+/** a 到 b 差幾天（日期字串，只算日）。注意別叫 days——那個名字給日曆佔走了。 */
+function daysBetween(a,b){return Math.round((parse(b)-parse(a))/864e5)}
 function md(s){var m=String(s).match(/^\d{4}-(\d{2})-(\d{2})/);return m?(+m[1])+'/'+(+m[2]):''}
 function parse(s){return new Date(String(s).slice(0,10)+'T00:00:00')}
 
@@ -599,12 +608,15 @@ function go(v){
 function vkey(){
   if(VIEW==='board')return 'board:'+(DATE||today());
   if(VIEW==='projects')return 'projects:'+PJRANGE+':'+(PJDATE||today());
+  if(VIEW==='overview')return 'overview:'+OVRANGE+':'+(OVDATE||today());
   if(VIEW==='done')return 'done:'+DRANGE;
   if(VIEW==='outputs')return 'outputs:'+SRC+':'+ALL;
   return VIEW}
 
 function fetchView(){
   if(VIEW==='projects')return call('projects',{range:PJRANGE,date:PJDATE||today()});
+  // 看板總覽跟時間表要的是同一份資料（區間內的任務），只是畫法不同，共用同一個 action
+  if(VIEW==='overview')return call('projects',{range:OVRANGE,date:OVDATE||today()});
   if(VIEW==='pool')return call('pool',{});
   if(VIEW==='outputs')return call('outputs',{source:SRC,all:ALL?'1':''});
   if(VIEW==='done')return call('done',{range:DRANGE});
@@ -644,27 +656,36 @@ function shift(n){
     else if(PJRANGE==='week')d.setDate(d.getDate()+7*n);
     else d.setMonth(d.getMonth()+n);
     PJDATE=ymd(d)}
+  else if(VIEW==='overview'){
+    var o=parse(OVDATE||today());
+    if(OVRANGE==='week')o.setDate(o.getDate()+7*n);else o.setMonth(o.getMonth()+n);
+    OVDATE=ymd(o)}
   else if(VIEW==='board'){var b=parse(DATE||today());b.setDate(b.getDate()+n);DATE=ymd(b)}
   else return;
   load()}
-function goToday(){DATE=null;PJDATE=null;load()}
+function goToday(){DATE=null;PJDATE=null;OVDATE=null;load()}
 function pjRange(r){PJRANGE=r;load()}
+function ovRange(r){OVRANGE=r;load()}
 
 /* ---------------- header bits ---------------- */
 var RNAME={day:'日',week:'週',month:'月'};
 function header(){
   var lab='',now=true;
-  if(VIEW==='projects'&&RAW&&RAW.from){
-    lab=PJRANGE==='day'?dayLab(RAW.from):(RAW.from+' – '+RAW.to);
+  var span=(VIEW==='projects'||VIEW==='overview')&&RAW&&RAW.from;
+  if(span){
+    lab=RAW.range==='day'?dayLab(RAW.from):(RAW.from+' – '+RAW.to);
     now=RAW.from<=today()&&today()<=RAW.to}
   else{var d=parse((RAW&&RAW.date)||DATE||today());lab=dayLab(ymd(d));now=ymd(d)===today()}
   $('dateLab').textContent=lab;
   $('todayChip').classList.toggle('on',now);
-  $('todayChip').textContent=VIEW==='projects'?{day:'今天',week:'本週',month:'本月'}[PJRANGE]:'今天';
+  $('todayChip').textContent=VIEW==='projects'?{day:'今天',week:'本週',month:'本月'}[PJRANGE]
+    :VIEW==='overview'?{week:'本週',month:'本月'}[OVRANGE]:'今天';
 
   var ex='';
   if(VIEW==='projects')ex=['day','week','month'].map(function(r){
     return '<button class="chip'+(PJRANGE===r?' on':'')+'" onclick="pjRange(\''+r+'\')">'+RNAME[r]+'</button>'}).join(' ');
+  if(VIEW==='overview')ex=['week','month'].map(function(r){
+    return '<button class="chip'+(OVRANGE===r?' on':'')+'" onclick="ovRange(\''+r+'\')">'+RNAME[r]+'</button>'}).join(' ');
   if(VIEW==='outputs'&&RAW)ex=srcChips(RAW);
   if(VIEW==='done')ex=[['week','本週'],['month','本月'],['all','全部']].map(function(r){
     return '<button class="chip'+(DRANGE===r[0]?' on':'')+'" onclick="DRANGE=\''+r[0]+'\';load()">'+
@@ -689,6 +710,7 @@ function paint(){
   if(VIEW==='settings')return $('view').innerHTML=settings();
   if(!RAW)return;
   if(VIEW==='board')return $('view').innerHTML=board(RAW,q);
+  if(VIEW==='overview')return $('view').innerHTML=overview(RAW,q);
   if(VIEW==='projects')return $('view').innerHTML=projects(RAW,q);
   if(VIEW==='pool')return $('view').innerHTML=pool(RAW,q);
   if(VIEW==='outputs')return $('view').innerHTML=outputs(RAW,q);
@@ -759,7 +781,10 @@ function col(cls,icon,title,cards,empty){
     手機三欄是上下堆疊的，垂直拖曳會跟捲動打架，所以那邊靠這些按鈕，桌機才用拖的。 */
 function taskCard(t,col){
   var td=today(),cls=t.due?(t.due<td?'over':(t.due===td?'now':'')):'';
-  var lbl=t.due?(t.due<td?'逾期 '+md(t.due):(t.due===td?'今天':(t.due===ymd(new Date(Date.now()+864e5))?'明天':md(t.due)))):'未排日期';
+  // 昨天沒做完的今天照樣出現在「今日工作」，但到期日不會被改掉——
+  // 改掉就再也看不出這件本來哪天該交。所以標示成「順延 N 天 · 需完成 9/3」。
+  var lbl=t.due?(t.due<td?'順延 '+daysBetween(t.due,td)+' 天 · 需完成 '+md(t.due)
+      :(t.due===td?'今天':(t.due===ymd(new Date(Date.now()+864e5))?'明天':md(t.due)))):'未排日期';
   var a=(t.status!=='進行中'?'<button class="go" onclick="event.stopPropagation();toCol(\''+t.id+'\',\'run\',\''+(col||'')+'\')">開始</button>':'')+
     '<button class="ok" onclick="st(\''+t.id+'\',\'完成\')">完成 ✓</button>'+
     (col!=='today'?'<button onclick="event.stopPropagation();toCol(\''+t.id+'\',\'today\',\''+(col||'')+'\')">移到今日</button>':'')+
@@ -935,11 +960,48 @@ function monthCal(r,f){
     var k=ymd(d),ts=tByDay[k]||[],n=nByDay[k]||0;
     h+='<div class="mc'+(d.getMonth()!==m?' out':'')+(k===td?' tdy':'')+'">'+
       '<div class="d">'+d.getDate()+'</div>'+
-      ts.slice(0,3).map(function(t){
-        return '<button class="chip2 '+t.priority+(t.status==='完成'?' dn2':'')+
-          '" onclick="edit(\''+t.id+'\')" title="'+esc(t.title)+'">'+esc(t.title)+'</button>'}).join('')+
+      ts.slice(0,3).map(dayChip).join('')+
       (ts.length>3?'<div class="more">還有 '+(ts.length-3)+' 件</div>':'')+
       (n?'<div class="more">● '+n+' 筆紀錄</div>':'')+'</div>'}
+  return h+'</div>'}
+
+/** 日曆格子裡的一件任務。點下去就是編輯，跟卡片同一套。 */
+function dayChip(t){
+  return '<button class="chip2 '+t.priority+(t.status==='完成'?' dn2':'')+
+    '" onclick="edit(\''+t.id+'\')" title="'+esc(t.title)+'">'+esc(t.title)+'</button>'}
+
+/* ---------------- 看板總覽 ----------------
+   跟「AI 工作時間表」看的是同一份資料，但這裡只管任務排在哪一天、做完了沒，
+   不畫實際執行的時間軸。週看七格、月看整月，上下一段用標題列的 ‹ › 切。 */
+function overview(r,q){
+  var f=function(a){return a.filter(function(x){return hit(x,q)})};
+  var ts=f(r.tasks),td=today();
+  var done=ts.filter(function(t){return t.status==='完成'}).length;
+  var over=ts.filter(function(t){return t.status!=='完成'&&t.due&&t.due<td}).length;
+  return '<div class="wrap">'+
+    '<div class="panelbox" style="display:flex;gap:26px;flex-wrap:wrap">'+
+      kpi('區間',RNAME[r.range]+' · '+r.from+' – '+r.to)+
+      kpi('任務',done+' / '+ts.length+' 完成')+
+      kpi('逾期未完成',over+' 件')+
+      kpi('未排日期',r.unscheduled.length+' 件')+
+    '</div>'+
+    (r.range==='month'?monthCal(r,f):weekGrid(r,f))+
+    (r.unscheduled.length?'<div class="sec">未排日期 '+r.unscheduled.length+'</div>'+
+      f(r.unscheduled).map(function(t){return taskCard(t,'')}).join(''):'')+
+    '</div>'}
+
+/** 一週七格。任務照到期日放；已完成但沒排日期的，用完成日放。 */
+function weekGrid(r,f){
+  var td=today(),by={};
+  f(r.tasks).forEach(function(t){
+    var k=t.due||String(t.done_at||'').slice(0,10);
+    if(k)(by[k]=by[k]||[]).push(t)});
+  var h='<div class="mgrid wk">',wd='日一二三四五六';
+  for(var d=parse(r.from);ymd(d)<=r.to;d.setDate(d.getDate()+1)){
+    var k=ymd(d),ts=by[k]||[];
+    h+='<div class="mc'+(k===td?' tdy':'')+'">'+
+      '<div class="wd">週'+wd[d.getDay()]+'</div><div class="d">'+d.getDate()+'</div>'+
+      (ts.length?ts.map(dayChip).join(''):'<div class="more">—</div>')+'</div>'}
   return h+'</div>'}
 
 function kpi(k,v){return '<div><div class="k" style="font-size:12px;color:var(--dim)">'+esc(k)+

@@ -320,3 +320,64 @@ assert.strictEqual(fakeRow._hidden,true);
 assert.strictEqual(repaints,0,'展開不該重畫整頁');
 ctx.paint=oldPaint;
 console.log('昨天紀錄  只留標題，點了才展開');
+
+// ---- 同名函式守門員 ----
+// daysBetween 本來叫 days，跟日曆的 days(from,to) 撞名被默默蓋掉，taskCard 就拿到日期陣列。
+// JS 不會報錯，所以這裡自己檢查一遍。
+{
+  const names={},dup=[];
+  (js.match(/^function ([A-Za-z_$][\w$]*)\s*\(/gm)||[]).forEach(m=>{
+    const n=m.replace(/^function /,'').replace(/\s*\($/,'');
+    if(names[n])dup.push(n);names[n]=1});
+  assert.strictEqual(dup.length,0,'有同名函式，後面那個會默默蓋掉前面那個：'+dup.join('、'));
+  console.log('函式名稱  '+Object.keys(names).length+' 個，沒有撞名');
+}
+
+// ---- 昨天沒做完的，今天照樣出現，但看得出本來哪天要交 ----
+// 到期日刻意不改寫：改掉就再也看不出這件原本什麼時候該完成。
+const yday=(()=>{const d=new Date();d.setDate(d.getDate()-1);return ctx.ymd(d)})();
+const d3=(()=>{const d=new Date();d.setDate(d.getDate()-3);return ctx.ymd(d)})();
+assert.strictEqual(ctx.daysBetween(yday,T),1);
+assert.strictEqual(ctx.daysBetween(d3,T),3);
+const late=ctx.taskCard({id:'T9',title:'合約等 PN 回覆',project:'行銷構圖',
+  due:d3,priority:'A',status:'待辦',next:'',waiting:''},'today');
+assert(late.includes('順延 3 天'),'看得出拖了幾天：'+late);
+assert(late.includes('需完成 '+ctx.md(d3)),'看得出原訂哪天要交');
+assert(!late.includes('逾期 '),'不再只寫「逾期」');
+// 今天到期的還是寫「今天」，不要被順延那條吃掉
+assert(ctx.taskCard({id:'TA',title:'今天的',due:T,priority:'B',status:'待辦'},'today').includes('今天'));
+
+// ---- 看板總覽 ----
+// 跟時間表共用同一個 action，畫法不同：這裡只管任務排在哪天、做完沒。
+const OV={range:'week',from:'2026-08-31',to:'2026-09-06',
+  tasks:[{id:'T1',title:'週一的事',due:'2026-08-31',priority:'A',status:'待辦'},
+         {id:'T2',title:'週四的事',due:'2026-09-03',priority:'B',status:'完成',done_at:'2026-09-03 11:00'},
+         {id:'T3',title:'沒排日期但做完了',due:'',priority:'C',status:'完成',done_at:'2026-09-02 09:00'}],
+  logs:[],unscheduled:[{id:'T4',title:'還沒排',due:'',priority:'B',status:'待辦'}]};
+const ov=ctx.overview(OV,'');
+assert.strictEqual((ov.match(/class="mc/g)||[]).length,7,'一週剛好七格');
+assert(ov.includes('mgrid wk'),'週用週格');
+assert(ov.includes('週一的事')&&ov.includes('週四的事'));
+assert(ov.includes('沒排日期但做完了'),'沒到期日就照完成日放格子');
+assert(/chip2 B dn2/.test(ov),'做完的畫成刪除線');
+assert(ov.includes('2 / 3 完成'),'三件裡兩件完成');
+assert(ov.includes('還沒排'),'未排日期的列在下面');
+// 搜尋要吃得到
+assert(!ctx.overview(OV,'週一').includes('週四的事'));
+// 月改用月曆格
+const ovm=ctx.overview(Object.assign({},OV,{range:'month',from:'2026-09-01',to:'2026-09-30'}),'');
+assert(ovm.includes('<div class="mgrid">')&&!ovm.includes('mgrid wk'),'月用月曆格');
+
+// 上下一段：週跳七天、月跳一個月
+ctx.VIEW='overview';ctx.OVRANGE='week';ctx.OVDATE='2026-09-03';
+ctx.shift(1);assert.strictEqual(ctx.OVDATE,'2026-09-10','下一週');
+ctx.shift(-1);assert.strictEqual(ctx.OVDATE,'2026-09-03','上一週');
+ctx.OVRANGE='month';ctx.OVDATE='2026-09-15';
+ctx.shift(1);assert.strictEqual(ctx.OVDATE,'2026-10-15','下個月');
+ctx.shift(-1);assert.strictEqual(ctx.OVDATE,'2026-09-15','上個月');
+// 每個區間各自快取，切週切月不會拿到上一段的資料
+ctx.OVRANGE='week';assert.strictEqual(ctx.vkey(),'overview:week:2026-09-15');
+ctx.OVRANGE='month';assert.strictEqual(ctx.vkey(),'overview:month:2026-09-15');
+ctx.goToday();assert.strictEqual(ctx.OVDATE,null,'回到本期');
+ctx.VIEW='board';
+console.log('看板總覽  週七格 / 月曆格，‹ › 切上下一段');
