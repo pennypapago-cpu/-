@@ -416,3 +416,63 @@ assert.strictEqual(ctx.briefItems('1. Claude SEO 優化')[0],'Claude SEO 優化'
 assert(/<u>進行中<\/u><div><ol>/.test(bh),'只有一件也畫成條列');
 assert(!/<p>1\. /.test(bh),'編號不該留在段落文字裡');
 console.log('早晨簡報  四段分列，必做的拆成條列');
+
+// ---- 側邊欄 ----
+// 資料庫平常不常翻，從設定進去就好；側邊欄的專案池整塊拿掉。
+assert(!ctx.VIEWS.some(v=>v.v==='outputs'&&!v.hide),'資料庫不該再出現在側邊欄');
+assert(ctx.VIEWS.some(v=>v.v==='outputs'),'但頁面本身還在');
+assert(ctx.settings().includes("go('outputs')"),'設定頁要有進資料庫的入口');
+assert(!/id="pool"/.test(src),'側邊欄的專案池已移除');
+assert(!src.includes('.pj.pA'),'連帶的樣式也清掉（.tag.pj 是別的東西，留著）');
+ctx.renderPjs([{name:'起士公爵'},{name:'電腦舖'}]);
+assert(ctx.$('pjs').innerHTML.includes('起士公爵'),'「專案」欄位的自動完成還要留著');
+
+// 上一版的漏網之魚：看板總覽的日期列被藏起來，‹ › 和週/月切換全都點不到
+ctx.go('overview');
+assert.strictEqual(ctx.$('dates').style.display,'','看板總覽要看得到日期列');
+ctx.go('board');assert.strictEqual(ctx.$('dates').style.display,'');
+ctx.go('pool');assert.strictEqual(ctx.$('dates').style.display,'none','專案池沒有區間可切');
+ctx.VIEW='pool';
+
+// ---- AI 專案池 ----
+const POOL={backlog:4,overdue:2,yesterdayHours:3.5,
+  order:[{task:{id:'T1',title:'中秋禮盒控單程式確認',project:'中秋禮盒',priority:'A',status:'待辦',due:'2026-09-03'},reason:'逾期 1 天'}],
+  yesterday:[
+    {id:'L1',title:'工作看板更新到第 9 版',source:'Cowork',start:'2026-09-03 17:53',end:'2026-09-03 18:00',status:'完成'},
+    {id:'L2',title:'建立 update-worklog skill',source:'Cowork',start:'2026-09-03 16:10',end:'2026-09-03 16:40',status:'完成'},
+    {id:'L3',title:'修好拖曳的 bug',source:'Claude Code',start:'2026-09-03 10:00',end:'2026-09-03 11:00',status:'完成'},
+    {id:'L4',title:'手動補的一筆',source:'手動',start:'2026-09-03 09:00',end:'2026-09-03 09:10',status:'完成'}],
+  projects:[
+    {name:'中秋禮盒',priority:'A',overdue:1,tasks:[
+      {id:'T1',title:'中秋禮盒控單程式確認',project:'中秋禮盒',priority:'A',status:'待辦',due:'2026-09-03'}]},
+    {name:'Shopline',priority:'B',overdue:1,tasks:[
+      {id:'T2',title:'Shopline 每週任務檢查',project:'Shopline',priority:'B',status:'待辦',due:'2026-09-03'}]},
+    {name:'行銷構圖',priority:'C',overdue:0,tasks:[
+      {id:'T3',title:'合約等 PN 回覆',project:'行銷構圖',priority:'C',status:'待辦',due:T}]}]};
+const pv=ctx.pool(POOL,'');
+
+// 昨天：兩個 AI 各自一欄，看得出誰在做事、誰整天沒動靜
+assert(pv.includes('class="srcs"'),'昨天的紀錄分欄');
+assert.strictEqual((pv.match(/class="srcc"/g)||[]).length,3,'Cowork、Claude Code，加上手動那欄');
+// 用 section 切，不要用「Cowork」切——那個字在欄位裡出現不只一次
+const srcCols=pv.match(/<section class="srcc">[\s\S]*?<\/section>/g);
+const cw=srcCols[0];
+assert(cw.includes('工作看板更新到第 9 版')&&cw.includes('建立 update-worklog skill'),'Cowork 那欄放 Cowork 的');
+assert(!cw.includes('修好拖曳的 bug'),'Claude Code 的不要混進來');
+assert(pv.includes('修好拖曳的 bug'),'Claude Code 那欄有東西');
+assert(pv.includes('手動補的一筆'),'其他來源不能整個消失');
+// 一邊掛零時要說清楚為什麼，不然看起來像壞掉
+const none=ctx.pool(Object.assign({},POOL,{yesterday:[POOL.yesterday[0]]}),'');
+assert(none.includes('得在自己的電腦裝好 hook'),'Claude Code 沒紀錄要講原因');
+
+// 還剩什麼：依 A/B/C 分三塊，不再依專案
+assert(pv.includes('還剩什麼'));
+assert(!pv.includes('各專案還剩什麼'));
+assert(pv.includes('優先處理')&&pv.includes('推進型')&&pv.includes('維護型'),'三塊都在');
+assert(pv.indexOf('優先處理')<pv.indexOf('推進型'),'A 排在 B 前面');
+assert(pv.indexOf('推進型')<pv.indexOf('維護型'),'B 排在 C 前面');
+assert(pv.includes('中秋禮盒控單程式確認')&&pv.includes('Shopline 每週任務檢查')&&pv.includes('合約等 PN 回覆'));
+// A 級掛零要直說，那通常代表今天沒有真正推進結果的工作
+const noA=ctx.pool(Object.assign({},POOL,{projects:POOL.projects.slice(1)}),'');
+assert(noA.includes('沒有優先處理的事'),'A 掛零要點出來');
+console.log('專案池    昨天分 Cowork / Claude Code 兩欄，還剩什麼分 A/B/C');
