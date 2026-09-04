@@ -356,7 +356,7 @@ const OV={range:'week',from:'2026-08-31',to:'2026-09-06',
   logs:[],unscheduled:[{id:'T4',title:'還沒排',due:'',priority:'B',status:'待辦'}]};
 const ov=ctx.overview(OV,'');
 assert.strictEqual((ov.match(/class="mc/g)||[]).length,7,'一週剛好七格');
-assert(ov.includes('mgrid wk'),'週用週格');
+assert(ov.includes('mgrid mweek'),'週用週格');
 assert(ov.includes('週一的事')&&ov.includes('週四的事'));
 assert(ov.includes('沒排日期但做完了'),'沒到期日就照完成日放格子');
 assert(/chip2 B dn2/.test(ov),'做完的畫成刪除線');
@@ -366,7 +366,7 @@ assert(ov.includes('還沒排'),'未排日期的列在下面');
 assert(!ctx.overview(OV,'週一').includes('週四的事'));
 // 月改用月曆格
 const ovm=ctx.overview(Object.assign({},OV,{range:'month',from:'2026-09-01',to:'2026-09-30'}),'');
-assert(ovm.includes('<div class="mgrid">')&&!ovm.includes('mgrid wk'),'月用月曆格');
+assert(ovm.includes('<div class="mgrid">')&&!ovm.includes('mgrid mweek'),'月用月曆格');
 
 // 上下一段：週跳七天、月跳一個月
 ctx.VIEW='overview';ctx.OVRANGE='week';ctx.OVDATE='2026-09-03';
@@ -476,3 +476,49 @@ assert(pv.includes('中秋禮盒控單程式確認')&&pv.includes('Shopline 每�
 const noA=ctx.pool(Object.assign({},POOL,{projects:POOL.projects.slice(1)}),'');
 assert(noA.includes('沒有優先處理的事'),'A 掛零要點出來');
 console.log('專案池    昨天分 Cowork / Claude Code 兩欄，還剩什麼分 A/B/C');
+
+// ---- CSS 撞名守門員（第二版）----
+// 第一版只比對「絕對定位」的裸類別，抓不到這次的 bug：
+// weekGrid 用 class="mgrid wk"，但 .wk 早就是統計列的週長條圖（display:flex），
+// 同權重又寫在後面，直接把 .mgrid 的 display:grid 蓋掉，七格擠成一排。
+// 這裡改成通用檢查：同一個元素上的兩個類別，如果各自都有「單一類別」的規則
+// 且宣告了同一個排版屬性，就是撞名。只看會把版面弄壞的那幾個屬性。
+{
+  const BREAKS=['display','position','grid-template-columns','flex-direction'];
+  const css=src.split('<style>')[1].split('</style>')[0];
+  const bare={};                       // .foo -> Set(屬性)
+  let m,re=/([^{}]+)\{([^{}]*)\}/g;
+  while((m=re.exec(css))){
+    const sel=m[1].trim(), decls=m[2];
+    sel.split(',').map(x=>x.trim()).forEach(one=>{
+      if(!/^\.[A-Za-z][\w-]*$/.test(one))return;    // 只看「單一裸類別」
+      const set=bare[one]||(bare[one]=new Set());
+      BREAKS.forEach(p=>{
+        if(new RegExp('(^|;)\\s*'+p+'\\s*:','i').test(decls))set.add(p)});
+    });
+  }
+
+  // 用真的畫出來的 HTML 收集類別組合，不要用猜的
+  const html=[
+    ctx.overview(OV,''), ctx.pool(POOL,''), ctx.logRow(LG),
+    ctx.taskCard({id:'X',title:'t',project:'p',due:T,priority:'A',status:'待辦'},'today'),
+    ctx.noteCard({id:'D1',title:'n',body:'n'}), ctx.settings(),
+  ].join(' ');
+
+  const clashes=[];
+  (html.match(/class="[^"]+"/g)||[]).forEach(a=>{
+    const cls=a.slice(7,-1).trim().split(/\s+/).filter(Boolean);
+    for(let i=0;i<cls.length;i++)for(let j=i+1;j<cls.length;j++){
+      const A=bare['.'+cls[i]],B=bare['.'+cls[j]];
+      if(!A||!B)continue;
+      BREAKS.forEach(p=>{if(A.has(p)&&B.has(p))
+        clashes.push('.'+cls[i]+' 和 .'+cls[j]+' 都宣告了 '+p+'（同時掛在一個元素上）')});
+    }
+  });
+  assert.strictEqual([...new Set(clashes)].join('；'),'','類別撞名：後面那條會蓋掉前面那條');
+  console.log('CSS 撞名  檢查 '+Object.keys(bare).length+' 個裸類別，元素上沒有互相蓋掉的排版屬性');
+}
+
+// weekGrid 的修飾詞不能再叫 wk
+assert(ctx.overview(OV,'').includes('mgrid mweek'),'週格用 mweek，不要用被佔走的 wk');
+assert(!/class="mgrid wk"/.test(src),'wk 是統計列長條圖的類別');
