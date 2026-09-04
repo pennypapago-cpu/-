@@ -198,7 +198,19 @@
   .wrap{padding:16px 24px 40px}
   .sec{font-size:0.9375rem;color:var(--dim);font-weight:600;margin:18px 2px 9px}
   .sec:first-child{margin-top:2px}
-  .lg{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:11px 12px;margin-bottom:8px}
+  /* 昨天的紀錄一天可能十幾筆，全部攤開要捲很久，所以預設只留標題 */
+  .lg{background:var(--card);border:1px solid var(--line);border-radius:12px;margin-bottom:8px;overflow:hidden}
+  .lgh{display:flex;align-items:center;gap:9px;width:100%;padding:11px 12px;
+    background:none;border:0;color:var(--ink);font:inherit;text-align:left;cursor:pointer}
+  .lgh:hover{background:var(--card2)}
+  .lgh .cv{flex:0 0 auto;font-style:normal;color:var(--dim);font-size:0.8125rem;
+    transition:transform .12s;transform-origin:50% 50%}
+  .lg.open .lgh .cv{transform:rotate(90deg)}
+  .lgh .ti{flex:1 1 auto;min-width:0;font-size:1.0625rem;font-weight:600;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .lgh em{flex:0 0 auto;font-style:normal;color:var(--dim);font-size:0.8125rem}
+  .lgb{padding:0 12px 11px}
+  .lgb .tags{margin-top:0}
   .lg .sm{font-size:0.9375rem;color:var(--mute);margin-top:6px;white-space:pre-wrap;word-break:break-word}
   .panelbox{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin-bottom:14px}
   .panelbox h3{margin:0 0 12px;font-size:1.125rem}
@@ -527,6 +539,7 @@ var $=function(i){return document.getElementById(i)};
     存在這台裝置，手機和桌機可以各自設不同大小。 */
 var STATS=0,Z=2,DRANGE='week',VC={};
 var BOPEN=localStorage.getItem('briefOpen')!=='0';
+var LOPEN={};      // 昨天的紀錄哪幾筆是展開的，key 是紀錄 id
 try{Z=parseFloat(localStorage.getItem('worklog_zoom'))||2;
     STATS=localStorage.getItem('worklog_stats')==='1'?1:0}catch(e){}
 function toggleStats(){
@@ -1170,15 +1183,30 @@ function outRow(l){
     (l.link?'<a class="url" href="'+esc(l.link)+'" target="_blank" rel="noopener">🔗 '+esc(l.link)+'</a>':'')+
     '</div>'}
 
+/** 一列紀錄：預設只看得到標題和時間，點標題才展開細節。展開狀態記在 LOPEN，
+    重畫（搜尋、背景更新）之後還在。 */
 function logRow(l){
-  return '<div class="lg"><div class="ti">'+esc(l.title)+'</div>'+
-    '<div class="tags"><span class="tag src">'+esc(l.source)+'</span>'+
-    (l.project?'<span class="tag pj">'+esc(l.project)+'</span>':'')+
-    '<span class="tag pj">'+String(l.start).slice(11,16)+(l.end?'–'+String(l.end).slice(11,16):' 起')+'</span>'+
-    (l.status!=='完成'?'<span class="tag A">'+esc(l.status)+'</span>':'')+'</div>'+
-    (l.summary?'<div class="sm">'+esc(l.summary)+'</div>':'')+
-    (l.link?'<a class="url" href="'+esc(l.link)+'" target="_blank" rel="noopener">🔗 產出連結</a>':'')+
-    '</div>'}
+  var id=String(l.id||''),on=!!LOPEN[id];
+  var time=String(l.start).slice(11,16)+(l.end?'–'+String(l.end).slice(11,16):' 起');
+  return '<div class="lg'+(on?' open':'')+'" data-lg="'+esc(id)+'">'+
+    '<button class="lgh" onclick="toggleLog(\''+esc(id)+'\')" aria-expanded="'+on+'">'+
+      '<i class="cv">▶</i><span class="ti">'+esc(l.title)+'</span><em>'+time+'</em></button>'+
+    '<div class="lgb"'+(on?'':' hidden')+'>'+
+      '<div class="tags"><span class="tag src">'+esc(l.source)+'</span>'+
+      (l.project?'<span class="tag pj">'+esc(l.project)+'</span>':'')+
+      '<span class="tag pj">'+time+'</span>'+
+      (l.status!=='完成'?'<span class="tag A">'+esc(l.status)+'</span>':'')+'</div>'+
+      (l.summary?'<div class="sm">'+esc(l.summary)+'</div>':'')+
+      (l.link?'<a class="url" href="'+esc(l.link)+'" target="_blank" rel="noopener">🔗 產出連結</a>':'')+
+    '</div></div>'}
+
+/** 直接動 DOM，不重畫整頁——展開要像開抽屜一樣即時 */
+function toggleLog(id){
+  var row=document.querySelector('.lg[data-lg="'+id+'"]');if(!row)return;
+  var on=!LOPEN[id];LOPEN[id]=on;
+  row.classList.toggle('open',on);
+  row.querySelector('.lgb').hidden=!on;
+  row.querySelector('.lgh').setAttribute('aria-expanded',on)}
 
 /* ---------------- settings ---------------- */
 function settings(){
