@@ -14,7 +14,8 @@ const cols={run:new El('col c-run','run'),today:new El('col c-today','today'),tm
 function mkStub(){return{className:'',dataset:{},style:{},classList:{add(){},remove(){},toggle(){}},
   addEventListener(){},appendChild(){},remove(){},cloneNode(){return this},
   getBoundingClientRect(){return{left:0,top:0,width:100}},focus(){},querySelectorAll(){return[]},
-  closest(){return null},value:'',innerHTML:'',textContent:'',disabled:false}}
+  closest(){return null},value:'',innerHTML:'',textContent:'',disabled:false,
+  _kids:{},querySelector(sel){return this._kids[sel]||(this._kids[sel]=mkStub())}}}
 const stub=mkStub();
 // 每個 id 給自己的節點，才驗得出「編輯紀錄時 seg 藏起來、標題換成編輯紀錄」這種跨節點的狀態
 const els={};
@@ -279,7 +280,13 @@ assert.strictEqual(ctx.$('brief').style.display,'none','收起來就不佔位子
 ctx.toggleBrief();
 assert.strictEqual(ctx.$('brief').style.display,'','再按一次叫回來');
 // 收起來之後要有路徑叫回來，不然就永遠不見了
-assert(/onclick="toggleBrief\(\)">早晨簡報/.test(src),'標題列那顆鈕要能把簡報叫回來');
+assert(src.includes("sw('早晨簡報',BOPEN,'toggleBrief()')"),'標題列那顆鈕要能把簡報叫回來');
+// 三條橫幅的開關要並排在同一處，不要有的在日期列、有的藏在 ▾ 選單
+assert(src.includes("sw('營運數字',MXOPEN,'toggleMx()')"));
+assert(src.includes("sw('統計列',!!STATS,'toggleStats()')"));
+assert(!/id="mStats"/.test(src),'統計列開關從 ▾ 選單搬走了');
+assert(ctx.sw('早晨簡報',true,'x()').includes('chip on')&&ctx.sw('早晨簡報',true,'x()').includes('▴'));
+assert(!ctx.sw('早晨簡報',false,'x()').includes('chip on')&&ctx.sw('早晨簡報',false,'x()').includes('▾'));
 console.log('數字列    營業額 / 廣告花費 / ROAS / 流量 / 加購，簡報可收合');
 
 // ---- 昨天執行的內容：預設只留標題 ----
@@ -596,3 +603,38 @@ assert(empty.includes('自己手上還有 5 件'),'空畫面要指路');
 assert(empty.includes('把「誰做」改成 AI'));
 assert(ctx.pool(Object.assign({},POOL,{mine:5}),'').includes('自己要做'),'頂端也看得到自己還有幾件');
 console.log('誰做      我／AI／一起，預設我，只有 AI 那兩種進專案池');
+
+// ---- 週格子裡的任務可以拖到別天 ----
+// 拖曳原本只認兩種東西（看板卡片換欄、資料區卡片換分區），現在多一種：
+// 看板總覽週格子裡的任務換日期。三種共用同一套流程，用 DKIND 描述差別。
+assert.deepStrictEqual(Object.keys(ctx.DKIND).sort(),['chip','nc','t']);
+assert.strictEqual(ctx.DKIND.chip.key,'date','放到哪一格＝哪一天');
+assert.strictEqual(ctx.DKIND.chip.col,'.mc[data-date]');
+const ovw=ctx.overview(OV,'');
+assert(/data-date="2026-09-0[1-6]"/.test(ovw),'每一格要帶日期，才知道拖到哪天');
+assert(ovw.includes('data-id="T1"'),'任務要帶 id 才拖得動');
+assert(!/chip2[^>]*onclick=/.test(ovw),'不要掛 onclick——拖完那一下會誤觸發編輯');
+const clickH2=src.split("$('view').addEventListener('click'")[1].split('});')[0];
+assert(clickH2.includes(".chip2[data-id]"),'改走委派，才吃得到拖曳後的保護');
+assert(clickH2.indexOf('chip2')<clickH2.indexOf("closest('button')"),
+  'chip2 本身是按鈕，要排在「按鈕不處理」那道防線前面');
+
+// 放下去要改到期日，而且就地更新
+ctx.paint=function(){};
+ctx.RAW={tasks:[{id:'T1',title:'那件事',due:'2026-09-03',priority:'A',status:'待辦'}]};
+sent=null;ctx.toDay('T1','2026-09-06');
+assert.strictEqual(sent.action,'task_update');
+assert.strictEqual(sent.params.due,'2026-09-06');
+assert.strictEqual(ctx.RAW.tasks[0].due,'2026-09-06','就地更新，不用整頁重抓');
+assert.strictEqual(ctx.applyDue('沒這筆','2026-09-06'),false);
+
+// 原本兩種不能被改壞（前面的測試改過 VIEW，這裡要轉回看板才會帶 board 旗標）
+ctx.VIEW='board';
+assert.strictEqual(move('T1','run','today'),want0({action:'task_update',params:{id:'T1',status:'進行中'}}));
+assert.strictEqual(ctx.DKIND.t.key,'drop');
+assert.strictEqual(ctx.DKIND.nc.key,'sect');
+
+// ---- 箭頭直接寫上下一個什麼 ----
+assert(src.includes("'上一'+unit"),'‹ › 光是箭頭看不出會跳多遠');
+assert(src.includes("{week:'週',month:'個月'}[OVRANGE]"));
+console.log('週格拖曳  任務可以拖到別天，箭頭寫明上一週／下一週');

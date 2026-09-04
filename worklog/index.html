@@ -72,7 +72,12 @@
 
   .sub{display:flex;align-items:center;gap:9px;padding:9px 24px 0;color:var(--mute);font-size:1rem;flex-wrap:wrap}
   .sub .d{display:flex;align-items:center;gap:7px}
-  .step{width:1.875rem;height:1.875rem;border-radius:7px;color:var(--dim);display:grid;place-items:center;font-size:0.9688rem}
+  /* 帶文字之後不能再是固定的小方塊，不然「上一週」會被擠成直排 */
+  .step{min-width:1.875rem;height:1.875rem;padding:0 8px;border-radius:7px;color:var(--dim);
+    display:inline-flex;align-items:center;gap:4px;white-space:nowrap;font-size:0.9688rem}
+  .step b{font-weight:600;font-size:0.875rem}
+  /* 螢幕窄的時候收回只剩箭頭，tooltip 還在 */
+  @media(max-width:820px){.step b{display:none}.step{padding:0}}
   .step:hover{background:var(--card);color:var(--ink)}
   .chip{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:4px 12px;font-size:0.9375rem;color:var(--mute)}
   .chip:hover{color:var(--ink);border-color:var(--line2)}
@@ -166,6 +171,10 @@
   .ghost{position:fixed;z-index:40;pointer-events:none;margin:0;cursor:grabbing;
     transform:rotate(-1.5deg);box-shadow:0 14px 34px rgba(0,0,0,.6);border-color:var(--acc)}
   .col.drop{background:rgba(59,130,246,.08);border-color:var(--acc)}
+  .chip2[data-id]{cursor:grab;touch-action:pan-y}
+  .mc.drop{background:rgba(59,130,246,.14);outline:2px dashed var(--acc);outline-offset:-2px}
+  .chip2.ghost{position:fixed;z-index:40;pointer-events:none;margin:0;cursor:grabbing;
+    box-shadow:0 12px 30px rgba(0,0,0,.55);opacity:.95}
   .col.drop>h3 b{color:var(--acc)}
   .col.drop .add{border-color:var(--acc);color:var(--acc)}
   body.dragging{user-select:none;-webkit-user-select:none}
@@ -475,8 +484,8 @@
     <div class="sub">
       <span id="dates" class="d">
         <span class="d">🕐 <span id="dateLab"></span></span>
-        <button class="step" onclick="shift(-1)" title="上一個">‹</button>
-        <button class="step" onclick="shift(1)" title="下一個">›</button>
+        <button class="step" id="prevBtn" onclick="shift(-1)">‹ <b></b></button>
+        <button class="step" id="nextBtn" onclick="shift(1)"><b></b> ›</button>
         <button class="chip" id="todayChip" onclick="goToday()">今天</button>
       </span>
       <span id="extra"></span>
@@ -487,7 +496,6 @@
         <div class="menu" id="menu">
           <button onclick="openAdd('task')">新增任務</button>
           <button onclick="openAdd('log')">手動補一筆紀錄</button>
-          <button id="mStats" onclick="toggleStats()">顯示統計列</button>
           <button onclick="load()">重新整理</button>
           <button onclick="openSheet()">開啟 Google 試算表</button>
         </div>
@@ -561,13 +569,13 @@ var $=function(i){return document.getElementById(i)};
     存在這台裝置，手機和桌機可以各自設不同大小。 */
 var STATS=0,Z=2,DRANGE='week',VC={};
 var BOPEN=localStorage.getItem('briefOpen')!=='0';
+var MXOPEN=localStorage.getItem('mxOpen')!=='0';
 var LOPEN={};      // 昨天的紀錄哪幾筆是展開的，key 是紀錄 id
 try{Z=parseFloat(localStorage.getItem('worklog_zoom'))||2;
     STATS=localStorage.getItem('worklog_stats')==='1'?1:0}catch(e){}
 function toggleStats(){
   STATS=STATS?0:1;
   try{localStorage.setItem('worklog_stats',STATS)}catch(e){}
-  $('mStats').textContent=STATS?'隱藏統計列':'顯示統計列';
   $('menu').classList.remove('on');paint()}
 function applyZ(){
   Z=Math.min(2.6,Math.max(1,Math.round(Z*10)/10));
@@ -594,7 +602,6 @@ function call(a,p){return new Promise(function(res,rej){
 function boot(){
   if(!TOKEN){$('gate').style.display='block';return}
   $('gate').style.display='none';$('app').style.display='block';
-  $('mStats').textContent=STATS?'隱藏統計列':'顯示統計列';
   $('nav').innerHTML=VIEWS.filter(function(x){return !x.hide}).map(function(x){
     return '<button data-v="'+x.v+'" onclick="go(\''+x.v+'\')"><i>'+x.i+'</i>'+x.n+'</button>'}).join('');
   go('board')}
@@ -706,6 +713,12 @@ function header(){
     now=RAW.from<=today()&&today()<=RAW.to}
   else{var d=parse((RAW&&RAW.date)||DATE||today());lab=dayLab(ymd(d));now=ymd(d)===today()}
   $('dateLab').textContent=lab;
+  // 光是 ‹ › 看不出會跳多遠，直接寫「上週／下週」「上個月／下個月」
+  var unit=VIEW==='projects'?{day:'天',week:'週',month:'個月'}[PJRANGE]
+    :VIEW==='overview'?{week:'週',month:'個月'}[OVRANGE]:'天';
+  $('prevBtn').querySelector('b').textContent='上一'+unit;
+  $('nextBtn').querySelector('b').textContent='下一'+unit;
+  $('prevBtn').title='上一'+unit;$('nextBtn').title='下一'+unit;
   $('todayChip').classList.toggle('on',now);
   $('todayChip').textContent=VIEW==='projects'?{day:'今天',week:'本週',month:'本月'}[PJRANGE]
     :VIEW==='overview'?{week:'本週',month:'本月'}[OVRANGE]:'今天';
@@ -719,12 +732,20 @@ function header(){
   if(VIEW==='done')ex=[['week','本週'],['month','本月'],['all','全部']].map(function(r){
     return '<button class="chip'+(DRANGE===r[0]?' on':'')+'" onclick="DRANGE=\''+r[0]+'\';load()">'+
       r[1]+'</button>'}).join(' ');
-  if(VIEW==='board'&&RAW&&RAW.note)
-    ex='<button class="chip'+(BOPEN?' on':'')+'" onclick="toggleBrief()">早晨簡報 '+(BOPEN?'▴':'▾')+'</button>';
+  // 每日看板的三條橫幅各有一顆開關，並排在日期列——不要有的在這裡、有的藏在 ▾ 選單
+  if(VIEW==='board')ex=[
+    (RAW&&RAW.note?sw('早晨簡報',BOPEN,'toggleBrief()'):''),
+    sw('營運數字',MXOPEN,'toggleMx()'),
+    sw('統計列',!!STATS,'toggleStats()')
+  ].filter(Boolean).join(' ');
   $('extra').innerHTML=ex;
 
   var od=RAW&&(RAW.stats?RAW.stats.overdue:RAW.overdue);
   $('bell').style.display=od?'grid':'none';$('bell').textContent=od||0}
+
+/** 日期列上的開關鈕，開著是實心、關著帶個 ▾ */
+function sw(name,on,fn){
+  return '<button class="chip'+(on?' on':'')+'" onclick="'+fn+'">'+name+' '+(on?'▴':'▾')+'</button>'}
 
 function dayLab(s){var d=parse(s);
   return d.getFullYear()+' 年 '+(d.getMonth()+1)+' 月 '+d.getDate()+' 日（星期'+'日一二三四五六'[d.getDay()]+'）'}
@@ -800,6 +821,10 @@ function briefItems(body){
   return parts.map(function(p){return p.trim().replace(/^\d{1,2}\s*[.．]\s*/,'')})
     .filter(function(p){return p})}
 
+function toggleMx(){
+  MXOPEN=!MXOPEN;try{localStorage.setItem('mxOpen',MXOPEN?'1':'0')}catch(e){}
+  mx(RAW&&RAW.metrics);header()}
+
 function toggleBrief(){
   BOPEN=!BOPEN;localStorage.setItem('briefOpen',BOPEN?'1':'0');
   brief(RAW&&RAW.note);header()}
@@ -817,7 +842,7 @@ function money(v){return v===null||v===undefined||v===''?'—':'$'+n2(v)}
  */
 function mx(m){
   var el=$('mx');
-  if(!m){el.style.display='none';el.innerHTML='';return}
+  if(!m||!MXOPEN){el.style.display='none';el.innerHTML='';return}
   el.style.display='';
   if(!m.has){
     el.innerHTML='<div class="miss">今日還沒有營運數字。在 Cowork 說「更新今日數據」，'+
@@ -1029,7 +1054,7 @@ function monthCal(r,f,showTasks){
 /** 日曆格子裡的一件任務。點下去就是編輯，跟卡片同一套。 */
 function dayChip(t){
   return '<button class="chip2 '+t.priority+(t.status==='完成'?' dn2':'')+
-    '" onclick="edit(\''+t.id+'\')" title="'+esc(t.title)+'">'+esc(t.title)+'</button>'}
+    '" data-id="'+esc(t.id)+'" title="'+esc(t.title)+'">'+esc(t.title)+'</button>'}
 
 /* ---------------- 看板總覽 ----------------
    跟「AI 工作時間表」看的是同一份資料，但這裡只管任務排在哪一天、做完了沒，
@@ -1060,7 +1085,7 @@ function weekGrid(r,f){
   var h='<div class="mgrid mweek">',wd='日一二三四五六';
   for(var d=parse(r.from);ymd(d)<=r.to;d.setDate(d.getDate()+1)){
     var k=ymd(d),ts=by[k]||[];
-    h+='<div class="mc'+(k===td?' tdy':'')+'">'+
+    h+='<div class="mc'+(k===td?' tdy':'')+'" data-date="'+k+'">'+
       '<div class="wd">週'+wd[d.getDay()]+'</div><div class="d">'+d.getDate()+'</div>'+
       (ts.length?ts.map(dayChip).join(''):'<div class="more">—</div>')+'</div>'}
   return h+'</div>'}
@@ -1553,38 +1578,55 @@ function submit(){
 var PRESS=null,DRAG=null,NODRAG=0;
 var DROP={run:'AI 正執行工作',today:'今日工作',tmr:'明日工作'};
 
-function colOf(el){return el&&el.closest?el.closest('.col[data-drop],.ncol[data-sect]'):null}
+/* 三種可以拖的東西，差別只在「從哪裡拖」「放到哪裡」「放下去要送什麼」：
+   看板卡片換欄、資料區卡片換分區、看板總覽週格子裡的任務換日期。 */
+var DKIND={
+  t:   { sel:'.t[data-id]',     col:'.col[data-drop]',  key:'drop', id:'id',   cls:'t'     },
+  nc:  { sel:'.nc[data-item]',  col:'.ncol[data-sect]', key:'sect', id:'item', cls:'nc'    },
+  chip:{ sel:'.chip2[data-id]', col:'.mc[data-date]',   key:'date', id:'id',   cls:'chip2' }
+};
+var DKEYS=['t','nc','chip'];
+
+function colOf(el,k){
+  if(!el||!el.closest)return null;
+  return el.closest(k?DKIND[k].col:'.col[data-drop],.ncol[data-sect],.mc[data-date]')}
 
 function press(e){
   if(e.button)return;
-  var card=e.target.closest&&e.target.closest('.t[data-id],.nc[data-item]');
-  if(!card||e.target.closest('button')||e.target.closest('a')||
-     e.target.isContentEditable||!colOf(card))return;
+  var k=null,card=null;
+  for(var i=0;i<DKEYS.length;i++){
+    var c=e.target.closest&&e.target.closest(DKIND[DKEYS[i]].sel);
+    if(c&&colOf(c,DKEYS[i])){k=DKEYS[i];card=c;break}
+  }
+  if(!card)return;
+  // 卡片裡的按鈕不能拖；但週格子的任務本身就是一顆按鈕，那個要放行
+  var btn=e.target.closest&&e.target.closest('button');
+  if((btn&&btn!==card)||e.target.closest('a')||e.target.isContentEditable)return;
   clearPress();
-  PRESS={card:card,id:card.dataset.id||card.dataset.item,note:!!card.dataset.item,
+  PRESS={card:card,k:k,id:card.dataset[DKIND[k].id],
     x:e.clientX,y:e.clientY,touch:e.pointerType!=='mouse'};
   if(PRESS.touch)PRESS.timer=setTimeout(function(){if(PRESS)lift(e.clientX,e.clientY)},380)}
 
 function clearPress(){if(PRESS&&PRESS.timer)clearTimeout(PRESS.timer);PRESS=null}
 
 function lift(x,y){
-  var card=PRESS.card,r=card.getBoundingClientRect();
+  var card=PRESS.card,k=PRESS.k,D=DKIND[k],r=card.getBoundingClientRect();
   var g=card.cloneNode(true);
-  g.className=(PRESS.note?'nc':'t')+' ghost';g.style.width=r.width+'px';g.style.left=r.left+'px';g.style.top=r.top+'px';
+  g.className=D.cls+' ghost';g.style.width=r.width+'px';g.style.left=r.left+'px';g.style.top=r.top+'px';
   document.body.appendChild(g);
-  var home=colOf(card);
-  DRAG={id:PRESS.id,card:card,ghost:g,dx:x-r.left,dy:y-r.top,note:PRESS.note,
-    from:PRESS.note?home.dataset.sect:home.dataset.drop,over:null};
+  var home=colOf(card,k);
+  DRAG={id:PRESS.id,k:k,card:card,ghost:g,dx:x-r.left,dy:y-r.top,
+    from:home.dataset[D.key],over:null};
   card.classList.add('lift');document.body.classList.add('dragging');
   clearPress();over(x,y)}
 
 function over(x,y){
   DRAG.ghost.style.left=(x-DRAG.dx)+'px';DRAG.ghost.style.top=(y-DRAG.dy)+'px';
-  var c=colOf(document.elementFromPoint(x,y));
+  var c=colOf(document.elementFromPoint(x,y),DRAG.k);
   if(c===DRAG.over)return;
   if(DRAG.over)DRAG.over.classList.remove('drop');
-  var key=c&&(DRAG.note?c.dataset.sect:c.dataset.drop);
-  var same=!c||key===DRAG.from||(DRAG.note?c.dataset.sect===undefined:c.dataset.drop===undefined);
+  var key=c&&c.dataset[DKIND[DRAG.k].key];
+  var same=!c||key===undefined||key===DRAG.from;
   DRAG.over=c;if(!same)c.classList.add('drop');else DRAG.over=null}
 
 function move(e){
@@ -1599,14 +1641,26 @@ function move(e){
 function drop(){
   clearPress();
   if(!DRAG)return;
-  var note=DRAG.note,id=DRAG.id;
-  var to=DRAG.over&&(note?DRAG.over.dataset.sect:DRAG.over.dataset.drop);
+  var k=DRAG.k,id=DRAG.id;
+  var to=DRAG.over&&DRAG.over.dataset[DKIND[k].key];
   DRAG.ghost.remove();DRAG.card.classList.remove('lift');
   if(DRAG.over)DRAG.over.classList.remove('drop');
   document.body.classList.remove('dragging');
   var from=DRAG.from;DRAG=null;NODRAG=Date.now();
   if(to===undefined||to===null||to===from)return;
-  note?moveItem(id,to):toCol(id,to,from)}
+  if(k==='nc')return moveItem(id,to);
+  if(k==='chip')return toDay(id,to);
+  toCol(id,to,from)}
+
+/** 週格子裡把任務拖到別天＝改到期日。就地更新，不用整頁重抓。 */
+function toDay(id,due){
+  return mutate('task_update',{id:id,due:due},function(){return applyDue(id,due)})
+    .then(function(){toast('移到 '+md(due))})}
+
+function applyDue(id,due){
+  var a=(RAW&&RAW.tasks)||[];
+  for(var i=0;i<a.length;i++)if(a[i]&&a[i].id===id){a[i].due=due;return true}
+  return false}
 
 document.addEventListener('pointerdown',press);
 document.addEventListener('pointermove',move);
@@ -1618,6 +1672,8 @@ document.addEventListener('touchmove',function(e){if(DRAG)e.preventDefault()},{p
 // 卡片點一下展開動作列；剛拖完那一下不算
 $('view').addEventListener('click',function(e){
   if(Date.now()-NODRAG<250)return;
+  var chip=e.target.closest&&e.target.closest('.chip2[data-id]');
+  if(chip)return edit(chip.dataset.id);      // 它本身是按鈕，要排在下面那道防線前面
   if(e.target.closest('button')||e.target.closest('a'))return;
   var card=e.target.closest&&e.target.closest('.t[data-id]');
   if(card)return edit(card.dataset.id);
