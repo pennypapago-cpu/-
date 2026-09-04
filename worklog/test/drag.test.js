@@ -281,3 +281,42 @@ assert.strictEqual(ctx.$('brief').style.display,'','再按一次叫回來');
 // 收起來之後要有路徑叫回來，不然就永遠不見了
 assert(/onclick="toggleBrief\(\)">早晨簡報/.test(src),'標題列那顆鈕要能把簡報叫回來');
 console.log('數字列    營業額 / 廣告花費 / ROAS / 流量 / 加購，簡報可收合');
+
+// ---- 昨天執行的內容：預設只留標題 ----
+// 一天十幾筆紀錄全攤開要捲很久，改成點標題才展開。
+const LG={id:'L9',title:'工作看板更新到第 9 版',source:'Cowork',project:'個人',
+  start:T+' 17:53',end:T+' 17:53',status:'完成',
+  summary:'Code.gs 31611→31723。setup 執行完畢，六張工作表核對齊全。',
+  link:'https://drive.google.com/file/d/x/view'};
+
+ctx.LOPEN={};
+let row=ctx.logRow(LG);
+assert(row.includes('工作看板更新到第 9 版'),'標題一定看得到');
+assert(row.includes('17:53–17:53'),'時間跟標題同一行');
+assert(/<div class="lgb" hidden>/.test(row),'內容預設收起來');
+assert(row.includes('Code.gs 31611'),'內容有畫出來，只是藏著——展開才不用重抓');
+assert(row.includes('data-lg="L9"'));
+assert(!/class="lg open"/.test(row));
+
+ctx.LOPEN={L9:1};
+row=ctx.logRow(LG);
+assert(/class="lg open"/.test(row),'展開過的重畫之後還是展開的');
+assert(!/<div class="lgb" hidden>/.test(row));
+
+// 點下去直接動 DOM，不重畫整頁
+let repaints=0;const oldPaint=ctx.paint;ctx.paint=function(){repaints++};
+const fakeRow={_cls:{},classList:{toggle(c,on){this._on=on}},_hidden:null,_aria:null,
+  querySelector(sel){const r=this;return sel==='.lgb'?{set hidden(v){r._hidden=v}}
+    :{setAttribute(k,v){r._aria=v}}}};
+ctx.document.querySelector=function(){return fakeRow};
+ctx.LOPEN={};
+ctx.toggleLog('L9');
+assert.strictEqual(ctx.LOPEN.L9,true,'記住展開了');
+assert.strictEqual(fakeRow._hidden,false,'內容顯示出來');
+assert.strictEqual(fakeRow._aria,true);
+ctx.toggleLog('L9');
+assert.strictEqual(ctx.LOPEN.L9,false,'再點一次收起來');
+assert.strictEqual(fakeRow._hidden,true);
+assert.strictEqual(repaints,0,'展開不該重畫整頁');
+ctx.paint=oldPaint;
+console.log('昨天紀錄  只留標題，點了才展開');
