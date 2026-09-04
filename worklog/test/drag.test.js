@@ -256,7 +256,7 @@ assert(mh.includes('連結點擊，不是全站流量'));
 assert(mh.includes('不要拿來算轉換率'),'加購與點擊的歸因基準不同');
 assert(mh.includes('一次 $6.79'),'流量成本');
 assert(mh.includes('一次 $130.21'),'加購成本');
-assert(mh.includes('14:30 更新'),'看得出數字是什麼時候抓的');
+assert.strictEqual(ctx.$('mxWhen').textContent,'14:30 更新','更新時間搬到分段標題右邊');
 assert.strictEqual(ctx.$('mx').style.display,'');
 
 // 缺數字時顯示「—」，不能出現 NaN / Infinity
@@ -278,7 +278,8 @@ ctx.header=function(){};
 ctx.RAW={note:'昨天：做了事。\n今天必做：那件。'};
 ctx.BOPEN=true;ctx.brief(ctx.RAW.note);
 assert.strictEqual(ctx.$('brief').style.display,'');
-assert(ctx.$('brief').innerHTML.includes('toggleBrief'),'要有收起來的鈕');
+assert(!ctx.$('brief').innerHTML.includes('早晨簡報'),'標題交給分段標題，不要重複寫一次');
+assert.strictEqual(ctx.$('briefHead').style.display,'flex','分段標題跟著顯示');
 ctx.toggleBrief();
 assert.strictEqual(ctx.BOPEN,false);
 assert.strictEqual(ctx.$('brief').style.display,'none','收起來就不佔位子');
@@ -411,7 +412,7 @@ assert(bh.includes('<li>中秋禮盒控單程式確認（中秋禮盒，昨天�
 assert(!/<li>1\./.test(bh),'數字編號交給 <ol> 畫，不要重複');
 assert(bh.includes('class="todo"'),'今天必做那段標起來');
 assert(/<u>昨天<\/u><div><p>/.test(bh),'沒編號的段落不要硬做成條列');
-assert(bh.includes('toggleBrief'),'收合鈕還在');
+assert(!bh.includes('早晨簡報'),'標題不重複——分段標題已經寫了，收合走日期列那顆鈕');
 
 // 不照格式寫也不能掉字
 const messy=ctx.$('brief');
