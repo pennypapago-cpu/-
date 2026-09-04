@@ -145,6 +145,7 @@
   .t.pB{border-left:3px solid var(--b)}
   .t.pC{border-left:3px solid var(--c)}
   .t .ti{font-size:1.125rem;font-weight:600;line-height:1.4;word-break:break-word}
+  .own{font-style:normal;margin-right:5px;font-size:0.9375rem;vertical-align:1px}
   .tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
   .tag{font-size:0.875rem;font-weight:600;padding:2.5px 8px;border-radius:6px;white-space:nowrap}
   .tag.A{background:rgba(240,85,109,.15);color:#ff8095}
@@ -518,6 +519,12 @@
         </select></div>
       </div>
       <div class="f"><label>等待者（卡在誰身上，沒有就留空）</label><input id="fW" placeholder="例：PN"></div>
+      <div class="f"><label>誰做（只有「AI」和「一起」會進 AI 專案池）</label>
+        <div class="seg" id="segOwn">
+          <button type="button" id="ow1" class="on" onclick="owner('我')">我</button>
+          <button type="button" id="ow2" onclick="owner('AI')">AI</button>
+          <button type="button" id="ow3" onclick="owner('一起')">一起</button>
+        </div></div>
     </div>
     <div id="logF" style="display:none">
       <div class="f"><label>摘要</label><textarea id="fS" class="big" rows="8"
@@ -545,7 +552,7 @@ var VIEWS=[
   {v:'settings', i:'⚙', n:'設定',      t:'設定',          ic:'⚙'}
 ];
 var PN={A:'A 優先處理',B:'B 推進型',C:'C 維護型'};
-var TOKEN='',VIEW='board',KIND='task',EDIT=null,EDITL=null,COL='',DATE=null,PJDATE=null,PJRANGE='week',OVDATE=null,OVRANGE='week',SRC='',ALL=0,D=null,RAW=null;
+var TOKEN='',VIEW='board',KIND='task',OWNER='我',EDIT=null,EDITL=null,COL='',DATE=null,PJDATE=null,PJRANGE='week',OVDATE=null,OVRANGE='week',SRC='',ALL=0,D=null,RAW=null;
 try{TOKEN=localStorage.getItem('worklog_token')||''}catch(e){}
 
 var $=function(i){return document.getElementById(i)};
@@ -850,10 +857,17 @@ function taskCard(t,col){
   var sub=(t.project?'<em>'+esc(t.project)+'</em>':'')+
     (t.waiting?'<b>等待者：</b>'+esc(t.waiting):(t.next?'<b>下一步：</b>'+esc(t.next):''));
   return '<article class="t p'+t.priority+'" data-id="'+t.id+'" title="'+PN[t.priority]+'">'+
-    '<div class="ti">'+esc(t.title)+'</div>'+
+    '<div class="ti">'+ownerMark(t.owner)+esc(t.title)+'</div>'+
     '<div class="meta"><div class="nx">'+sub+'</div>'+
       '<div class="dd '+cls+'">📅 '+lbl+'</div></div>'+
     '<div class="acts">'+a+'</div></article>'}
+
+/** 交給 AI 的事在標題前面掛個記號，一眼看得出這件不用自己動手 */
+function ownerMark(o){
+  o=o||'我';
+  if(o==='AI')return '<i class="own" title="交給 AI">🤖</i>';
+  if(o==='一起')return '<i class="own" title="AI 做初稿、自己收尾">🤝</i>';
+  return ''}
 
 function logCard(l){
   return '<article class="t live"><div class="ti">'+esc(l.title)+'</div>'+
@@ -1059,9 +1073,9 @@ function pool(r,q){
   var order=r.order.filter(function(o){return hit(o.task,q)});
   var h='<div class="wrap">'+
     '<div class="panelbox" style="display:flex;gap:26px;flex-wrap:wrap">'+
-      kpi('未完成',r.backlog+' 件')+
+      kpi('交給 AI',r.backlog+' 件')+
       kpi('逾期',r.overdue+' 件')+
-      kpi('專案',r.projects.length+' 個')+
+      kpi('自己要做',(r.mine||0)+' 件')+
       kpi('昨天',r.yesterday.length+' 筆 · '+r.yesterdayHours+' 小時')+
     '</div>';
 
@@ -1074,7 +1088,10 @@ function pool(r,q){
           (t.next?' · 下一步：'+esc(t.next):'')+'</div></div>'+
         '<span class="tag '+t.priority+'">'+t.priority+'</span>'+
         '<button class="chip" onclick="toCol(\''+t.id+'\',\'run\',\'\')">開始</button></div>'
-    }).join('')+'</div>':'<div class="none">沒有待辦</div>';
+    }).join('')+'</div>'
+    :'<div class="none">'+(r.mine?'目前沒有交給 AI 的事——自己手上還有 '+r.mine+
+      ' 件。哪幾件想丟出去？點卡片編輯，把「誰做」改成 AI。'
+      :'沒有待辦。')+'</div>';
 
   // 兩個 AI 各自一欄，才看得出昨天是誰在做事、誰整天沒動靜
   var ys=r.yesterday.filter(function(l){return hit(l,q)});
@@ -1100,7 +1117,7 @@ function pool(r,q){
       ' <b class="cnt">'+ts.length+'</b>'+
       (od?' <span class="tag A">逾期 '+od+'</span>':'')+'</h3>'+
       (ts.length?ts.map(function(t){return taskCard(t,'')}).join('')
-        :'<div class="none">'+(p==='A'?'沒有優先處理的事——這通常代表今天沒有真正推進結果的工作。':'沒有')+'</div>')+
+        :'<div class="none">'+(p==='A'?'沒有交給 AI 的 A 級工作。':'沒有')+'</div>')+
       '</div>'});
   return h+'</div>'}
 
@@ -1446,11 +1463,14 @@ function bump(id){event.stopPropagation();
 function findTask(id){
   var a=allTasks(RAW).concat(allTasks(D));
   for(var i=0;i<a.length;i++)if(a[i]&&a[i].id===id)return a[i];return null}
-function edit(id){event.stopPropagation();
+function edit(id){
+  // 卡片點擊已經走委派處理，這裡不一定有事件；沒有就別碰它
+  if(typeof event!=='undefined'&&event&&event.stopPropagation)event.stopPropagation();
   var t=findTask(id);if(!t)return;
   EDIT=id;openAdd('task');$('shTitle').textContent='編輯任務';$('fDel').style.display='';
   $('fT').value=t.title;$('fP').value=t.project;$('fN').value=t.next;
-  $('fD').value=t.due;$('fPr').value=t.priority;$('fW').value=t.waiting}
+  $('fD').value=t.due;$('fPr').value=t.priority;$('fW').value=t.waiting;
+  owner(t.owner||'我')}
 
 /** col 決定新任務的預設日期與狀態：今日欄＝今天、明日欄＝明天、
     正執行欄＝今天且直接標進行中。從別的地方叫就預設今天。 */
@@ -1492,7 +1512,13 @@ function closeAdd(){
   $('veil').classList.remove('on');EDIT=null;EDITL=null;COL='';
   $('fDel').style.display='none';
   var c=document.getElementById('confirmBox');if(c)c.remove();
-  ['fT','fP','fN','fD','fW','fS'].forEach(function(i){$(i).value=''});$('fPr').value='B'}
+  ['fT','fP','fN','fD','fW','fS'].forEach(function(i){$(i).value=''});$('fPr').value='B';owner('我')}
+function owner(o){
+  OWNER=o;
+  $('ow1').classList.toggle('on',o==='我');
+  $('ow2').classList.toggle('on',o==='AI');
+  $('ow3').classList.toggle('on',o==='一起')}
+
 function kind(k){KIND=k;
   $('sgT').classList.toggle('on',k==='task');$('sgL').classList.toggle('on',k==='log');
   $('taskF').style.display=k==='task'?'':'none';$('logF').style.display=k==='log'?'':'none';
@@ -1506,7 +1532,7 @@ function submit(){
   var p;
   if(KIND==='task'){
     var d={title:t,project:$('fP').value.trim(),next:$('fN').value.trim(),
-      due:$('fD').value,priority:$('fPr').value,waiting:$('fW').value.trim()};
+      due:$('fD').value,priority:$('fPr').value,waiting:$('fW').value.trim(),owner:OWNER};
     if(EDIT)d.id=EDIT;
     else if(COL==='run')d.status='進行中';       // 在「AI 正執行」那欄新增＝直接開工
     var eid=EDIT;

@@ -34,8 +34,8 @@ var METRIC_NUMS    = ['revenue', 'orders', 'spend', 'clicks', 'carts'];
 // 表頭（中文，給人看）與欄位鍵（英文，給 API 用）一一對應
 var LOG_HEADERS = ['id', '開始時間', '結束時間', '來源', '專案', '標題', '狀態', '摘要', '產出連結', 'session_id', '任務id', '檔案位置'];
 var LOG_KEYS    = ['id', 'start',    'end',     'source', 'project', 'title', 'status', 'summary', 'link', 'session_id', 'task_id', 'path'];
-var TASK_HEADERS = ['id', '建立時間', '標題', '專案', '到期日', '優先', '狀態', '下一步', '等待者', '預估時數', '備註', '完成時間'];
-var TASK_KEYS    = ['id', 'created', 'title', 'project', 'due', 'priority', 'status', 'next', 'waiting', 'estimate', 'note', 'done_at'];
+var TASK_HEADERS = ['id', '建立時間', '標題', '專案', '到期日', '優先', '狀態', '下一步', '等待者', '預估時數', '備註', '完成時間', '執行者'];
+var TASK_KEYS    = ['id', 'created', 'title', 'project', 'due', 'priority', 'status', 'next', 'waiting', 'estimate', 'note', 'done_at', 'owner'];
 
 var TASK_OPEN = ['待辦', '進行中'];
 var DATE_ONLY_KEYS = { due: true };
@@ -61,7 +61,29 @@ var STATUS_ALIAS = {
 };
 var STATUS_OK = { '待辦': 1, '進行中': 1, '完成': 1, '取消': 1 };
 var MONTHS_ = { JAN: 1, FEB: 2, MAR: 3, APR: 4, MAY: 5, JUN: 6, JUL: 7, AUG: 8, SEP: 9, OCT: 10, NOV: 11, DEC: 12 };
-var TASK_EDITABLE = ['title', 'project', 'due', 'priority', 'status', 'next', 'waiting', 'estimate', 'note'];
+var TASK_EDITABLE = ['title', 'project', 'due', 'priority', 'status', 'next', 'waiting', 'estimate', 'note', 'owner'];
+
+// 誰動手做這件事。系統猜不出來——「碳標籤申報」和「Claude SEO 優化」從資料上長得一樣，
+// 只有本人知道。所以是欄位，不是推論。預設「我」：新任務和匯進來的都不用回頭整理，
+// 只有真的要交出去的那幾件才改。「一起」＝AI 產初稿、自己收尾，算在 AI 那邊。
+var OWNER_SELF = '我', OWNER_AI = 'AI', OWNER_BOTH = '一起';
+var OWNER_OK = { '我': 1, 'AI': 1, '一起': 1 };
+var OWNER_ALIAS = {
+  'ME': '我', 'SELF': '我', '自己': '我', '本人': '我', 'PENNY': '我',
+  'CLAUDE': 'AI', 'COWORK': 'AI', 'CLAUDE CODE': 'AI', '機器人': 'AI', 'BOT': 'AI', 'AI': 'AI',
+  'BOTH': '一起', '共同': '一起', '協作': '一起', '一起做': '一起'
+};
+
+/** 空白一律當「我」——沒標記過的事都是自己的事，寧可多列在每日看板，也不要誤放進 AI 區 */
+function normOwner_(v) {
+  var raw = String(v === undefined || v === null ? '' : v).trim();
+  if (!raw) return OWNER_SELF;
+  if (OWNER_OK[raw]) return raw;
+  return OWNER_ALIAS[raw.toUpperCase()] || OWNER_SELF;
+}
+
+/** AI 專案池只收這些：交給 AI 的，加上人機一起做的 */
+function isAiTask_(t) { return normOwner_(t.owner) !== OWNER_SELF; }
 
 // 紀錄可以在看板上手改的欄位。時間、來源、session_id 由 hook 寫，不給改。
 var LOG_EDITABLE = ['title', 'project', 'summary', 'link', 'status', 'path'];
@@ -250,6 +272,7 @@ function upsertLog_(p) {
       row[col.path] = p.path || '';
       sh.appendRow(fill_(row, LOG_KEYS.length));
       dirty_(SHEET_LOG);
+      markAiOwner_(p);
       return toObj_(LOG_KEYS, row);
     }
 
@@ -265,9 +288,32 @@ function upsertLog_(p) {
     if (p.status === '完成') row[col.end] = now_();
     sh.getRange(rowNum, 1, 1, LOG_KEYS.length).setValues([row]);
     dirty_(SHEET_LOG);
+    markAiOwner_(p);
     return toObj_(LOG_KEYS, row);
   } finally {
     lock.releaseLock();
+  }
+}
+
+/**
+ * Claude Code 或 Cowork 對某個任務跑出紀錄，就代表那件事實際上是 AI 在做，
+ * 把「執行者」自動補成 AI，不用手動維護。只在目前還標「我」時改——
+ * 已經標成「一起」的是刻意的，不要蓋掉。手動紀錄不算，那是自己做的。
+ */
+function markAiOwner_(p) {
+  if (!p.task_id) return;
+  if (p.source !== 'Claude Code' && p.source !== 'Cowork') return;
+  try {
+    var sh = sheet_(SHEET_TASK);
+    var col = index_(TASK_KEYS);
+    var rowNum = findRow_(sh, col.id, p.task_id);
+    if (!rowNum) return;
+    var cell = sh.getRange(rowNum, col.owner + 1, 1, 1);
+    if (normOwner_(cell.getValues()[0][0]) !== OWNER_SELF) return;
+    cell.setValues([[OWNER_AI]]);
+    dirty_(SHEET_TASK);
+  } catch (e) {
+    // 補標記失敗不該讓寫紀錄整個失敗——紀錄本身比這個重要
   }
 }
 
@@ -346,6 +392,7 @@ function addTask_(p) {
     row[col.estimate] = p.estimate || '';
     row[col.note] = p.note || '';
     row[col.done_at] = '';
+    row[col.owner] = normOwner_(p.owner);
     sh.appendRow(fill_(row, TASK_KEYS.length));
     dirty_(SHEET_TASK);
     return toObj_(TASK_KEYS, row);
@@ -365,7 +412,8 @@ function updateTask_(p) {
     if (!rowNum) throw new Error('找不到任務 ' + p.id);
     var row = sh.getRange(rowNum, 1, 1, TASK_KEYS.length).getValues()[0];
     TASK_EDITABLE.forEach(function (k) {
-      if (p[k] !== undefined) row[col[k]] = k === 'priority' ? normPriority_(p[k]) : p[k];
+      if (p[k] === undefined) return;
+      row[col[k]] = k === 'priority' ? normPriority_(p[k]) : (k === 'owner' ? normOwner_(p[k]) : p[k]);
     });
     if (p.status === '完成' && !row[col.done_at]) row[col.done_at] = now_();
     if (p.status && p.status !== '完成') row[col.done_at] = '';
@@ -393,7 +441,7 @@ function backfill_() {
     var sh = sheet_(SHEET_TASK);
     var col = index_(TASK_KEYS);
     var last = sh.getLastRow();
-    var n = { rows: 0, id: 0, created: 0, priority: 0, status: 0, due: 0, dueBad: 0, samples: [] };
+    var n = { rows: 0, id: 0, created: 0, priority: 0, status: 0, owner: 0, due: 0, dueBad: 0, samples: [] };
     if (last < 2) return n;
     var rng = sh.getRange(2, 1, last - 1, TASK_KEYS.length);
     var vals = rng.getValues();
@@ -406,6 +454,9 @@ function backfill_() {
 
       var p = normPriority_(row[col.priority]);
       if (p !== String(row[col.priority]).trim()) { row[col.priority] = p; n.priority++; }
+
+      var ow = normOwner_(row[col.owner]);
+      if (ow !== String(row[col.owner]).trim()) { row[col.owner] = ow; n.owner++; }
 
       var st = normStatus_(row[col.status]);
       if (st !== String(row[col.status]).trim()) { row[col.status] = st; n.status++; }
@@ -588,7 +639,8 @@ function outputs_(source, all) {
 function pool_(date) {
   var today = date ? fmtDate_(parseDate_(date)) : fmtDate_(new Date());
   var yesterday = fmtDate_(shiftDays_(parseDate_(today), -1));
-  var open = readTasks_('open');
+  var all = readTasks_('open');
+  var open = all.filter(isAiTask_);      // 自己做的事不進這頁，那是「每日看板」的事
 
   var byName = {};
   open.forEach(function (t) { (byName[t.project || '未分類'] = byName[t.project || '未分類'] || []).push(t); });
@@ -607,7 +659,8 @@ function pool_(date) {
     yesterday: yLogs,
     yesterdayHours: focusHours_(yLogs),
     backlog: open.length,
-    overdue: open.filter(function (t) { return t.due && t.due < today; }).length
+    overdue: open.filter(function (t) { return t.due && t.due < today; }).length,
+    mine: all.length - open.length        // 自己要做的還有幾件，讓空畫面說得出話
   };
 }
 
