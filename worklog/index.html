@@ -42,16 +42,7 @@
   .nav button.on{background:var(--card2);color:var(--ink);font-weight:600}
   .nav i{font-style:normal;width:17px;text-align:center;font-size:1.0625rem;flex:0 0 auto;opacity:.85}
   .nav button.on i{opacity:1}
-  .pool{margin-top:16px;padding:0 12px 16px;flex:1;overflow-y:auto;min-height:0}
-  .pool h4{display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;
-    background:var(--panel);font-size:0.9062rem;color:var(--dim);font-weight:600;margin:0 4px 8px;padding:2px 0}
-  .pool h4 button{color:var(--acc);font-size:0.9062rem}
-  .pj{background:var(--card);border:1px solid var(--line);border-left:2px solid var(--line2);
-    border-radius:9px;padding:8px 10px;margin-bottom:6px;width:100%;text-align:left;display:block}
-  .pj:hover{background:var(--card2)}
-  .pj.pA{border-left-color:var(--a)} .pj.pB{border-left-color:var(--b)} .pj.pC{border-left-color:var(--c)}
-  .pj .n{display:flex;justify-content:space-between;gap:6px;font-size:0.9688rem;font-weight:600;align-items:center}
-  .pj .s{font-size:0.8125rem;color:var(--dim);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .side .nav{flex:1;min-height:0;overflow-y:auto}
   .fold{flex:0 0 auto;padding:10px 14px;border-top:1px solid var(--line);color:var(--dim);font-size:0.9062rem;
     display:flex;align-items:center;gap:7px}
   .fold:hover{color:var(--ink)}
@@ -210,6 +201,14 @@
   .sec{font-size:0.9375rem;color:var(--dim);font-weight:600;margin:18px 2px 9px}
   .sec:first-child{margin-top:2px}
   /* 昨天的紀錄一天可能十幾筆，全部攤開要捲很久，所以預設只留標題 */
+  /* 昨天執行的內容：Cowork 一欄、Claude Code 一欄 */
+  .srcs{display:grid;grid-template-columns:repeat(auto-fit,minmax(17rem,1fr));gap:12px;align-items:start}
+  .srcc{min-width:0}
+  .srcc>h4{display:flex;align-items:center;gap:7px;margin:0 2px 7px;font-size:0.9375rem;font-weight:700}
+  .srcc>h4 b{margin-left:auto;font-size:0.875rem;color:var(--dim);font-weight:600}
+  .dot{width:9px;height:9px;border-radius:2px;flex:0 0 auto}
+  .dot.cc{background:#34d399}.dot.cw2{background:#e0a03a}.dot.mn{background:#4ea3f5}
+  .panelbox h3 .cnt{margin-left:4px;font-size:0.9375rem;color:var(--dim);font-weight:600}
   .lg{background:var(--card);border:1px solid var(--line);border-radius:12px;margin-bottom:8px;overflow:hidden}
   .lgh{display:flex;align-items:center;gap:9px;width:100%;padding:11px 12px;
     background:none;border:0;color:var(--ink);font:inherit;text-align:left;cursor:pointer}
@@ -454,10 +453,6 @@
   <aside class="side" id="side">
     <div class="me"><div class="av">P</div><b>Penny</b></div>
     <nav class="nav" id="nav"></nav>
-    <div class="pool">
-      <h4>AI 專案池 <button onclick="openAdd('task')">＋ 新增</button></h4>
-      <div id="pool"></div>
-    </div>
     <button class="fold" onclick="side(0,1)">« 收合側邊欄</button>
   </aside>
 
@@ -542,7 +537,7 @@ var VIEWS=[
   {v:'overview', i:'▥', n:'看板總覽',  t:'看板總覽',      ic:'▥'},
   {v:'projects', i:'▤', n:'AI 工作時間表', t:'AI 工作時間表', ic:'▤'},
   {v:'pool',     i:'✦', n:'AI 專案池', t:'AI 專案池',     ic:'✦'},
-  {v:'outputs',  i:'🗄', n:'資料庫',    t:'產出資料庫',    ic:'🗄️'},
+  {v:'outputs',  i:'🗄', n:'資料庫',    t:'產出資料庫',    ic:'🗄️', hide:1},   // 從設定進去就好
   {v:'notes',    i:'▤', n:'資料區',    t:'資料區',        ic:'🗂️'},
   {v:'done',     i:'✓', n:'完成項目',  t:'完成項目',      ic:'✅'},
   {v:'settings', i:'⚙', n:'設定',      t:'設定',          ic:'⚙'}
@@ -591,7 +586,7 @@ function boot(){
   if(!TOKEN){$('gate').style.display='block';return}
   $('gate').style.display='none';$('app').style.display='block';
   $('mStats').textContent=STATS?'隱藏統計列':'顯示統計列';
-  $('nav').innerHTML=VIEWS.map(function(x){
+  $('nav').innerHTML=VIEWS.filter(function(x){return !x.hide}).map(function(x){
     return '<button data-v="'+x.v+'" onclick="go(\''+x.v+'\')"><i>'+x.i+'</i>'+x.n+'</button>'}).join('');
   go('board')}
 function saveTok(){var v=$('tok').value.trim();if(!v)return;
@@ -610,7 +605,7 @@ function go(v){
   [].forEach.call(document.querySelectorAll('#nav button'),function(b){b.classList.toggle('on',b.dataset.v===v)});
   $('h1').textContent=m.t;$('hIcon').textContent=m.ic;
   $('srchBox').classList.toggle('off',v==='settings');
-  $('dates').style.display=(v==='board'||v==='projects')?'':'none';
+  $('dates').style.display=(v==='board'||v==='projects'||v==='overview')?'':'none';
   if(v!=='board')$('brief').style.display='none';
   $('q').value='';
   load()}
@@ -638,7 +633,7 @@ function fetchView(){
 function settle(r){
   RAW=r;
   if(r.stats)D=r;
-  if(r.projects&&(r.stats||r.order))renderPool(r.projects);
+  if(r.projects&&(r.stats||r.order))renderPjs(r.projects);
   paint()}
 
 function busy(on){$('busy').style.display=on?'':'none'}
@@ -875,13 +870,8 @@ function stats(r){
     '</div>'}
 
 /* ---------------- projects / pool ---------------- */
-function renderPool(ps){
-  $('pool').innerHTML=ps.length?ps.slice(0,10).map(function(p){
-    return '<button class="pj p'+p.priority+'" onclick="go(\'projects\')"><div class="n">'+esc(p.name)+
-      '<span class="tag '+p.priority+'">'+p.priority+'</span></div>'+
-      '<div class="s">'+(p.next?'下一步：'+esc(p.next):p.count+' 件待辦')+'</div>'+
-      '<div class="s">'+(p.due?'截止日：'+md(p.due):'未排日期')+(p.overdue?' · 逾期 '+p.overdue:'')+'</div></button>'
-  }).join(''):'<div class="none">還沒有任務</div>';
+/** 側邊欄的專案池拿掉之後，這裡只剩下「專案」輸入框的自動完成清單 */
+function renderPjs(ps){
   $('pjs').innerHTML=ps.map(function(p){return '<option value="'+esc(p.name)+'">'}).join('')}
 
 function allTasks(r){
@@ -1075,18 +1065,40 @@ function pool(r,q){
         '<button class="chip" onclick="toCol(\''+t.id+'\',\'run\',\'\')">開始</button></div>'
     }).join('')+'</div>':'<div class="none">沒有待辦</div>';
 
-  h+='<div class="sec">昨天執行的內容</div>';
-  h+=r.yesterday.length?r.yesterday.filter(function(l){return hit(l,q)}).map(logRow).join('')
-    :'<div class="none">昨天沒有紀錄</div>';
+  // 兩個 AI 各自一欄，才看得出昨天是誰在做事、誰整天沒動靜
+  var ys=r.yesterday.filter(function(l){return hit(l,q)});
+  var by=function(src){return ys.filter(function(l){return l.source===src})};
+  var other=ys.filter(function(l){return l.source!=='Cowork'&&l.source!=='Claude Code'});
+  h+='<div class="sec">昨天執行的內容</div>'+
+    '<div class="srcs">'+
+      logCol('Cowork','cw2',by('Cowork'),'昨天 Cowork 沒有跑任何任務。')+
+      logCol('Claude Code','cc',by('Claude Code'),
+        '昨天 Claude Code 沒有紀錄。要自動進來，得在自己的電腦裝好 hook；跑在雲端的 session 送不出來。')+
+      (other.length?logCol('手動與其他','mn',other,''):'')+
+    '</div>';
 
-  h+='<div class="sec">各專案還剩什麼</div>';
-  r.projects.forEach(function(p){
-    var ts=p.tasks.filter(function(t){return hit(t,q)});
-    if(!ts.length)return;
-    h+='<div class="panelbox"><h3>'+esc(p.name)+' <span class="tag '+p.priority+'">'+p.priority+'</span>'+
-      (p.overdue?' <span class="tag A">逾期 '+p.overdue+'</span>':'')+'</h3>'+
-      ts.map(function(t){return taskCard(t,'')}).join('')+'</div>'});
+  // 依 A/B/C 分三塊，不再依專案分——決定「現在做哪一件」時看的是輕重，不是屬於誰
+  var left=[];
+  r.projects.forEach(function(p){left=left.concat(p.tasks||[])});
+  left=left.filter(function(t){return hit(t,q)});
+  h+='<div class="sec">還剩什麼</div>';
+  ['A','B','C'].forEach(function(p){
+    var ts=left.filter(function(t){return t.priority===p});
+    var od=ts.filter(function(t){return t.due&&t.due<today()}).length;
+    h+='<div class="panelbox"><h3><span class="tag '+p+'">'+p+'</span> '+esc(PN[p].slice(2))+
+      ' <b class="cnt">'+ts.length+'</b>'+
+      (od?' <span class="tag A">逾期 '+od+'</span>':'')+'</h3>'+
+      (ts.length?ts.map(function(t){return taskCard(t,'')}).join('')
+        :'<div class="none">'+(p==='A'?'沒有優先處理的事——這通常代表今天沒有真正推進結果的工作。':'沒有')+'</div>')+
+      '</div>'});
   return h+'</div>'}
+
+/** 昨天某個來源做過的事，一欄。標題帶顏色點，跟日曆的來源色一致。 */
+function logCol(name,cls,logs,empty){
+  return '<section class="srcc"><h4><i class="dot '+cls+'"></i>'+esc(name)+
+    '<b>'+logs.length+'</b></h4>'+
+    (logs.length?logs.map(logRow).join(''):'<div class="none">'+esc(empty)+'</div>')+
+    '</section>'}
 
 /* ---------------- 資料區 ---------------- */
 /** 分區是使用者自己開的，標題點一下就能改。對不到分區的卡片歸「未分類」。 */
@@ -1329,6 +1341,9 @@ function settings(){
       '<div class="kv"><span>TOKEN</span><b>已儲存於本機</b></div>'+
       '<div class="kv"><span>換一組 TOKEN</span><b><button class="chip" onclick="logout()">登出並重新輸入</button></b></div>'+
       '<p class="u" style="margin-top:10px;-webkit-line-clamp:4">TOKEN 存在這個瀏覽器的 localStorage，換裝置要重貼一次。要作廢舊的，到 Apps Script「專案設定 → 指令碼屬性」改掉 TOKEN 再重跑 setup。</p></div>'+
+    '<div class="panelbox"><h3>產出資料庫</h3>'+
+      '<div class="kv"><span>做出來的東西</span><b><button class="chip" onclick="go(\'outputs\')">開啟資料庫</button></b></div>'+
+      '<p class="u" style="margin-top:8px;-webkit-line-clamp:3">Claude Code、Cowork、手動記下來的產出連結與檔案位置，可依來源過濾。平常不常翻，所以從這裡進去。</p></div>'+
     '<div class="panelbox"><h3>自動記錄</h3>'+
       '<div class="kv"><span>Claude Code</span><b>SessionStart / Stop hook</b></div>'+
       '<div class="kv"><span>Cowork</span><b>work-log skill</b></div>'+
