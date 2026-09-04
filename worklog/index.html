@@ -98,6 +98,14 @@
   .menu button:hover{background:var(--card2);color:var(--ink)}
 
   /* ---------------- columns ---------------- */
+  /* 每一段給一個標題和一條細線，三塊才不會疊成一整面牆 */
+  .sechead{display:flex;align-items:center;gap:12px;margin:18px 24px 7px;
+    color:var(--dim);font-size:0.8125rem;font-weight:600;letter-spacing:.05em}
+  .sechead i{flex:1;height:1px;background:var(--line)}
+  .sechead span{flex:0 0 auto}
+  .sechead em{flex:0 0 auto;font-style:normal;font-weight:400}
+  @media(max-width:980px){.sechead{margin:14px 14px 6px}}
+
   /* 生意數字：Shopline 營業額、FB 廣告花費，還有兩者換算出來的比率 */
   .mx{display:flex;gap:10px;flex-wrap:wrap;align-items:stretch;margin:12px 24px 0}
   .mx .m{flex:1 1 150px;min-width:0;background:var(--card);border:1px solid var(--line);
@@ -148,8 +156,6 @@
   .brief{margin:12px 24px 0;padding:10px 13px 11px;
     background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--acc);
     border-radius:11px;font-size:0.875rem;color:var(--mute);line-height:1.6}
-  .brief .bh{display:flex;align-items:center;gap:7px;margin-bottom:6px}
-  .brief .bh b{font-size:0.9375rem;color:var(--ink)}
   .brief i{font-style:normal;flex:0 0 auto}
   .brief .x{margin-left:auto;flex:0 0 auto;background:none;border:0;color:var(--dim);
     font-size:1.0625rem;line-height:1;padding:0 2px;cursor:pointer}
@@ -534,7 +540,9 @@
         </div>
       </div>
     </div>
+    <div id="mxHead" class="sechead" style="display:none"><span>營運數字</span><i></i><em id="mxWhen"></em></div>
     <div id="mx" class="mx" style="display:none"></div>
+    <div id="briefHead" class="sechead" style="display:none"><span>早晨簡報</span><i></i></div>
     <div id="brief" class="brief" style="display:none"></div>
     <div id="view"><div class="spin">載入中…</div></div>
   </div>
@@ -835,7 +843,8 @@ function board(r,q){
   brief(r.note);mx(r.metrics);
   var f=function(a,c){return a.filter(function(x){return hit(x,q)}).map(function(t){return taskCard(t,c)})};
   var run=f(r.running,'run').concat(r.liveLogs.filter(function(l){return hit(l,q)}).map(logCard));
-  return '<div class="cols">'+
+  return '<div class="sechead"><span>今天要做的</span><i></i></div>'+
+    '<div class="cols">'+
     col('c-run','⏰','AI 正執行工作',run,'現在沒有進行中的工作')+
     col('c-today','📅','今日工作',f(r.today,'today'),'今天沒有到期的任務')+
     col('c-tmr','🕐','明日工作',f(r.tomorrow,'tmr').concat(f(r.unscheduled.slice(0,3),'tmr')),'明天空著')+
@@ -844,10 +853,10 @@ function board(r,q){
 /** 早晨簡報：統計列收起來之後，它就沒地方擺了，改成日期列下面一行。
     可以按 ✕ 收起來，收起後從標題列那顆「早晨簡報」鈕叫回來，選擇會記住。 */
 function brief(note){
-  var el=$('brief'),show=note&&BOPEN;
-  el.innerHTML=show?'<div class="bh"><i>🎯</i><b>早晨簡報</b>'+
-    '<button class="x" onclick="toggleBrief()" title="收起">✕</button></div>'+
-    briefBody(note):'';
+  var el=$('brief'),h=$('briefHead'),show=note&&BOPEN;
+  h.style.display=show?'flex':'none';
+  // 標題交給上面的分段標題，這裡不要再寫一次；收起來按日期列那顆「早晨簡報 ▴」
+  el.innerHTML=show?briefBody(note):'';
   el.style.display=show?'':'none'}
 
 /**
@@ -904,9 +913,9 @@ function money(v){return v===null||v===undefined||v===''?'—':'$'+n2(v)}
  * daily-metrics skill 抓好寫進「指標」工作表的，這裡只負責顯示。
  */
 function mx(m){
-  var el=$('mx');
-  if(!m||!MXOPEN){el.style.display='none';el.innerHTML='';return}
-  el.style.display='';
+  var el=$('mx'),h=$('mxHead');
+  if(!m||!MXOPEN){el.style.display='none';h.style.display='none';el.innerHTML='';return}
+  el.style.display='';h.style.display='flex';$('mxWhen').textContent='';
   if(!m.has){
     el.innerHTML='<div class="miss">今日還沒有營運數字。在 Cowork 說「更新今日數據」，'+
       '它會去 Shopline 和 FB 廣告管理員抓一次填進來。</div>';
@@ -918,15 +927,15 @@ function mx(m){
     tile('廣告花費',money(m.spend),'','','FB 廣告管理員今天的花費')+
     // 刻意叫「總 ROAS」不叫 ROAS：分子是全站營業額、分母只有廣告費，
     // 會比 FB 後台自己報的 ROAS 高。看趨勢很好用，但別拿去跟 FB 的數字對。
-    tile('總 ROAS',roas===null?'—':n2(roas)+'x','全站營收 ÷ 廣告費',rc,
+    tile('總 ROAS',roas===null?'—':n2(roas)+'x','營收 ÷ 廣告費',rc,
       '不是 FB 廣告管理員的 ROAS。分子是 Shopline 全站營業額（含自然流量），'+
       '分母只有 FB 廣告花費，所以會比 FB 後台報的高。當趨勢看，別跟 FB 的數字對。')+
     tile('流量',n2(m.clicks),m.cpc===null?'':'一次 '+money(m.cpc),
       '','FB 廣告的連結點擊，不是全站流量')+
     tile('加入購物車',n2(m.carts),m.cpaCart===null?'':'一次 '+money(m.cpaCart),
       '','FB 的歸因轉換（預設 7 天點擊 + 1 天瀏覽），今天報的裡面有前幾天點的人。'+
-      '跟「流量」基準不同，不要拿來算轉換率。')+
-    (m.updated?'<div class="up">'+esc(String(m.updated).slice(11,16))+' 更新</div>':'')}
+      '跟「流量」基準不同，不要拿來算轉換率。');
+  $('mxWhen').textContent=m.updated?String(m.updated).slice(11,16)+' 更新':''}
 
 function tile(label,val,sub,cls,tip){
   return '<div class="m'+(cls?' '+cls:'')+(tip?' tip':'')+'"'+
