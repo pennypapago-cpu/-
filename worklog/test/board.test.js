@@ -21,20 +21,20 @@ Sheet.prototype.getRange=function(r,c,nr,nc){const s=this;return{
   setValues(v){v.forEach((row,i)=>{row.forEach((val,j)=>{s.rows[r-1+i][c-1+j]=val})});return this},
   setFontWeight(){return this}}};
 
-const TASKS=[['id','建立時間','標題','專案','到期日','優先','狀態','下一步','等待者','預估時數','備註','完成時間']];
+const TASKS=[['id','建立時間','標題','專案','到期日','優先','狀態','下一步','等待者','預估時數','備註','完成時間','執行者']];
 const LOGS=[['id','開始時間','結束時間','來源','專案','標題','狀態','摘要','產出連結','session_id','任務id']];
 const T='2026-09-03', Y='2026-09-02', TM='2026-09-04';
-function task(id,title,pj,due,pri,st,next,wait,done){TASKS.push([id,T,title,pj,due,pri,st,next||'',wait||'','','',done||''])}
+function task(id,title,pj,due,pri,st,next,wait,done,owner){TASKS.push([id,T,title,pj,due,pri,st,next||'',wait||'','','',done||'',owner||''])}
 function log(id,s,e,src,pj,title,st,sum,link){LOGS.push([id,s,e,src,pj,title,st,sum||'',link||'','sid'+id,''])}
 
-task('T1','Claude SEO 優化','Claude SEO','2026-09-10','B','進行中','優化內頁標題');
+task('T1','Claude SEO 優化','Claude SEO','2026-09-10','B','進行中','優化內頁標題','','','AI');
 task('T2','吳若樺貼文完成定稿','行銷構圖',T,'A','待辦','審核發佈');
 task('T3','中秋禮盒控單程式確認','食品開發 AI',T,'A','待辦','程式驗證');
 task('T4','合約等 PN 回覆','行銷構圖',TM,'C','待辦','','PN');
 task('T5','測試訂單完成','Shopline',TM,'A','待辦');
-task('T6','早就該做的事','行銷構圖','2026-08-20','A','待辦','補做');   // 逾期
+task('T6','早就該做的事','行銷構圖','2026-08-20','A','待辦','補做','','','AI');   // 逾期
 task('T7','已完成的','Shopline',T,'A','完成','','', T+' 11:15');
-task('T8','沒排日期','食品開發 AI','','B','待辦','等排程');
+task('T8','沒排日期','食品開發 AI','','B','待辦','等排程','','','一起');
 log('L1',T+' 09:00',T+' 10:30','Claude Code','工作看板','建立 board API','完成','加了 board_','https://drive.google.com/file/d/abc/view');
 log('L2',T+' 10:40','','Cowork','起士公爵','FB 廣告週報','進行中','抓數據中');
 log('L3',Y+' 14:00',Y+' 15:00','Cowork','起士公爵','昨天的事','完成');
@@ -132,20 +132,51 @@ assert(out.rows.length===0||out.rows.every(r=>r.link),'列出來的都有連結'
 // ---- AI 專案池 ----
 const pl=ctx.handle_('pool',{date:T},'tok');
 assert(pl.ok,'pool: '+pl.error);
-assert.strictEqual(pl.backlog,8);
+// 這頁只收交給 AI 的（含「一起」）；自己要做的不進來，那是每日看板的事
+assert.strictEqual(pl.backlog,3,'T1(AI)、T6(AI)、T8(一起)');
+assert.strictEqual(pl.mine,5,'自己要做的還有幾件，空畫面才說得出話');
 assert.strictEqual(pl.overdue,1);
+const poolTitles=pl.order.map(o=>o.task.title);
+assert(!poolTitles.includes('吳若樺貼文完成定稿'),'沒標執行者＝自己做，不該出現');
+assert(!poolTitles.includes('中秋禮盒控單程式確認'));
+assert(poolTitles.includes('Claude SEO 優化')&&poolTitles.includes('沒排日期'),'AI 與一起都要收');
+assert(pl.projects.every(p=>p.tasks.every(t=>t.owner!=='我')),'各專案剩什麼也只列 AI 的');
 assert.strictEqual(pl.yesterday.length,1,'昨天一筆紀錄');
 assert.strictEqual(pl.yesterdayHours,1);
 assert.strictEqual(pl.order[0].task.title,'早就該做的事','逾期最急');
 assert(/逾期 14 天/.test(pl.order[0].reason),'理由要講逾期幾天：'+pl.order[0].reason);
-const doing=pl.order.find(o=>o.task.status==='進行中');
-assert.strictEqual(doing.reason,'已經在做，收掉它');
-const waiting=pl.order.find(o=>o.task.waiting);
-assert.strictEqual(waiting.reason,'等 PN，先去催');
-assert(pl.order.some(o=>o.reason==='A 優先處理'),'A 級的理由改成「A 優先處理」');
-assert(pl.order.indexOf(waiting)>pl.order.indexOf(doing),'卡在別人身上的往後排');
+// 建議理由與排序直接驗那兩支函式——不必為了測理由，把「合約等 PN 回覆」硬說成 AI 的事
+// 兩件只差在「已開工」和「卡在別人身上」，其他條件一樣，才比得出那兩個加權
+const doingT={status:'進行中',due:TM,priority:'B',waiting:''};
+const waitingT={status:'待辦',due:TM,priority:'B',waiting:'PN'};
+assert.strictEqual(ctx.whyNow_(doingT,T),'已經在做，收掉它');
+assert.strictEqual(ctx.whyNow_(waitingT,T),'等 PN，先去催');
+assert.strictEqual(ctx.whyNow_({status:'待辦',due:'',priority:'A',waiting:''},T),'A 優先處理');
+assert(ctx.urgency_(waitingT,T)>ctx.urgency_(doingT,T),'卡在別人身上的往後排');
 assert(pl.projects.every(p=>Array.isArray(p.tasks)),'每個專案帶著自己的任務');
-assert.strictEqual(pl.order.length,Math.min(8,10),'最多十件');
+assert.strictEqual(pl.order.length,3,'池子裡就這三件');
+
+// ---- AI 跑過的任務自動標成 AI ----
+// Claude Code / Cowork 對某個任務寫了紀錄，就代表那件事實際上是 AI 在做。
+{
+  const before=ctx.handle_('tasks',{},'tok').rows.filter(t=>t.id==='T2')[0];
+  assert.strictEqual(ctx.normOwner_(before.owner),'我','原本是自己做');
+  ctx.handle_('log',{source:'Cowork',title:'幫你把貼文定稿了',task_id:'T2',status:'完成',
+    session_id:'auto1'},'tok');
+  assert.strictEqual(ctx.handle_('tasks',{},'tok').rows.filter(t=>t.id==='T2')[0].owner,'AI',
+    'AI 跑過就自動補標記');
+  // 手動紀錄不算——那是自己做的
+  ctx.handle_('log',{source:'手動',title:'我自己做的',task_id:'T3',status:'完成',
+    session_id:'auto2'},'tok');
+  assert.strictEqual(ctx.normOwner_(ctx.handle_('tasks',{},'tok').rows.filter(t=>t.id==='T3')[0].owner),
+    '我','手動紀錄不該把任務標成 AI');
+  // 已經標「一起」的是刻意的，不要被蓋成 AI
+  ctx.handle_('log',{source:'Claude Code',title:'跑了一段',task_id:'T8',status:'完成',
+    session_id:'auto3'},'tok');
+  assert.strictEqual(ctx.handle_('tasks',{},'tok').rows.filter(t=>t.id==='T8')[0].owner,'一起',
+    '「一起」是刻意標的，不要蓋掉');
+  console.log('自動標記   Cowork 跑過 T2 → 執行者變 AI');
+}
 
 // ---- 從別的工具匯入之後的補齊 ----
 // 貼進來的列沒有 id，看板認不出那張卡片，按「開始」「完成」都會失敗。
@@ -253,7 +284,8 @@ assert.strictEqual(dn.range,'week');
 assert.strictEqual(dn.items.length,dn.total);
 assert(dn.items.every(x=>x.at),'每項都有完成時間');
 assert(dn.items.every((x,i,a)=>i===0||a[i-1].at>=x.at),'新的排前面');
-const lg=dn.items.find(x=>x.kind==='log');
+// 指名抓那一筆——別的測試會再寫進紀錄，「第一筆」不是穩定的錨
+const lg=dn.items.find(x=>x.kind==='log'&&x.title==='建立 board API');
 assert.strictEqual(lg.link,'https://drive.google.com/file/d/abc/view','紀錄帶產出連結');
 assert.strictEqual(dn.withLink,1,'有產出的項數');
 assert(dn.items.some(x=>x.kind==='task'&&x.title==='已完成的'),'完成的任務也要列進來');

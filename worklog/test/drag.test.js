@@ -474,7 +474,7 @@ assert(pv.indexOf('推進型')<pv.indexOf('維護型'),'B 排在 C 前面');
 assert(pv.includes('中秋禮盒控單程式確認')&&pv.includes('Shopline 每週任務檢查')&&pv.includes('合約等 PN 回覆'));
 // A 級掛零要直說，那通常代表今天沒有真正推進結果的工作
 const noA=ctx.pool(Object.assign({},POOL,{projects:POOL.projects.slice(1)}),'');
-assert(noA.includes('沒有優先處理的事'),'A 掛零要點出來');
+assert(noA.includes('沒有交給 AI 的 A 級工作'),'A 掛零要點出來');
 console.log('專案池    昨天分 Cowork / Claude Code 兩欄，還剩什麼分 A/B/C');
 
 // ---- CSS 撞名守門員（第二版）----
@@ -557,3 +557,42 @@ assert(!pjm.includes('chip2'),'月檢視也不畫任務');
 const ovm2=ctx.overview(Object.assign({},OV,{range:'month',from:'2026-09-01',to:'2026-09-30'}),'');
 assert(ovm2.includes('chip2'),'看板總覽的月還是要看得到任務');
 console.log('時間表    只畫紀錄，任務留給看板總覽');
+
+// ---- 誰做：我 / AI / 一起 ----
+// 系統猜不出來，所以是欄位不是推論；空白一律當「我」，
+// 免得沒標記過的事被誤放進 AI 區。
+assert.strictEqual(ctx.ownerMark(''),'','自己做的不加記號，不然滿版都是圖示');
+assert.strictEqual(ctx.ownerMark('我'),'');
+assert(ctx.ownerMark('AI').includes('🤖'));
+assert(ctx.ownerMark('一起').includes('🤝'));
+assert(ctx.taskCard({id:'X',title:'交給 AI 的事',project:'p',due:T,priority:'B',status:'待辦',owner:'AI'},'today')
+  .includes('🤖'),'卡片上看得出這件不用自己動手');
+assert(!ctx.taskCard({id:'Y',title:'自己做的事',project:'p',due:T,priority:'B',status:'待辦'},'today')
+  .includes('🤖'));
+
+// 表單：預設「我」，編輯時帶出既有值，送出時一起送
+ctx.paint=function(){};
+ctx.RAW={running:[{id:'Z1',title:'交給 AI 的',project:'p',due:T,priority:'B',status:'進行中',
+  next:'',waiting:'',owner:'AI'}],today:[],tomorrow:[],unscheduled:[],date:T};
+ctx.closeAdd();
+assert.strictEqual(ctx.OWNER,'我','關掉之後回到預設');
+assert.strictEqual(ctx.$('ow1').classList._s?undefined:undefined,undefined);
+ctx.edit('Z1');
+assert.strictEqual(ctx.OWNER,'AI','編輯既有任務要帶出它的執行者');
+ctx.$('fT').value='交給 AI 的';
+sent=null;ctx.submit();
+assert.strictEqual(sent.params.owner,'AI','送出時帶上執行者');
+ctx.closeAdd();ctx.openAdd('task');
+assert.strictEqual(ctx.OWNER,'我','新增預設是自己做');
+ctx.owner('一起');
+ctx.$('fT').value='AI 產初稿我潤稿';
+sent=null;ctx.submit();
+assert.strictEqual(sent.params.owner,'一起');
+ctx.closeAdd();
+
+// 專案池空的時候要說得出話，而不是只寫「沒有待辦」
+const empty=ctx.pool(Object.assign({},POOL,{order:[],projects:[],mine:5}),'');
+assert(empty.includes('自己手上還有 5 件'),'空畫面要指路');
+assert(empty.includes('把「誰做」改成 AI'));
+assert(ctx.pool(Object.assign({},POOL,{mine:5}),'').includes('自己要做'),'頂端也看得到自己還有幾件');
+console.log('誰做      我／AI／一起，預設我，只有 AI 那兩種進專案池');
