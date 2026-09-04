@@ -43,6 +43,24 @@ var DATE_ONLY_KEYS = { due: true };
 // 優先級：A 優先處理（帶來結果）、B 推進型（讓事情前進）、C 維護型（不做會出事）
 var PRIORITY_RANK = { A: 0, B: 1, C: 2 };
 var PRIORITY_LEGACY = { 高: 'A', 中: 'B', 低: 'C' };
+// 從別的工具（Notion、Asana、Jira…）匯進來的優先級寫法。比對前會先轉大寫。
+// P0/P1 都當 A：那兩級在多數團隊都是「現在就要做」。
+var PRIORITY_ALIAS = {
+  'HIGH': 'A', 'URGENT': 'A', 'CRITICAL': 'A', 'P0': 'A', 'P1': 'A', '1': 'A', '緊急': 'A', '重要': 'A',
+  'MEDIUM': 'B', 'MED': 'B', 'NORMAL': 'B', 'P2': 'B', '2': 'B', '一般': 'B', '普通': 'B',
+  'LOW': 'C', 'MINOR': 'C', 'P3': 'C', 'P4': 'C', '3': 'C', '次要': 'C'
+};
+// 狀態同理。認不出來的一律當「待辦」，寧可多做也不要把沒做完的當成完成。
+var STATUS_ALIAS = {
+  '未開始': '待辦', '待處理': '待辦', 'TODO': '待辦', 'TO DO': '待辦', 'NOT STARTED': '待辦',
+  'BACKLOG': '待辦', 'NEW': '待辦', 'OPEN': '待辦',
+  '進行': '進行中', 'DOING': '進行中', 'IN PROGRESS': '進行中', 'WIP': '進行中', 'ACTIVE': '進行中',
+  '已完成': '完成', '完成了': '完成', 'DONE': '完成', 'COMPLETE': '完成', 'COMPLETED': '完成',
+  'CLOSED': '完成', 'FINISHED': '完成',
+  '已取消': '取消', 'CANCELLED': '取消', 'CANCELED': '取消', 'ARCHIVED': '取消', 'DROPPED': '取消'
+};
+var STATUS_OK = { '待辦': 1, '進行中': 1, '完成': 1, '取消': 1 };
+var MONTHS_ = { JAN: 1, FEB: 2, MAR: 3, APR: 4, MAY: 5, JUN: 6, JUL: 7, AUG: 8, SEP: 9, OCT: 10, NOV: 11, DEC: 12 };
 var TASK_EDITABLE = ['title', 'project', 'due', 'priority', 'status', 'next', 'waiting', 'estimate', 'note'];
 
 // 紀錄可以在看板上手改的欄位。時間、來源、session_id 由 hook 寫，不給改。
@@ -163,6 +181,7 @@ function handle_(action, p, token) {
       case 'tasks':       return { ok: true, rows: readTasks_(p.status) };
       case 'task_add':    return withBoard_({ ok: true, row: addTask_(p) }, p);
       case 'task_update': return withBoard_({ ok: true, row: updateTask_(p) }, p);
+      case 'backfill':    return Object.assign({ ok: true }, backfill_());
       case 'board':       return Object.assign({ ok: true }, board_(p.date));
       case 'projects':    return Object.assign({ ok: true }, projects_(p.range, p.date));
       case 'outputs':     return Object.assign({ ok: true }, outputs_(p.source, p.all));
@@ -353,6 +372,60 @@ function updateTask_(p) {
     sh.getRange(rowNum, 1, 1, TASK_KEYS.length).setValues([row]);
     dirty_(SHEET_TASK);
     return toObj_(TASK_KEYS, row);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * 從別的工具（Notion、Asana…）把工作項目貼進「任務」工作表之後跑這一支。
+ * 貼進來的列沒有 id 和建立時間，看板就認不出那張卡片，按「開始」「完成」會失敗；
+ * 優先級和狀態也還是原本工具的寫法。這裡一次補齊，可以重複跑，已經正確的不會被動到。
+ *
+ * 到期日認不出來的不會亂猜：原文搬到「備註」（前面加「原到期日：」），到期日清空，
+ * 回傳裡會報幾筆、前三筆長什麼樣，你自己去看要怎麼填。
+ * 已完成的任務不會補「完成時間」——我們不知道它什麼時候做完的，不編一個進去。
+ */
+function backfill_() {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var sh = sheet_(SHEET_TASK);
+    var col = index_(TASK_KEYS);
+    var last = sh.getLastRow();
+    var n = { rows: 0, id: 0, created: 0, priority: 0, status: 0, due: 0, dueBad: 0, samples: [] };
+    if (last < 2) return n;
+    var rng = sh.getRange(2, 1, last - 1, TASK_KEYS.length);
+    var vals = rng.getValues();
+
+    vals.forEach(function (row) {
+      if (!String(row[col.title]).trim()) return;        // 沒有標題的列當空列，跳過
+      n.rows++;
+      if (!String(row[col.id]).trim()) { row[col.id] = 'T' + Utilities.getUuid().slice(0, 8); n.id++; }
+      if (!String(row[col.created]).trim()) { row[col.created] = now_(); n.created++; }
+
+      var p = normPriority_(row[col.priority]);
+      if (p !== String(row[col.priority]).trim()) { row[col.priority] = p; n.priority++; }
+
+      var st = normStatus_(row[col.status]);
+      if (st !== String(row[col.status]).trim()) { row[col.status] = st; n.status++; }
+
+      var d = normDate_(row[col.due]);
+      if (d.ok) {
+        if (d.value !== String(row[col.due]).trim()) { row[col.due] = d.value; n.due++; }
+      } else {
+        var orig = String(row[col.due]).trim();
+        if (n.samples.length < 3) n.samples.push(orig);
+        var note = String(row[col.note] || '').trim();
+        row[col.note] = (note ? note + ' · ' : '') + '原到期日：' + orig;
+        row[col.due] = '';
+        n.dueBad++;
+      }
+    });
+
+    rng.setValues(vals);
+    dirty_(SHEET_TASK);
+    return n;
   } finally {
     lock.releaseLock();
   }
@@ -640,10 +713,59 @@ function focusHours_(logs) {
   return Math.round(minutes / 6) / 10;
 }
 
+/**
+ * 優先級正規化。先比完整字串，再退回看第一個字母——順序不能反過來，
+ * 不然 Critical 會被第一個字母判成 C（維護型），剛好跟它的意思相反。
+ */
 function normPriority_(v) {
-  var s = String(v === undefined || v === null ? '' : v).trim().toUpperCase().charAt(0);
-  if (PRIORITY_RANK[s] !== undefined) return s;
-  return PRIORITY_LEGACY[String(v).trim()] || 'B';
+  var raw = String(v === undefined || v === null ? '' : v).trim();
+  if (!raw) return 'B';
+  var up = raw.toUpperCase();
+  if (PRIORITY_LEGACY[raw]) return PRIORITY_LEGACY[raw];
+  if (PRIORITY_ALIAS[up]) return PRIORITY_ALIAS[up];
+  var c = up.charAt(0);
+  return PRIORITY_RANK[c] !== undefined ? c : 'B';
+}
+
+/** 狀態正規化。認不出來就當「待辦」——寧可多做，也不要把沒做完的當成完成。 */
+function normStatus_(v) {
+  var raw = String(v === undefined || v === null ? '' : v).trim();
+  if (!raw) return '待辦';
+  if (STATUS_OK[raw]) return raw;
+  return STATUS_ALIAS[raw.toUpperCase()] || '待辦';
+}
+
+/**
+ * 到期日正規化成 yyyy-MM-dd。認得出來回 {ok:true, value}，認不出來回 {ok:false}，
+ * 由呼叫端決定怎麼處理——絕不亂猜一個日期塞進去。
+ * 支援：Date 物件（貼進試算表常被自動轉成這個）、2026-09-03、2026/9/3、
+ * September 3, 2026、Sep 3, 2026、以及 Notion 的日期區間（取開始那天）。
+ * M/D/YYYY 這種只有斜線的寫法照美式讀（Notion 預設），但第一個數字大於 12
+ * 時只可能是日，就反過來讀。
+ */
+function normDate_(v) {
+  if (v instanceof Date) return { ok: true, value: fmtDate_(v) };
+  var s = String(v === undefined || v === null ? '' : v).trim();
+  if (!s) return { ok: true, value: '' };
+  s = s.split(/\s*(?:→|->|~|至)\s*/)[0].trim();          // 區間取開始那天
+  var m = s.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/);
+  if (m) return { ok: true, value: pad4_(m[1], m[2], m[3]) };
+  m = s.match(/^([A-Za-z]{3,})\.?\s+(\d{1,2}),?\s+(\d{4})/);
+  if (m && MONTHS_[m[1].slice(0, 3).toUpperCase()]) {
+    return { ok: true, value: pad4_(m[3], MONTHS_[m[1].slice(0, 3).toUpperCase()], m[2]) };
+  }
+  m = s.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})/);
+  if (m) {
+    var a = Number(m[1]), b = Number(m[2]);
+    return a > 12 ? { ok: true, value: pad4_(m[3], b, a) } : { ok: true, value: pad4_(m[3], a, b) };
+  }
+  return { ok: false };
+}
+
+function pad4_(y, mo, d) {
+  mo = Number(mo); d = Number(d);
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return '';
+  return y + '-' + (mo < 10 ? '0' : '') + mo + '-' + (d < 10 ? '0' : '') + d;
 }
 
 function shiftDays_(d, n) {

@@ -147,6 +147,56 @@ assert(pl.order.indexOf(waiting)>pl.order.indexOf(doing),'卡在別人身上的�
 assert(pl.projects.every(p=>Array.isArray(p.tasks)),'每個專案帶著自己的任務');
 assert.strictEqual(pl.order.length,Math.min(8,10),'最多十件');
 
+// ---- 從別的工具匯入之後的補齊 ----
+// 貼進來的列沒有 id，看板認不出那張卡片，按「開始」「完成」都會失敗。
+{
+  const sh=sheets['任務'];
+  const before=sh.rows.length;
+  // 模擬從 Notion 貼進來的四列：沒有 id、沒有建立時間、優先與狀態是別人的寫法
+  sh.rows.push(['','','Notion 來的甲','中秋禮盒','September 3, 2026','High','In progress','','','','']);
+  sh.rows.push(['','','Notion 來的乙','Shopline','2026/9/5','P3','Done','','','','']);
+  sh.rows.push(['','','Notion 來的丙','','下週三','Critical','Backlog','','','','原本的備註']);
+  sh.rows.push(['','','Notion 來的丁','','','','','','','','']);
+  const bf=ctx.handle_('backfill',{},'tok');
+  assert(bf.ok,'backfill: '+bf.error);
+  assert.strictEqual(bf.id,4,'四筆都補了 id');
+  assert.strictEqual(bf.created,4,'四筆都補了建立時間');
+  assert.strictEqual(bf.dueBad,1,'「下週三」看不懂');
+  assert.strictEqual(bf.samples[0],'下週三','會回報看不懂的原文');
+
+  const got=ctx.handle_('tasks',{},'tok').rows;
+  const g=n=>got.filter(t=>t.title===n)[0];
+  assert(/^T/.test(g('Notion 來的甲').id),'id 補成 T 開頭');
+  assert.strictEqual(g('Notion 來的甲').due,'2026-09-03','September 3, 2026');
+  assert.strictEqual(g('Notion 來的甲').priority,'A','High → A');
+  assert.strictEqual(g('Notion 來的甲').status,'進行中','In progress → 進行中');
+  assert.strictEqual(g('Notion 來的乙').due,'2026-09-05','2026/9/5 補零');
+  assert.strictEqual(g('Notion 來的乙').priority,'C','P3 → C');
+  assert.strictEqual(g('Notion 來的乙').status,'完成','Done → 完成');
+  assert.strictEqual(g('Notion 來的乙').done_at,'','不編一個完成時間出來');
+  // Critical 開頭是 C，但它的意思是最急——完整字串要先比，不能只看第一個字母
+  assert.strictEqual(g('Notion 來的丙').priority,'A','Critical → A 而不是 C');
+  assert.strictEqual(g('Notion 來的丙').status,'待辦','Backlog → 待辦');
+  assert.strictEqual(g('Notion 來的丙').due,'','看不懂的日期清空，不亂猜');
+  assert(g('Notion 來的丙').note.includes('原到期日：下週三'),'原文留在備註');
+  assert(g('Notion 來的丙').note.includes('原本的備註'),'原有的備註不被蓋掉');
+  assert.strictEqual(g('Notion 來的丁').priority,'B','沒填優先就當 B');
+  assert.strictEqual(g('Notion 來的丁').status,'待辦','沒填狀態就當待辦');
+
+  // 補過的卡片要真的動得了——這才是補齊的目的
+  const id=g('Notion 來的甲').id;
+  assert(ctx.handle_('task_update',{id:id,status:'完成'},'tok').ok,'補完就改得動了');
+
+  // 重複跑不該再動任何東西
+  const again=ctx.handle_('backfill',{},'tok');
+  assert.strictEqual(again.id,0,'第二次沒有要補的 id');
+  assert.strictEqual(again.due,0,'第二次沒有要改的日期');
+  assert.strictEqual(again.priority,0,'第二次沒有要改的優先');
+  assert.strictEqual(again.dueBad,0,'已經清空的日期不會再被報一次');
+  assert.strictEqual(sh.rows.length,before+4,'不會多長出列來');
+  console.log('匯入補齊   '+bf.rows+' 筆，看不懂的日期 '+bf.dueBad+' 筆移到備註');
+}
+
 // ---- 生意數字 ----
 // 看板連不到 Shopline 和 FB 廣告管理員，數字由 Cowork 寫進「指標」表，這裡只換算。
 const mt=ctx.handle_('metrics',{date:T},'tok').metrics;

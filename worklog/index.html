@@ -593,6 +593,20 @@ function saveTok(){var v=$('tok').value.trim();if(!v)return;
   TOKEN=v;$('err').textContent='';
   call('ping').then(function(){try{localStorage.setItem('worklog_token',v)}catch(e){}boot()})
     .catch(function(e){TOKEN='';$('err').textContent=e.message})}
+/** 匯入之後補齊 id 等欄位。會改動整張「任務」表，所以要按兩次。 */
+function backfill(){
+  var b=$('bfBtn');if(!b)return;
+  if(b.dataset.armed!=='1'){b.dataset.armed='1';b.textContent='再按一次確認';return}
+  b.dataset.armed='';b.disabled=true;b.textContent='補齊中…';busy(1);
+  var done=function(){busy(0);b.disabled=false;b.textContent='補齊匯入的任務'};
+  call('backfill',{}).then(function(r){
+    done();
+    toast(r.rows?('掃了 '+r.rows+' 筆：補 id '+r.id+'、建立時間 '+r.created+
+      '、優先 '+r.priority+'、狀態 '+r.status+'、日期 '+r.due+
+      (r.dueBad?'；'+r.dueBad+' 筆日期看不懂，原文已移到備註':'')):'「任務」工作表是空的');
+    VC={};load()})
+   .catch(function(e){done();toast(e.message)})}
+
 function logout(){try{localStorage.removeItem('worklog_token')}catch(e){}location.reload()}
 function side(on,fold){var s=$('side');
   if(fold){s.classList.toggle('hide');return}
@@ -1341,6 +1355,14 @@ function settings(){
       '<div class="kv"><span>TOKEN</span><b>已儲存於本機</b></div>'+
       '<div class="kv"><span>換一組 TOKEN</span><b><button class="chip" onclick="logout()">登出並重新輸入</button></b></div>'+
       '<p class="u" style="margin-top:10px;-webkit-line-clamp:4">TOKEN 存在這個瀏覽器的 localStorage，換裝置要重貼一次。要作廢舊的，到 Apps Script「專案設定 → 指令碼屬性」改掉 TOKEN 再重跑 setup。</p></div>'+
+    '<div class="panelbox"><h3>從別的工具匯入</h3>'+
+      '<div class="kv"><span>貼完之後按這裡</span><b>'+
+        '<button class="chip" id="bfBtn" onclick="backfill()">補齊匯入的任務</button></b></div>'+
+      '<p class="u" style="margin-top:8px;-webkit-line-clamp:6">把 Notion 之類的工作項目貼進試算表的「任務」工作表之後，'+
+      '那些列沒有 id 和建立時間，看板認不出來，卡片按了不會動。這支會補齊 id 與建立時間，'+
+      '並把 High／Medium／Low、P0～P3、Done／In progress 這些寫法換成 A/B/C 與待辦／進行中／完成。'+
+      '可以重複按，已經正確的不會被改。看不懂的到期日不會亂猜——原文移到「備註」，'+
+      '到期日留空，執行完會告訴你有幾筆。</p></div>'+
     '<div class="panelbox"><h3>產出資料庫</h3>'+
       '<div class="kv"><span>做出來的東西</span><b><button class="chip" onclick="go(\'outputs\')">開啟資料庫</button></b></div>'+
       '<p class="u" style="margin-top:8px;-webkit-line-clamp:3">Claude Code、Cowork、手動記下來的產出連結與檔案位置，可依來源過濾。平常不常翻，所以從這裡進去。</p></div>'+
