@@ -249,6 +249,11 @@ let mh=ctx.$('mx').innerHTML;
 assert(mh.includes('$48,200'),'營業額要有千分位');
 assert(mh.includes('31 筆訂單'));
 assert(mh.includes('3.86x'),'ROAS');
+// 刻意叫「總 ROAS」：分子是全站營業額、分母只有廣告費，跟 FB 後台報的不是同一個東西
+assert(mh.includes('總 ROAS'),'不要只寫 ROAS，會被拿去跟 FB 後台對');
+assert(mh.includes('不是 FB 廣告管理員的 ROAS'),'把口徑寫在提示裡');
+assert(mh.includes('連結點擊，不是全站流量'));
+assert(mh.includes('不要拿來算轉換率'),'加購與點擊的歸因基準不同');
 assert(mh.includes('一次 $6.79'),'流量成本');
 assert(mh.includes('一次 $130.21'),'加購成本');
 assert(mh.includes('14:30 更新'),'看得出數字是什麼時候抓的');

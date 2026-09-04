@@ -103,6 +103,9 @@
   .mx .m{flex:1 1 150px;min-width:0;background:var(--card);border:1px solid var(--line);
     border-radius:11px;padding:9px 12px}
   .mx .m u{display:block;text-decoration:none;color:var(--dim);font-size:0.8125rem;margin-bottom:3px}
+  .mx .m.tip{cursor:help}
+  .mx .m.tip u::after{content:'?';margin-left:4px;font-size:0.6875rem;opacity:.5;
+    border:1px solid currentColor;border-radius:50%;padding:0 3px}
   .mx .m b{display:block;font-size:1.375rem;font-weight:700;letter-spacing:-.02em;line-height:1.2}
   .mx .m s{display:block;text-decoration:none;color:var(--mute);font-size:0.8125rem;margin-top:2px}
   .mx .m.good b{color:#4ade9e}
@@ -910,15 +913,24 @@ function mx(m){
     return}
   var roas=m.roas,rc=roas===null?'na':(roas>=3?'good':(roas<1.5?'bad':''));
   el.innerHTML=
-    tile('今日營業額',money(m.revenue),m.orders===null?'':n2(m.orders)+' 筆訂單')+
-    tile('廣告花費',money(m.spend),'')+
-    tile('ROAS',roas===null?'—':n2(roas)+'x','花一元換回來的',rc)+
-    tile('流量',n2(m.clicks),m.cpc===null?'':'一次 '+money(m.cpc))+
-    tile('加入購物車',n2(m.carts),m.cpaCart===null?'':'一次 '+money(m.cpaCart))+
+    tile('今日營業額',money(m.revenue),m.orders===null?'':n2(m.orders)+' 筆訂單',
+      '','Shopline 全站，含自然流量與其他來源')+
+    tile('廣告花費',money(m.spend),'','','FB 廣告管理員今天的花費')+
+    // 刻意叫「總 ROAS」不叫 ROAS：分子是全站營業額、分母只有廣告費，
+    // 會比 FB 後台自己報的 ROAS 高。看趨勢很好用，但別拿去跟 FB 的數字對。
+    tile('總 ROAS',roas===null?'—':n2(roas)+'x','全站營收 ÷ 廣告費',rc,
+      '不是 FB 廣告管理員的 ROAS。分子是 Shopline 全站營業額（含自然流量），'+
+      '分母只有 FB 廣告花費，所以會比 FB 後台報的高。當趨勢看，別跟 FB 的數字對。')+
+    tile('流量',n2(m.clicks),m.cpc===null?'':'一次 '+money(m.cpc),
+      '','FB 廣告的連結點擊，不是全站流量')+
+    tile('加入購物車',n2(m.carts),m.cpaCart===null?'':'一次 '+money(m.cpaCart),
+      '','FB 的歸因轉換（預設 7 天點擊 + 1 天瀏覽），今天報的裡面有前幾天點的人。'+
+      '跟「流量」基準不同，不要拿來算轉換率。')+
     (m.updated?'<div class="up">'+esc(String(m.updated).slice(11,16))+' 更新</div>':'')}
 
-function tile(label,val,sub,cls){
-  return '<div class="m'+(cls?' '+cls:'')+'"><u>'+esc(label)+'</u><b>'+esc(val)+'</b>'+
+function tile(label,val,sub,cls,tip){
+  return '<div class="m'+(cls?' '+cls:'')+(tip?' tip':'')+'"'+
+    (tip?' title="'+esc(tip)+'"':'')+'><u>'+esc(label)+'</u><b>'+esc(val)+'</b>'+
     (sub?'<s>'+esc(sub)+'</s>':'')+'</div>'}
 
 function col(cls,icon,title,cards,empty){
