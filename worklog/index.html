@@ -276,12 +276,17 @@
   .mc.tdy .d{color:#fff;background:var(--acc2);border-radius:50%;width:1.5rem;height:1.5rem;
     line-height:1.5rem;text-align:center;margin:0 0 3px auto;font-size:0.875rem}
   .mc .more{font-size:0.7812rem;color:var(--dim);padding-left:2px}
-  .mgrid.wk .mc{min-height:13rem}
-  .mgrid.wk .wd{font-size:0.8125rem;color:var(--dim);text-align:center;margin-bottom:1px}
-  .mgrid.wk .d{text-align:center;font-size:1.0625rem;color:var(--ink)}
-  .mgrid.wk .mc.tdy .d{margin:0 auto 4px}
-  @media(max-width:980px){.mgrid.wk{grid-template-columns:repeat(2,minmax(0,1fr))}
-    .mgrid.wk .mc{min-height:6rem}}
+  /* 修飾詞別再叫 wk——那個名字被統計列的週長條圖佔走了（.wk{display:flex}），
+     同權重又寫在後面，會把 .mgrid 的 display:grid 蓋掉，七格擠成一排 */
+  .mgrid.mweek .mc{min-height:13rem}
+  .mgrid.mweek .wd{font-size:0.8125rem;color:var(--dim);text-align:center;margin-bottom:1px}
+  .mgrid.mweek .d{text-align:center;font-size:1.0625rem;color:var(--ink)}
+  .mgrid.mweek .mc.tdy .d{margin:0 auto 4px}
+  /* 週檢視一格只有整寬的七分之一，標題截斷就完全看不出是什麼；
+     格子有 13rem 高，讓它換行比較有用。月檢視格子矮，維持截斷。 */
+  .mgrid.mweek .chip2{white-space:normal;overflow-wrap:anywhere;text-overflow:clip}
+  @media(max-width:980px){.mgrid.mweek{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .mgrid.mweek .mc{min-height:6rem}}
   .legend{display:flex;gap:14px;flex-wrap:wrap;padding:9px 4px 0;font-size:0.875rem;color:var(--dim)}
   .legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:-1px}
   @media(max-width:980px){
@@ -1046,7 +1051,7 @@ function weekGrid(r,f){
   f(r.tasks).forEach(function(t){
     var k=t.due||String(t.done_at||'').slice(0,10);
     if(k)(by[k]=by[k]||[]).push(t)});
-  var h='<div class="mgrid wk">',wd='日一二三四五六';
+  var h='<div class="mgrid mweek">',wd='日一二三四五六';
   for(var d=parse(r.from);ymd(d)<=r.to;d.setDate(d.getDate()+1)){
     var k=ymd(d),ts=by[k]||[];
     h+='<div class="mc'+(k===td?' tdy':'')+'">'+
