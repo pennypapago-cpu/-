@@ -112,6 +112,36 @@
   .mx .miss{flex:1 1 100%;color:var(--mute);font-size:0.875rem;padding:9px 12px;
     background:var(--card);border:1px dashed var(--line2);border-radius:11px}
   @media(max-width:980px){.mx{margin:10px 14px 0;gap:8px}.mx .m{flex:1 1 42%}}
+  /* 資料區的卡片點進去是一整頁，寫多長都行 */
+  .pveil{align-items:stretch;justify-content:center}
+  .page{background:var(--panel);border:1px solid var(--line);border-radius:16px;
+    width:min(52rem,100%);margin:3vh 16px;display:flex;flex-direction:column;
+    max-height:94vh;padding:18px 20px 14px}
+  .phead{display:flex;align-items:flex-start;gap:10px}
+  .ptitle{flex:1 1 auto;min-width:0;background:none;border:0;color:var(--ink);
+    font-size:1.75rem;font-weight:700;line-height:1.3;padding:2px 0}
+  .ptitle:focus{outline:none}
+  .ptitle::placeholder{color:var(--line2)}
+  .page .x{flex:0 0 auto;background:none;border:0;color:var(--dim);font-size:1.375rem;
+    line-height:1;padding:4px 6px}
+  .page .x:hover{color:var(--ink)}
+  .prow{display:flex;align-items:center;gap:9px;margin:8px 0 12px;
+    padding-bottom:12px;border-bottom:1px solid var(--line);font-size:0.875rem;color:var(--dim)}
+  .prow select{background:var(--card);border:1px solid var(--line);border-radius:8px;
+    color:var(--ink);padding:4px 8px;font-size:0.875rem}
+  .prow span{margin-left:auto}
+  .pbody{flex:1 1 auto;min-height:16rem;background:none;border:0;resize:none;
+    color:var(--ink);font-size:1.0625rem;line-height:1.75;padding:0;white-space:pre-wrap}
+  .pbody:focus{outline:none}
+  .pfoot{display:flex;align-items:center;gap:10px;padding-top:12px;
+    border-top:1px solid var(--line);margin-top:12px}
+  .pfoot .hint{margin-left:auto;font-size:0.8125rem;color:var(--dim)}
+  .pfoot .del{background:none;border:1px solid var(--line2);border-radius:9px;
+    color:#ff8b8b;padding:7px 13px;font-size:0.9375rem}
+  .pfoot .pri{background:var(--acc2);color:#fff;border:0;border-radius:9px;
+    padding:8px 18px;font-size:1rem;font-weight:600}
+  @media(max-width:980px){.page{margin:0;border-radius:0;max-height:100vh;height:100vh;
+    width:100%;padding:14px 14px 10px}.ptitle{font-size:1.4375rem}}
   .brief{margin:12px 24px 0;padding:10px 13px 11px;
     background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--acc);
     border-radius:11px;font-size:0.875rem;color:var(--mute);line-height:1.6}
@@ -507,6 +537,26 @@
   </div>
 </div>
 <button class="fab" onclick="openAdd('task')">＋</button>
+</div>
+
+<div class="veil pveil" id="pveil" onclick="if(event.target===this)closePage()">
+  <div class="page">
+    <div class="phead">
+      <input id="pgT" class="ptitle" placeholder="標題" spellcheck="false">
+      <button class="x" onclick="closePage()" title="關閉">×</button>
+    </div>
+    <div class="prow">
+      <label for="pgS">分區</label>
+      <select id="pgS"></select>
+      <span id="pgWhen"></span>
+    </div>
+    <textarea id="pgB" class="pbody" placeholder="在這裡寫內容，多長都可以。"></textarea>
+    <div class="pfoot">
+      <button class="del" onclick="delPage()">刪除</button>
+      <span class="hint">⌘/Ctrl + Enter 存檔 · Esc 關閉</span>
+      <button class="pri" onclick="savePage()">儲存</button>
+    </div>
+  </div>
 </div>
 
 <div class="veil" id="veil" onclick="if(event.target===this)closeAdd()">
@@ -1182,13 +1232,23 @@ function sectCol(sc,items,fixed){
 
 function noteCard(x){
   var body=String(x.body||''),url=/^https?:\/\/\S+$/.test(body.trim())?body.trim():'';
-  var rest=body.split('\n').slice(1).join('\n').trim();
+  var rest=bodyPreview(x);
   return '<article class="nc" data-item="'+esc(x.id)+'">'+
     '<button class="x" onclick="delItem(event,\''+x.id+'\')" title="刪除">×</button>'+
     '<div class="ti">'+esc(x.title)+'</div>'+
     (url?'<a class="u" href="'+esc(url)+'" target="_blank" rel="noopener">'+esc(url)+'</a>'
        :(rest?'<div class="b">'+esc(rest)+'</div>':''))+
     '</article>'}
+
+/**
+ * 卡片上要顯示的內文。舊資料的第一行就是標題（那時候標題是從內文推出來的），
+ * 重複顯示很醜；改成獨立標題之後第一行是真的內容，不能亂砍。所以只在
+ * 第一行剛好等於標題時才去掉。
+ */
+function bodyPreview(x){
+  var lines=String(x.body||'').split('\n');
+  if(lines.length&&lines[0].trim()===String(x.title||'').trim())lines=lines.slice(1);
+  return lines.join('\n').trim()}
 
 /** 第一行當標題，整段存進 body */
 function head1(t){
@@ -1208,7 +1268,9 @@ function inline(el,save,cancel){
   el.addEventListener('keydown',function(e){
     if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();fin(1)}
     else if(e.key==='Escape'){e.preventDefault();fin(0)}});
-  el.addEventListener('blur',function(){fin(1)});
+  // blur 事件還在派送時去改 innerHTML，Chrome 會丟
+  // 「The node to be removed is no longer a child of this node」。挪到事件之後再做。
+  el.addEventListener('blur',function(){setTimeout(function(){fin(1)},0)});
   el.focus();
   if(el.value!==undefined)el.setSelectionRange(el.value.length,el.value.length)}
 
@@ -1267,17 +1329,41 @@ function newItem(sect,btn){
       return true})},
     function(){el.remove()})}
 
-function editItem(id,card){
-  var x=findItem(id);if(!x||card.classList.contains('edit'))return;
-  var was=String(x.body||x.title);
-  card.classList.add('edit');
-  card.innerHTML='<textarea rows="3"></textarea>';
-  var ta=card.querySelector('textarea');ta.value=was;
-  inline(ta,function(t){
-    if(!t||t===was)return paint();
-    mutate('item_save',{id:id,body:t,title:head1(t)},function(){
-      return localItem(id,{body:t,title:head1(t)})})},
-    paint)}
+/* ---------------- 資料區的大頁面 ----------------
+   卡片點進去是一整頁：標題獨立一格、內文想寫多長都行、分區可以直接改。
+   之前是在卡片上長一個三行的 textarea，寫長一點就看不到自己在打什麼。 */
+var PAGE=null;
+
+function openItem(id){
+  var x=findItem(id);if(!x)return;
+  PAGE=id;
+  $('pgT').value=x.title||'';
+  $('pgB').value=x.body||'';
+  $('pgS').innerHTML='<option value="">未分類</option>'+
+    ((RAW&&RAW.sections)||[]).map(function(s){
+      return '<option value="'+esc(s.id)+'"'+(s.id===x.section?' selected':'')+'>'+esc(s.name)+'</option>'
+    }).join('');
+  $('pgWhen').textContent=x.created?String(x.created).slice(0,16):'';
+  $('pveil').classList.add('on');
+  setTimeout(function(){$(x.title?'pgB':'pgT').focus()},60)}
+
+function closePage(){PAGE=null;$('pveil').classList.remove('on')}
+
+function savePage(){
+  if(!PAGE)return;
+  var id=PAGE,t=$('pgT').value.trim(),b=$('pgB').value,s=$('pgS').value;
+  if(!t&&!b.trim()){toast('標題或內容至少要有一個');return}
+  var d={id:id,title:t||head1(b),body:b,section:s};
+  closePage();
+  mutate('item_save',d,function(){return localItem(id,{title:d.title,body:b,section:s})})
+    .then(function(){toast('已儲存')})}
+
+function delPage(){
+  if(!PAGE)return;
+  var id=PAGE,x=findItem(id);
+  if(!confirm('刪掉「'+((x&&x.title)||'這張卡片')+'」？'))return;
+  closePage();
+  mutate('item_del',{id:id},function(){return localItem(id,null)})}
 
 function delItem(e,id){
   e.stopPropagation();
@@ -1680,11 +1766,12 @@ $('view').addEventListener('click',function(e){
   var ev=e.target.closest&&e.target.closest('.ev[data-log]');
   if(ev)return editLog(ev.dataset.log);
   var nc=e.target.closest&&e.target.closest('.nc[data-item]');
-  if(nc)editItem(nc.dataset.item,nc)});
+  if(nc)openItem(nc.dataset.item)});
 
 document.addEventListener('click',function(){$('menu').classList.remove('on')});
 document.addEventListener('keydown',function(e){
-  if(e.key==='Escape'){closeAdd();$('menu').classList.remove('on')}
+  if(e.key==='Escape'){if(PAGE)closePage();closeAdd();$('menu').classList.remove('on')}
+  if(PAGE&&e.key==='Enter'&&(e.metaKey||e.ctrlKey)){e.preventDefault();return savePage()}
   if(/input|textarea|select/i.test(e.target.tagName))return;
   if(e.key==='n'){e.preventDefault();openAdd('task')}
   if(e.key==='/'){e.preventDefault();$('q').focus()}});
