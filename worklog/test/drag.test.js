@@ -488,7 +488,15 @@ assert(pv.includes('中秋禮盒控單程式確認')&&pv.includes('Shopline 每�
 // A 級掛零要直說，那通常代表今天沒有真正推進結果的工作
 const noA=ctx.pool(Object.assign({},POOL,{projects:POOL.projects.slice(1)}),'');
 assert(noA.includes('沒有交給 AI 的 A 級工作'),'A 掛零要點出來');
-console.log('專案池    昨天分 Cowork / Claude Code 兩欄，還剩什麼分 A/B/C');
+// A/B/C 要並排成三欄。上下堆疊的話一次只看得到一級，A 以外的要捲很久才看到
+{
+  const tail=pv.slice(pv.indexOf('還剩什麼'));
+  const grid=tail.match(/<div class="cols">[\s\S]*$/);
+  assert(grid,'還剩什麼要放進 .cols（跟每日看板同一種三欄網格）');
+  assert.strictEqual((grid[0].match(/class="col c-p[ABC]"/g)||[]).length,3,'A/B/C 各一欄');
+  assert(!tail.includes('panelbox'),'不要再用上下堆疊的區塊');
+}
+console.log('專案池    昨天分 Cowork / Claude Code 兩欄，還剩什麼並排成 A/B/C 三欄');
 
 // ---- CSS 撞名守門員（第二版）----
 // 第一版只比對「絕對定位」的裸類別，抓不到這次的 bug：

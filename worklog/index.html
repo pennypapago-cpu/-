@@ -173,10 +173,16 @@
     .brief .bs{display:block}.brief .bs>u{display:block;margin-bottom:1px}}
   .cols{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;padding:16px 24px 8px;align-items:start}
   .col{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px 12px 10px;min-width:0}
-  .col>h3{display:flex;align-items:center;gap:8px;margin:0 4px 12px;font-size:1.125rem;font-weight:700}
+  .col>h3{display:flex;align-items:center;gap:6px 8px;margin:0 4px 12px;
+    font-size:1.125rem;font-weight:700;flex-wrap:wrap}
+  .col>h3 .nm{white-space:nowrap}
+  .col>h3 .ovf{margin-left:0}
   .col>h3 i{font-style:normal;font-size:1.125rem}
   .col>h3 b{margin-left:auto;font-size:0.9688rem;color:var(--dim);font-weight:600}
   .c-run h3{color:var(--run)} .c-today h3{color:var(--today)} .c-tmr h3{color:var(--tmr)}
+  /* AI 專案池的三欄用優先級的顏色，左邊那條也跟著 */
+  .c-pA{border-top:2px solid var(--a)} .c-pB{border-top:2px solid var(--b)} .c-pC{border-top:2px solid var(--c)}
+  .c-pA h3{color:#ff97a9} .c-pB h3{color:#e8b45c} .c-pC h3{color:#8cc4ff}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
   .c-run h3 i{animation:pulse 2.4s infinite}
 
@@ -197,12 +203,14 @@
   .tag.C{background:rgba(78,163,245,.15);color:#7bbcff}
   .tag.src{background:rgba(52,211,153,.14);color:#4ade9e}
   .tag.pj{background:var(--card2);color:var(--mute);border:1px solid var(--line2)}
-  .meta{display:flex;justify-content:space-between;align-items:flex-end;gap:8px;margin-top:9px}
+  .meta{display:flex;justify-content:space-between;align-items:flex-end;gap:4px 8px;
+    margin-top:9px;flex-wrap:wrap}
   .nx{font-size:0.9375rem;color:var(--mute);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .nx b{color:var(--dim);font-weight:500}
   .nx em{font-style:normal;color:var(--dim);margin-right:7px}
   .nx em::after{content:" ·";opacity:.6}
-  .dd{font-size:0.9375rem;color:var(--dim);white-space:nowrap;flex:0 0 auto;display:flex;align-items:center;gap:4px}
+  .dd{font-size:0.9375rem;color:var(--dim);flex:0 1 auto;display:flex;align-items:center;
+    gap:0 4px;flex-wrap:wrap;justify-content:flex-end}
   .dd.over{color:var(--bad);font-weight:600} .dd.now{color:var(--warn);font-weight:600}
   /* 拖曳換欄：手指直向留給捲動，橫向與長按才由我們接手 */
   .t[data-id]{cursor:grab;touch-action:pan-y}
@@ -1219,17 +1227,18 @@ function pool(r,q){
   var left=[];
   r.projects.forEach(function(p){left=left.concat(p.tasks||[])});
   left=left.filter(function(t){return hit(t,q)});
-  h+='<div class="sec">還剩什麼</div>';
+  // 三個優先級並排成三欄，跟每日看板那三欄同一種樣子；上下堆疊的話一次只看得到一級
+  h+='<div class="sechead"><span>還剩什麼</span><i></i></div><div class="cols">';
   ['A','B','C'].forEach(function(p){
     var ts=left.filter(function(t){return t.priority===p});
     var od=ts.filter(function(t){return t.due&&t.due<today()}).length;
-    h+='<div class="panelbox"><h3><span class="tag '+p+'">'+p+'</span> '+esc(PN[p].slice(2))+
-      ' <b class="cnt">'+ts.length+'</b>'+
-      (od?' <span class="tag A">逾期 '+od+'</span>':'')+'</h3>'+
+    h+='<section class="col c-p'+p+'"><h3><span class="tag '+p+'">'+p+'</span>'+
+      '<span class="nm">'+esc(PN[p].slice(2))+'</span><b>'+ts.length+'</b>'+
+      (od?'<span class="tag A ovf">逾期 '+od+'</span>':'')+'</h3>'+
       (ts.length?ts.map(function(t){return taskCard(t,'')}).join('')
         :'<div class="none">'+(p==='A'?'沒有交給 AI 的 A 級工作。':'沒有')+'</div>')+
-      '</div>'});
-  return h+'</div>'}
+      '</section>'});
+  return h+'</div></div>'}
 
 /** 昨天某個來源做過的事，一欄。標題帶顏色點，跟日曆的來源色一致。 */
 function logCol(name,cls,logs,empty){
