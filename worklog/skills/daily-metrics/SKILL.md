@@ -28,7 +28,10 @@ WORKLOG_TOKEN = 你的TOKEN
 | carts | 今天的**加入購物車**次數 | FB 廣告管理員 |
 
 看板會自己換算三個比率，不用送：
-ROAS＝revenue÷spend、流量成本＝spend÷clicks、加購成本＝spend÷carts。
+總 ROAS＝revenue÷spend、流量成本＝spend÷clicks、加購成本＝spend÷carts。
+
+回報時說「總 ROAS」不要只說「ROAS」——分子是全站營業額、分母只有廣告費，
+跟 FB 廣告管理員自己報的 ROAS 不是同一個東西，會比它高。
 
 `clicks` 用「連結點擊」而不是 GA4 的全站工作階段，是刻意的——這樣流量成本才是
 「這筆廣告費買到一個訪客多少錢」。要改成看全站流量的話，成本那兩個數字就沒有意義了。
