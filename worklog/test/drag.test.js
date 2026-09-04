@@ -638,3 +638,50 @@ assert.strictEqual(ctx.DKIND.nc.key,'sect');
 assert(src.includes("'上一'+unit"),'‹ › 光是箭頭看不出會跳多遠');
 assert(src.includes("{week:'週',month:'個月'}[OVRANGE]"));
 console.log('週格拖曳  任務可以拖到別天，箭頭寫明上一週／下一週');
+
+// ---- 資料區的卡片點進去是一整頁 ----
+// 原本在卡片上長一個三行的 textarea，寫長一點就看不到自己在打什麼。
+ctx.paint=function(){};
+ctx.RAW={sections:[{id:'S1',name:'test 1'},{id:'S2',name:'test 2'}],
+  items:[{id:'D1',section:'S1',title:'生命',body:'生命\n這是舊資料，第一行就是標題',created:'2026-09-03 10:00'}]};
+ctx.openItem('D1');
+assert.strictEqual(ctx.PAGE,'D1');
+assert.strictEqual(ctx.$('pgT').value,'生命','標題獨立一格');
+assert.strictEqual(ctx.$('pgB').value,'生命\n這是舊資料，第一行就是標題','內文原封不動');
+assert(ctx.$('pgS').innerHTML.includes('test 2'),'分區可以直接在頁面上換');
+assert(ctx.$('pgS').innerHTML.includes('未分類'));
+
+ctx.$('pgT').value='生命';ctx.$('pgB').value='生命\n改過的內文';ctx.$('pgS').value='S2';
+sent=null;ctx.savePage();
+assert.strictEqual(sent.action,'item_save');
+assert.strictEqual(sent.params.title,'生命');
+assert.strictEqual(sent.params.body,'生命\n改過的內文');
+assert.strictEqual(sent.params.section,'S2');
+assert.strictEqual(ctx.PAGE,null,'存完就關掉');
+// 標題留空時退回用第一行，跟以前的行為一致
+ctx.RAW.items[0].title='';ctx.openItem('D1');
+ctx.$('pgT').value='';ctx.$('pgB').value='沒有標題的第一行\n第二行';
+sent=null;ctx.savePage();
+assert.strictEqual(sent.params.title,'沒有標題的第一行');
+// 兩個都空就不送
+ctx.openItem('D1');ctx.$('pgT').value='';ctx.$('pgB').value='   ';
+sent=null;ctx.savePage();
+assert.strictEqual(sent,null,'標題和內容都空就不要送');
+ctx.closePage();
+
+// 卡片點下去走 openItem，不再就地長 textarea
+const clickH3=src.split("$('view').addEventListener('click'")[1].split('});')[0];
+assert(clickH3.includes('openItem(nc.dataset.item)'));
+assert(!/function editItem/.test(src),'內嵌編輯那套拿掉了');
+
+// 卡片預覽：舊資料第一行等於標題要去掉，新資料不能亂砍
+assert.strictEqual(ctx.bodyPreview({title:'生命',body:'生命\n第二行'}),'第二行');
+assert.strictEqual(ctx.bodyPreview({title:'另一個標題',body:'第一行\n第二行'}),'第一行\n第二行',
+  '獨立標題之後第一行是真的內容，不能砍');
+assert.strictEqual(ctx.bodyPreview({title:'只有標題',body:'只有標題'}),'');
+
+// ---- blur 裡不能直接改 DOM ----
+// Chrome 會丟 The node to be removed is no longer a child of this node。
+const inlineSrc=src.split('function inline(')[1].split('\nfunction ')[0];
+assert(/blur[\s\S]*setTimeout/.test(inlineSrc),'blur 要挪到事件之後再存檔');
+console.log('資料區    卡片點進去開整頁，blur 不再同步改 DOM');
