@@ -381,3 +381,38 @@ ctx.OVRANGE='month';assert.strictEqual(ctx.vkey(),'overview:month:2026-09-15');
 ctx.goToday();assert.strictEqual(ctx.OVDATE,null,'回到本期');
 ctx.VIEW='board';
 console.log('看板總覽  週七格 / 月曆格，‹ › 切上下一段');
+
+// ---- 早晨簡報改成分段條列 ----
+// 以前四段串成一行，逾期哪幾件、進行中哪幾件全糊在一起。
+const NOTE=['昨天：工作看板系統從安裝一路迭代到第 9 版，Code.gs 與 index.html 反覆更新。',
+  '今天必做：1.中秋禮盒控單程式確認（中秋禮盒，昨天到期） 2. Shopline 每週任務檢查（Shopline，昨天到期） 3. 合約等 PN 回覆（行銷構圖，今天到期）',
+  '進行中：1. Claude SEO 優化（Claude SEO，9/10 到期）',
+  '建議：今天只有三件，先把昨天逾期的中秋禮盒做掉。'].join('\n');
+
+ctx.BOPEN=true;ctx.brief(NOTE);
+const bh=ctx.$('brief').innerHTML;
+assert.strictEqual((bh.match(/class="bs"/g)||[]).length,4,'四段各自一列');
+assert(bh.includes('<u>昨天</u>')&&bh.includes('<u>今天必做</u>')&&
+  bh.includes('<u>進行中</u>')&&bh.includes('<u>建議</u>'),'標籤獨立出來');
+assert.strictEqual((bh.match(/<li>/g)||[]).length,4,'今天必做三件＋進行中一件');
+assert(bh.includes('<li>中秋禮盒控單程式確認（中秋禮盒，昨天到期）</li>'),'編號拆乾淨');
+assert(!/<li>1\./.test(bh),'數字編號交給 <ol> 畫，不要重複');
+assert(bh.includes('class="todo"'),'今天必做那段標起來');
+assert(/<u>昨天<\/u><div><p>/.test(bh),'沒編號的段落不要硬做成條列');
+assert(bh.includes('toggleBrief'),'收合鈕還在');
+
+// 不照格式寫也不能掉字
+const messy=ctx.$('brief');
+ctx.brief('隨手寫的一句話，沒有冒號');
+assert(messy.innerHTML.includes('隨手寫的一句話'),'認不出標籤就原樣顯示');
+ctx.brief('昨天：第一行\n接續的第二行沒有標籤');
+assert(messy.innerHTML.includes('第一行 接續的第二行沒有標籤'),'續行接在上一段後面，不會被吃掉');
+
+// 版本號、日期、小數不能被當成編號拆開
+assert.strictEqual(ctx.briefItems('迭代到第 9 版，Code.gs 更新於 2026.09.04，轉換率 3.5%'),null);
+assert.strictEqual(ctx.briefItems('1. 甲 2. 乙').length,2);
+// 只有一件事的那幾天也要當條列，編號不能留在文字裡
+assert.strictEqual(ctx.briefItems('1. Claude SEO 優化')[0],'Claude SEO 優化');
+assert(/<u>進行中<\/u><div><ol>/.test(bh),'只有一件也畫成條列');
+assert(!/<p>1\. /.test(bh),'編號不該留在段落文字裡');
+console.log('早晨簡報  四段分列，必做的拆成條列');
