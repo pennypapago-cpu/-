@@ -577,6 +577,16 @@
         </select></div>
       </div>
       <div class="f"><label>等待者（卡在誰身上，沒有就留空）</label><input id="fW" placeholder="例：PN"></div>
+      <div class="f"><label>重複（做完會自動長出下一次）</label>
+        <select id="fR">
+          <option value="">不重複</option>
+          <option value="每天">每天</option>
+          <option value="每週">每週</option>
+          <option value="每兩週">每兩週</option>
+          <option value="每月">每月</option>
+          <option value="每季">每季</option>
+          <option value="每年">每年</option>
+        </select></div>
       <div class="f"><label>誰做（只有「AI」和「一起」會進 AI 專案池）</label>
         <div class="seg" id="segOwn">
           <button type="button" id="ow1" class="on" onclick="owner('我')">我</button>
@@ -932,7 +942,7 @@ function taskCard(t,col){
   var sub=(t.project?'<em>'+esc(t.project)+'</em>':'')+
     (t.waiting?'<b>等待者：</b>'+esc(t.waiting):(t.next?'<b>下一步：</b>'+esc(t.next):''));
   return '<article class="t p'+t.priority+'" data-id="'+t.id+'" title="'+PN[t.priority]+'">'+
-    '<div class="ti">'+ownerMark(t.owner)+esc(t.title)+'</div>'+
+    '<div class="ti">'+ownerMark(t.owner)+repeatMark(t.repeat)+esc(t.title)+'</div>'+
     '<div class="meta"><div class="nx">'+sub+'</div>'+
       '<div class="dd '+cls+'">📅 '+lbl+'</div></div>'+
     '<div class="acts">'+a+'</div></article>'}
@@ -943,6 +953,10 @@ function ownerMark(o){
   if(o==='AI')return '<i class="own" title="交給 AI">🤖</i>';
   if(o==='一起')return '<i class="own" title="AI 做初稿、自己收尾">🤝</i>';
   return ''}
+
+/** 重複任務標一個記號，看得出這件做完還會再來 */
+function repeatMark(r){
+  return r?'<i class="own" title="'+esc(r)+'重複，做完會長出下一次">🔁</i>':''}
 
 function logCard(l){
   return '<article class="t live"><div class="ti">'+esc(l.title)+'</div>'+
@@ -1550,9 +1564,12 @@ function applyTask(b,id,patch){
   b.unscheduled=rest.filter(function(x){return !x.due});
   return true}
 
+function nextToast(r){
+  return r&&r.spawned&&r.spawned.due?'已完成，下一次 '+md(r.spawned.due):'已完成'}
+
 function st(id,s){event.stopPropagation();
   mutate('task_update',{id:id,status:s},function(){return applyTask(RAW,id,{status:s})})
-    .then(function(){toast('已更新')})}
+    .then(function(r){toast(s==='完成'?nextToast(r):'已更新')})}
 
 /** 把任務移到某一欄。拖曳與動作列按鈕都走這裡。
     run＝開始做；today/tmr＝改到期日，若原本在執行中就一併退回待辦。 */
@@ -1580,7 +1597,7 @@ function edit(id){
   var t=findTask(id);if(!t)return;
   EDIT=id;openAdd('task');$('shTitle').textContent='編輯任務';$('fDel').style.display='';
   $('fT').value=t.title;$('fP').value=t.project;$('fN').value=t.next;
-  $('fD').value=t.due;$('fPr').value=t.priority;$('fW').value=t.waiting;
+  $('fD').value=t.due;$('fPr').value=t.priority;$('fW').value=t.waiting;$('fR').value=t.repeat||'';
   owner(t.owner||'我')}
 
 /** col 決定新任務的預設日期與狀態：今日欄＝今天、明日欄＝明天、
@@ -1623,7 +1640,8 @@ function closeAdd(){
   $('veil').classList.remove('on');EDIT=null;EDITL=null;COL='';
   $('fDel').style.display='none';
   var c=document.getElementById('confirmBox');if(c)c.remove();
-  ['fT','fP','fN','fD','fW','fS'].forEach(function(i){$(i).value=''});$('fPr').value='B';owner('我')}
+  ['fT','fP','fN','fD','fW','fS'].forEach(function(i){$(i).value=''});
+  $('fPr').value='B';$('fR').value='';owner('我')}
 function owner(o){
   OWNER=o;
   $('ow1').classList.toggle('on',o==='我');
@@ -1643,7 +1661,8 @@ function submit(){
   var p;
   if(KIND==='task'){
     var d={title:t,project:$('fP').value.trim(),next:$('fN').value.trim(),
-      due:$('fD').value,priority:$('fPr').value,waiting:$('fW').value.trim(),owner:OWNER};
+      due:$('fD').value,priority:$('fPr').value,waiting:$('fW').value.trim(),owner:OWNER,
+      repeat:$('fR').value};
     if(EDIT)d.id=EDIT;
     else if(COL==='run')d.status='進行中';       // 在「AI 正執行」那欄新增＝直接開工
     var eid=EDIT;

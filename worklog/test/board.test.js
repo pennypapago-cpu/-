@@ -21,10 +21,10 @@ Sheet.prototype.getRange=function(r,c,nr,nc){const s=this;return{
   setValues(v){v.forEach((row,i)=>{row.forEach((val,j)=>{s.rows[r-1+i][c-1+j]=val})});return this},
   setFontWeight(){return this}}};
 
-const TASKS=[['id','建立時間','標題','專案','到期日','優先','狀態','下一步','等待者','預估時數','備註','完成時間','執行者']];
+const TASKS=[['id','建立時間','標題','專案','到期日','優先','狀態','下一步','等待者','預估時數','備註','完成時間','執行者','重複']];
 const LOGS=[['id','開始時間','結束時間','來源','專案','標題','狀態','摘要','產出連結','session_id','任務id']];
 const T='2026-09-03', Y='2026-09-02', TM='2026-09-04';
-function task(id,title,pj,due,pri,st,next,wait,done,owner){TASKS.push([id,T,title,pj,due,pri,st,next||'',wait||'','','',done||'',owner||''])}
+function task(id,title,pj,due,pri,st,next,wait,done,owner,rep){TASKS.push([id,T,title,pj,due,pri,st,next||'',wait||'','','',done||'',owner||'',rep||''])}
 function log(id,s,e,src,pj,title,st,sum,link){LOGS.push([id,s,e,src,pj,title,st,sum||'',link||'','sid'+id,''])}
 
 task('T1','Claude SEO 優化','Claude SEO','2026-09-10','B','進行中','優化內頁標題','','','AI');
@@ -155,6 +155,49 @@ assert.strictEqual(ctx.whyNow_({status:'待辦',due:'',priority:'A',waiting:''},
 assert(ctx.urgency_(waitingT,T)>ctx.urgency_(doingT,T),'卡在別人身上的往後排');
 assert(pl.projects.every(p=>Array.isArray(p.tasks)),'每個專案帶著自己的任務');
 assert.strictEqual(pl.order.length,3,'池子裡就這三件');
+
+// ---- 固定每週要做的事 ----
+// 做完的那一刻長出下一次，原本那筆維持完成留在紀錄裡。
+{
+  // 下一次是從「這次的到期日」推，不是從今天——每週一的事週三才做完，下一次還是下週一
+  assert.strictEqual(ctx.nextDue_('2026-09-07','每週','2026-09-09'),'2026-09-14');
+  assert.strictEqual(ctx.nextDue_('2026-09-03','每天','2026-09-03'),'2026-09-04');
+  assert.strictEqual(ctx.nextDue_('2026-09-03','每兩週','2026-09-03'),'2026-09-17');
+  assert.strictEqual(ctx.nextDue_('2026-09-30','每月','2026-09-30'),'2026-10-30');
+  assert.strictEqual(ctx.nextDue_('2026-09-03','每季','2026-09-03'),'2026-12-03');
+  assert.strictEqual(ctx.nextDue_('2026-09-03','每年','2026-09-03'),'2027-09-03');
+  // 拖很久才做完，也不能一完成就馬上又逾期
+  assert(ctx.nextDue_('2026-06-01','每週','2026-09-03')>'2026-09-03','要推到今天之後');
+  // 月底要夾住：1/31 加一個月是 2/28，不是 3/3
+  assert.strictEqual(ctx.nextDue_('2026-01-31','每月','2026-01-31'),'2026-02-28');
+  assert.strictEqual(ctx.nextDue_('2026-09-03','','2026-09-03'),'','不重複就不算');
+  assert.strictEqual(ctx.normRepeat_('每周'),'每週');
+  assert.strictEqual(ctx.normRepeat_('weekly'),'每週');
+  assert.strictEqual(ctx.normRepeat_('看心情'),'','認不出來就當不重複，不要莫名冒出任務');
+
+  task('R1','Shopline 每週任務檢查','Shopline','2026-09-07','B','待辦','異常問題處理','','','','每週');
+  const before=ctx.handle_('tasks',{},'tok').rows.length;
+  const r=ctx.handle_('task_update',{id:'R1',status:'完成'},'tok');
+  assert(r.ok,'task_update: '+r.error);
+  assert(r.row.spawned,'要長出下一次');
+  assert.strictEqual(r.row.spawned.due,'2026-09-14');
+  assert.strictEqual(r.row.spawned.status,'待辦');
+  assert.strictEqual(r.row.spawned.repeat,'每週','下一次也還是每週');
+  assert.strictEqual(r.row.spawned.next,'異常問題處理','下一步跟著帶過去');
+  assert.notStrictEqual(r.row.spawned.id,'R1','是新的一筆，不是把舊的改日期');
+  const rows=ctx.handle_('tasks',{},'tok').rows;
+  assert.strictEqual(rows.length,before+1);
+  assert.strictEqual(rows.filter(t=>t.id==='R1')[0].status,'完成','原本那筆留著當紀錄');
+
+  // 重複按完成不該一直長
+  const again=ctx.handle_('task_update',{id:'R1',status:'完成'},'tok');
+  assert.strictEqual(again.row.spawned,undefined,'已經完成過就不再長');
+  assert.strictEqual(ctx.handle_('tasks',{},'tok').rows.length,before+1);
+  // 已經有一筆同名未完成也不長
+  const dup=ctx.handle_('task_update',{id:r.row.spawned.id,status:'完成'},'tok');
+  assert(dup.row.spawned,'這次該長（前一筆已經完成了）');
+  console.log('重複任務   完成 R1 → 長出 '+r.row.spawned.due+' 那一筆');
+}
 
 // ---- AI 跑過的任務自動標成 AI ----
 // Claude Code / Cowork 對某個任務寫了紀錄，就代表那件事實際上是 AI 在做。
