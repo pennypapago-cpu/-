@@ -237,9 +237,6 @@
   .chead .today .wd{color:var(--acc)}
   .chead .today .dn{background:var(--acc2);color:#fff;border-radius:50%;
     width:2.125rem;height:2.125rem;line-height:2.125rem;margin:1px auto 0;font-weight:700;font-size:1.125rem}
-  .allday{border-bottom:1px solid var(--line);background:rgba(255,255,255,.012)}
-  .allday>div{border-left:1px solid var(--line);padding:4px 3px;min-height:30px}
-  .allday>div:first-child{border-left:0;font-size:0.7812rem;color:var(--dim);text-align:right;padding:6px 6px 0 0}
   .chip2{display:block;width:100%;text-align:left;font-size:0.8125rem;line-height:1.35;padding:2.5px 6px;
     border-radius:4px;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
     border-left:3px solid}
@@ -904,21 +901,22 @@ function projects(r,q){
   var head='<div class="wrap">'+
     '<div class="panelbox" style="display:flex;gap:26px;flex-wrap:wrap">'+
       kpi('區間',RNAME[r.range]+(r.range==='day'?'':' · '+r.from+' – '+r.to))+
-      kpi('任務',r.done+' / '+r.total+' 完成')+
       kpi('實際紀錄',r.logs.length+' 筆 · '+logHours(r.logs)+' 小時')+
-      kpi('未排日期',r.unscheduled.length+' 件')+
+      kpi('Claude Code',cntSrc(r.logs,'Claude Code')+' 筆')+
+      kpi('Cowork',cntSrc(r.logs,'Cowork')+' 筆')+
     '</div>';
-  var body=r.range==='month'?monthCal(r,f):timeCal(r,f);
+  var body=r.range==='month'?monthCal(r,f,false):timeCal(r,f);
   return head+body+
     '<div class="legend">'+
       '<span><i style="background:#34d399"></i>Claude Code</span>'+
       '<span><i style="background:#e0a03a"></i>Cowork</span>'+
       '<span><i style="background:#4ea3f5"></i>手動</span>'+
-      '<span>上方全天列是排定的任務，時間軸是實際跑過的紀錄</span>'+
+      '<span>這頁只畫實際跑過的紀錄；任務排在哪一天請看「看板總覽」</span>'+
     '</div>'+
-    (r.unscheduled.length?'<div class="sec">未排日期 '+r.unscheduled.length+'</div>'+
-      f(r.unscheduled).map(function(t){return taskCard(t,'')}).join(''):'')+
     '</div>'}
+
+function cntSrc(logs,src){
+  return logs.filter(function(l){return l.source===src}).length}
 
 function logHours(logs){
   var m=0;logs.forEach(function(l){var a=tmin(l.start),b=tmin(l.end);
@@ -934,7 +932,7 @@ function srcCls(s){return s==='Claude Code'?'cc':(s==='Cowork'?'cw2':'mn')}
 /* ---- 日／週：上方全天列放任務，下方時間軸放紀錄 ---- */
 function timeCal(r,f){
   var ds=days(r.from,r.to),td=today(),H=Math.round(44*Z);
-  var tasks=f(r.tasks),logs=f(r.logs);
+  var logs=f(r.logs);
 
   // 時間軸範圍跟著實際紀錄伸縮，預設 8–19 點
   var lo=8*60,hi=19*60;
@@ -944,9 +942,8 @@ function timeCal(r,f){
   if(hi<=lo)hi=lo+60;
   var hrs=(hi-lo)/60;
 
-  var byDay={},tByDay={};
+  var byDay={};
   logs.forEach(function(l){(byDay[String(l.start).slice(0,10)]=byDay[String(l.start).slice(0,10)]||[]).push(l)});
-  tasks.forEach(function(t){if(t.due)(tByDay[t.due]=tByDay[t.due]||[]).push(t)});
 
   var style='--n:'+ds.length+';--gut:'+Math.round(52*Z)+'px;--h:'+H+'px';
   var h='<div class="cw" style="'+style+'">'+
@@ -954,12 +951,6 @@ function timeCal(r,f){
       var x=parse(d);
       return '<div class="'+(d===td?'today':'')+'"><div class="wd">週'+'日一二三四五六'[x.getDay()]+
         '</div><div class="dn">'+x.getDate()+'</div></div>'}).join('')+'</div>'+
-    '<div class="crow allday"><div>全天</div>'+ds.map(function(d){
-      var ts=tByDay[d]||[];
-      return '<div>'+ts.map(function(t){
-        return '<button class="chip2 '+t.priority+(t.status==='完成'?' dn2':'')+
-          '" onclick="edit(\''+t.id+'\')" title="'+esc(t.title)+'">'+esc(t.title)+'</button>'}).join('')+
-        '</div>'}).join('')+'</div>'+
     '<div class="cbody"><div class="crow">'+
       '<div class="gut">'+Array.apply(null,{length:hrs}).map(function(_,i){
         return '<div>'+(lo/60+i)+':00</div>'}).join('')+'</div>'+
@@ -1000,7 +991,8 @@ function nowLine(lo,hi,H){
   return '<div class="nowline" style="top:'+((m-lo)/60*H).toFixed(1)+'px"></div>'}
 
 /* ---- 月：格子裡放任務，附當天紀錄筆數 ---- */
-function monthCal(r,f){
+/** showTasks=false 就只畫紀錄筆數，不畫任務——「AI 工作時間表」用這個模式 */
+function monthCal(r,f,showTasks){
   var first=parse(r.from),td=today(),m=first.getMonth();
   var start=new Date(first);start.setDate(1-((first.getDay()+6)%7));   // 補到週一
   var last=parse(r.to),end=new Date(last);end.setDate(last.getDate()+(7-((last.getDay()+6)%7)-1));
@@ -1015,8 +1007,8 @@ function monthCal(r,f){
     var k=ymd(d),ts=tByDay[k]||[],n=nByDay[k]||0;
     h+='<div class="mc'+(d.getMonth()!==m?' out':'')+(k===td?' tdy':'')+'">'+
       '<div class="d">'+d.getDate()+'</div>'+
-      ts.slice(0,3).map(dayChip).join('')+
-      (ts.length>3?'<div class="more">還有 '+(ts.length-3)+' 件</div>':'')+
+      (showTasks===false?'':ts.slice(0,3).map(dayChip).join(''))+
+      (showTasks!==false&&ts.length>3?'<div class="more">還有 '+(ts.length-3)+' 件</div>':'')+
       (n?'<div class="more">● '+n+' 筆紀錄</div>':'')+'</div>'}
   return h+'</div>'}
 
