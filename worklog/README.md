@@ -272,7 +272,7 @@ A 優先處理（直接帶來結果）、B 推進型（讓事情往前走）、C
 | action | 參數 | 說明 |
 |---|---|---|
 | `ping` | | 測 token |
-| `log` | source, project, title, status, summary, link, path, task_id, session_id, prompt | 新增紀錄；帶 `session_id` 且已存在則更新那一列 |
+| `log` | source, project, title, status, summary, link, path, task_id, session_id, prompt, start, end | 新增紀錄；帶 `session_id` 且已存在則更新那一列。`start`／`end` 是給補登用的（`yyyy-MM-dd HH:mm`），不給就用現在 |
 | `log_update` | id + title / project / summary / link / status / path | 手改一筆既有紀錄（日曆點時間區塊）；空字串是清掉 |
 | `logs` | range=day/week/month, date=yyyy-MM-dd | 讀紀錄 |
 | `tasks` | status=open/待辦/進行中/完成 | 讀任務 |
@@ -302,6 +302,11 @@ curl -sS -L -X POST -H 'Content-Type: application/json' "$WORKLOG_URL" \
 ```
 
 ## Claude Code 自動記錄
+
+**只在自己的電腦上有效。** 跑在 claude.ai 的雲端 session（Claude Code on the web）
+連不到 `script.google.com`（代理 403，見下方限制一節），hook 會靜默失敗，那次工作
+就不會進看板。要補登以前做的事，用 `log` 帶 `start` 與 `end`（見 API 一節），
+時間才會落在真正做事的那一段，而不是「補登的那一刻」。
 
 在你自己的機器上（不是沙盒）：
 

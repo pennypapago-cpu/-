@@ -346,6 +346,22 @@ ctx.handle_('log',{source:'Cowork',title:'替 T2 做的',status:'完成',task_id
 const dn2=ctx.handle_('done',{range:'week',date:T},'tok');
 assert(dn2.items.some(x=>x.title==='替 T2 做的'&&x.path==='/Users/penny/報告'),'檔案位置存得進去');
 
+// 補登以前做的事：start 和 end 都要收得下，不然日曆會從真正的開始時間畫到「現在」
+{
+  const r=ctx.handle_('log',{source:'Claude Code',title:'昨天那段',status:'完成',
+    start:'2026-09-03 14:00',end:'2026-09-03 15:30',session_id:'S-backfill'},'tok');
+  assert(r.ok,'log: '+r.error);
+  assert.strictEqual(r.row.start,'2026-09-03 14:00','開始時間照給的寫');
+  assert.strictEqual(r.row.end,'2026-09-03 15:30','結束時間也是——這條以前會被蓋成現在');
+  // 同一個 session 再送一次也要能改結束時間
+  const r2=ctx.handle_('log',{source:'Claude Code',status:'完成',
+    session_id:'S-backfill',end:'2026-09-03 16:00'},'tok');
+  assert.strictEqual(r2.row.end,'2026-09-03 16:00','更新既有那列也吃 end');
+  // 沒給 end 的完成紀錄還是照舊填「現在」
+  const r3=ctx.handle_('log',{source:'Cowork',title:'現在做完的',status:'完成'},'tok');
+  assert(r3.row.end&&r3.row.end!=='','沒給 end 就填現在');
+}
+
 // ---- 資料區 ----
 sheets['分區']=new Sheet('分區',[['id','名稱','顏色','順序']]);
 sheets['資料']=new Sheet('資料',[['id','分區','標題','內容','順序','建立時間']]);
