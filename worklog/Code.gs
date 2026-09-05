@@ -306,7 +306,8 @@ function upsertLog_(p) {
       row = [];
       row[col.id] = 'L' + Utilities.getUuid().slice(0, 8);
       row[col.start] = p.start || now_();
-      row[col.end] = p.status === '完成' ? now_() : '';
+      // 補登以前的工作時要能指定結束時間，不然日曆會從真正的開始時間一路畫到「現在」
+      row[col.end] = p.end || (p.status === '完成' ? now_() : '');
       row[col.source] = p.source || '手動';
       row[col.project] = p.project || '';
       row[col.title] = p.title || (p.prompt ? clip_(p.prompt, 80) : (p.project || '(未命名)'));
@@ -331,7 +332,8 @@ function upsertLog_(p) {
       var cur = String(row[col.title] || '');
       if (!cur || cur === String(row[col.project] || '')) row[col.title] = clip_(p.prompt, 80);
     }
-    if (p.status === '完成') row[col.end] = now_();
+    if (p.end) row[col.end] = p.end;
+    else if (p.status === '完成') row[col.end] = now_();
     sh.getRange(rowNum, 1, 1, LOG_KEYS.length).setValues([row]);
     dirty_(SHEET_LOG);
     markAiOwner_(p);
