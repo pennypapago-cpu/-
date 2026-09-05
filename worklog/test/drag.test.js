@@ -297,14 +297,16 @@ console.log('編輯      點卡片＝編輯任務，點時間區塊＝編輯紀�
 // ---- 生意數字列 ----
 // 看板連不到 Shopline / FB，數字是 Cowork 寫進「指標」表的，這裡只負責顯示。
 ctx.mx({has:true,revenue:48200,orders:31,spend:12500,clicks:1840,carts:96,
-  roas:3.86,cpc:6.79,cpaCart:130.21,updated:T+' 14:30'});
+  roas:3.86,adPct:25.9,cpc:6.79,cpaCart:130.21,updated:T+' 14:30'});
 let mh=ctx.$('mx').innerHTML;
 assert(mh.includes('$48,200'),'營業額要有千分位');
 assert(mh.includes('31 筆訂單'));
-assert(mh.includes('3.86x'),'ROAS');
-// 刻意叫「總 ROAS」：分子是全站營業額、分母只有廣告費，跟 FB 後台報的不是同一個東西
-assert(mh.includes('總 ROAS'),'不要只寫 ROAS，會被拿去跟 FB 後台對');
-assert(mh.includes('不是 FB 廣告管理員的 ROAS'),'把口徑寫在提示裡');
+// 那一格從「總 ROAS」改成「廣告佔比」：營業額裡有幾成付給廣告
+assert(mh.includes('廣告佔比')&&mh.includes('25.9%'),'廣告佔比');
+assert(!/ROAS/.test(mh),'不要再出現 ROAS，兩種講法並存只會搞混：'+mh.slice(0,120));
+assert(mh.includes('廣告費 ÷ 營業額'),'算式寫在格子裡');
+assert(mh.includes('愈低愈好'),'成本型指標要講方向，不然會看成愈高愈好');
+assert(mh.includes('別跟 FB 後台的數字對'),'把口徑寫在提示裡');
 assert(mh.includes('連結點擊，不是全站流量'));
 assert(mh.includes('不要拿來算轉換率'),'加購與點擊的歸因基準不同');
 assert(mh.includes('一次 $6.79'),'流量成本');
@@ -326,6 +328,19 @@ assert(ctx.$('mx').innerHTML.includes('更新今日數據'),'要告訴使用者�
 ctx.mx(null);
 assert.strictEqual(ctx.$('mx').style.display,'none');
 
+// 成本型指標，好壞顏色跟其他格子相反：低＝good、高＝bad
+{
+  const base={has:true,revenue:1000,orders:1,spend:100,clicks:10,carts:1,
+    roas:null,cpc:null,cpaCart:null,updated:''};
+  const paint=p=>{ctx.mx(Object.assign({},base,p));
+    return ctx.$('mx').innerHTML.match(/<div class="m([^"]*)"[^>]*>\s*<u>廣告佔比/)[1]};
+  assert(/good/.test(paint({adPct:20})),'20% 是好的');
+  assert(/good/.test(paint({adPct:33.3})),'33.3%（＝ROAS 3）還算好');
+  assert(!/good|bad/.test(paint({adPct:50})),'中間就不上色');
+  assert(/bad/.test(paint({adPct:70})),'70%（＞ROAS 1.5）要示警');
+  assert(/na/.test(paint({adPct:null})),'算不出來就是灰的');
+}
+
 // ---- 早晨簡報可以收起來 ----
 ctx.header=function(){};
 ctx.RAW={note:'昨天：做了事。\n今天必做：那件。'};
@@ -346,7 +361,7 @@ assert(src.includes("sw('統計列',!!STATS,'toggleStats()')"));
 assert(!/id="mStats"/.test(src),'統計列開關從 ▾ 選單搬走了');
 assert(ctx.sw('早晨簡報',true,'x()').includes('chip on')&&ctx.sw('早晨簡報',true,'x()').includes('▴'));
 assert(!ctx.sw('早晨簡報',false,'x()').includes('chip on')&&ctx.sw('早晨簡報',false,'x()').includes('▾'));
-console.log('數字列    營業額 / 廣告花費 / ROAS / 流量 / 加購，簡報可收合');
+console.log('數字列    營業額 / 廣告花費 / 廣告佔比 / 流量 / 加購，簡報可收合');
 
 // ---- 昨天執行的內容：預設只留標題 ----
 // 一天十幾筆紀錄全攤開要捲很久，改成點標題才展開。

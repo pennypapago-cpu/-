@@ -362,6 +362,20 @@ assert(dn2.items.some(x=>x.title==='替 T2 做的'&&x.path==='/Users/penny/報�
   assert(r3.row.end&&r3.row.end!=='','沒給 end 就填現在');
 }
 
+// ---- 營運數字：廣告佔比 ----
+// 「總 ROAS」翻過來講：營業額裡有幾成付給廣告。是成本，愈低愈好。
+{
+  sheets['指標']=new Sheet('指標',[['日期','營業額','訂單數','廣告花費','流量','加入購物車','更新時間']]);
+  ctx.handle_('metrics_save',{date:T,revenue:55109,orders:36,spend:9993,clicks:923,carts:348},'tok');
+  const m=ctx.handle_('metrics',{date:T},'tok').metrics;
+  assert.strictEqual(m.adPct,18.1,'9993÷55109＝18.1%，留一位小數');
+  assert.strictEqual(m.roas,5.51,'ROAS 還在，API 沒有拿掉');
+  // 沒有營業額就算不出佔比，不能變成 Infinity 或 0
+  ctx.handle_('metrics_save',{date:'2026-01-01',spend:500},'tok');
+  assert.strictEqual(ctx.handle_('metrics',{date:'2026-01-01'},'tok').metrics.adPct,null,
+    '沒營業額就是算不出來，不要生一個假數字');
+}
+
 // ---- 資料區 ----
 sheets['分區']=new Sheet('分區',[['id','名稱','顏色','順序']]);
 sheets['資料']=new Sheet('資料',[['id','分區','標題','內容','順序','建立時間']]);

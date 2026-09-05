@@ -1049,16 +1049,20 @@ function mx(m){
     el.innerHTML='<div class="miss">今日還沒有營運數字。在 Cowork 說「更新今日數據」，'+
       '它會去 Shopline 和 FB 廣告管理員抓一次填進來。</div>';
     return}
-  var roas=m.roas,rc=roas===null?'na':(roas>=3?'good':(roas<1.5?'bad':''));
+  // 廣告佔比是成本，愈低愈好，所以好壞的顏色跟其他格子反過來。
+  // 門檻沿用原本 ROAS 那組換算過來的：33.3%＝ROAS 3，66.7%＝ROAS 1.5，
+  // 只是換個講法，不是偷偷改鬆或改嚴。
+  var ap=m.adPct,ac=ap===null?'na':(ap<=33.3?'good':(ap>66.7?'bad':''));
   el.innerHTML=
     tile('今日營業額',money(m.revenue),m.orders===null?'':n2(m.orders)+' 筆訂單',
       '','Shopline 全站，含自然流量與其他來源')+
     tile('廣告花費',money(m.spend),'','','FB 廣告管理員今天的花費')+
-    // 刻意叫「總 ROAS」不叫 ROAS：分子是全站營業額、分母只有廣告費，
-    // 會比 FB 後台自己報的 ROAS 高。看趨勢很好用，但別拿去跟 FB 的數字對。
-    tile('總 ROAS',roas===null?'—':n2(roas)+'x','營收 ÷ 廣告費',rc,
-      '不是 FB 廣告管理員的 ROAS。分子是 Shopline 全站營業額（含自然流量），'+
-      '分母只有 FB 廣告花費，所以會比 FB 後台報的高。當趨勢看，別跟 FB 的數字對。')+
+    // 分母是全站營業額（含自然流量、EDM），分子只有 FB 廣告費，
+    // 所以這個佔比會比「純廣告的成本佔比」好看。看趨勢很好用，別拿去跟 FB 的數字對。
+    tile('廣告佔比',ap===null?'—':n2(ap)+'%','廣告費 ÷ 營業額',ac,
+      '今天的營業額裡有幾成付給了廣告。分母是 Shopline 全站營業額（含自然流量、'+
+      'EDM 這些不是廣告帶來的），分子只有 FB 廣告花費，所以會比純廣告的成本佔比低。'+
+      '當趨勢看，別跟 FB 後台的數字對。愈低愈好。')+
     tile('流量',n2(m.clicks),m.cpc===null?'':'一次 '+money(m.cpc),
       '','FB 廣告的連結點擊，不是全站流量')+
     tile('加入購物車',n2(m.carts),m.cpaCart===null?'':'一次 '+money(m.cpaCart),

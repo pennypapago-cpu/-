@@ -1065,6 +1065,7 @@ function metrics_(date) {
   var m = { date: d, has: !!row, updated: row ? row.updated : '' };
   METRIC_NUMS.forEach(function (k) { m[k] = row ? num_(row[k]) : null; });
   m.roas = ratio_(m.revenue, m.spend);        // 廣告花一塊換回幾塊
+  m.adPct = pct_(m.spend, m.revenue);         // 廣告佔比：今天的營業額裡有幾成是廣告費
   m.cpc = ratio_(m.spend, m.clicks);          // 流量成本：一個點擊多少錢
   m.cpaCart = ratio_(m.spend, m.carts);       // 加購成本：一次加入購物車多少錢
   return m;
@@ -1079,6 +1080,12 @@ function num_(v) {
 function ratio_(a, b) {
   if (a === null || b === null || !b) return null;
   return Math.round(a / b * 100) / 100;
+}
+
+/** 百分比，留一位小數。18.1% 跟 18% 在看趨勢時差很多，不要四捨五入掉。 */
+function pct_(a, b) {
+  if (a === null || b === null || !b) return null;
+  return Math.round(a / b * 1000) / 10;
 }
 
 /** 寫當天的數字。只有這次帶到的欄位會被覆蓋，沒帶的保留原值。 */
