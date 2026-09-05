@@ -406,6 +406,13 @@ assert(ov.includes('沒排日期但做完了'),'沒到期日就照完成日放�
 assert(/chip2 B dn2/.test(ov),'做完的畫成刪除線');
 assert(ov.includes('2 / 3 完成'),'三件裡兩件完成');
 assert(ov.includes('還沒排'),'未排日期的列在下面');
+// 週格改成七張卡：每天有自己的抬頭、件數、內容區，不再是表格的儲存格
+assert.strictEqual((ov.match(/class="dh"/g)||[]).length,7,'每天一個抬頭');
+assert.strictEqual((ov.match(/class="lst"/g)||[]).length,7,'每天一個內容區');
+assert.strictEqual((ov.match(/class="cnt2"/g)||[]).length,3,'只有真的有事的那三天標件數');
+assert(/class="cnt2">1</.test(ov),'件數是那天的任務數');
+assert((ov.match(/class="mc pst"/g)||[]).length>=1,'過去的日子標 pst，會壓暗');
+assert.strictEqual((ov.match(/class="non"/g)||[]).length,4,'剩下四天放一個淡淡的破折號');
 // 搜尋要吃得到
 assert(!ctx.overview(OV,'週一').includes('週四的事'));
 // 月改用月曆格
@@ -573,6 +580,15 @@ console.log('專案池    昨天分 Cowork / Claude Code 兩欄，還剩什麼�
 
 // weekGrid 的修飾詞不能再叫 wk
 assert(ctx.overview(OV,'').includes('mgrid mweek'),'週格用 mweek，不要用被佔走的 wk');
+// 欄寬下限要用 rem。放大的是字不是視窗，media query 管不到——
+// 寫死七欄的話字級 200% 時七欄各剩 65px，一行只放得下一個字。
+{
+  const i=cssZ.indexOf('.mgrid.mweek{');
+  assert(i>=0,'找不到 .mgrid.mweek 的規則');
+  const rule=cssZ.slice(i,cssZ.indexOf('}',i));
+  assert(/grid-template-columns:repeat\(auto-fit,minmax\([\d.]+rem/.test(rule),
+    '週格欄寬要 auto-fit + rem 下限：'+rule.replace(/\s+/g,' '));
+}
 assert(!/class="mgrid wk"/.test(src),'wk 是統計列長條圖的類別');
 
 // ---- AI 工作時間表只畫紀錄，不畫任務 ----
