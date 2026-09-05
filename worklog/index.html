@@ -590,7 +590,7 @@
     <div id="taskF">
       <div class="f"><label>下一步（具體要動手的第一件事）</label><input id="fN" placeholder="例：優化內頁標題"></div>
       <div class="f2">
-        <div class="f"><label>到期日</label><input id="fD" type="date"></div>
+        <div class="f"><label>到期日</label><input id="fD" type="date" onclick="pickDate(this)"></div>
         <div class="f"><label>優先</label><select id="fPr">
           <option value="A">A 優先處理</option><option value="B" selected>B 推進型</option><option value="C">C 維護型</option>
         </select></div>
@@ -1562,7 +1562,8 @@ function mutate(action,params,opt){
     else if(did)VC[vkey()]=RAW;        // 已經就地更新過了，不用整頁重抓
     else{VC={};load()}
     return r})
-   .catch(function(e){busy(0);toast(e.message);VC={};load()})}
+   .catch(function(e){busy(0);toast(e.message);VC={};load();
+     return null})}   // 失敗回 null：呼叫端才不會在錯誤訊息後面再蓋一句「已儲存」
 
 /** 把一筆紀錄的改動就地套進目前這頁的資料，日曆才會馬上改字 */
 function applyLog(id,patch){
@@ -1599,7 +1600,7 @@ function nextToast(r){
 
 function st(id,s){event.stopPropagation();
   mutate('task_update',{id:id,status:s},function(){return applyTask(RAW,id,{status:s})})
-    .then(function(r){toast(s==='完成'?nextToast(r):'已更新')})}
+    .then(function(r){if(r)toast(s==='完成'?nextToast(r):'已更新')})}
 
 /** 把任務移到某一欄。拖曳與動作列按鈕都走這裡。
     run＝開始做；today/tmr＝改到期日，若原本在執行中就一併退回待辦。 */
@@ -1647,7 +1648,7 @@ function doDel(){
   var id=EDIT;
   closeAdd();
   mutate('task_update',{id:id,status:'取消'},function(){return applyTask(RAW,id,{status:'取消'})})
-    .then(function(){toast('已刪除')})}
+    .then(function(r){if(r)toast('已刪除')})}
 
 /** 日曆上的時間區塊是紀錄（hook 自動寫的），點一下就能把標題和摘要補好 */
 function editLog(id){
@@ -1672,6 +1673,12 @@ function closeAdd(){
   var c=document.getElementById('confirmBox');if(c)c.remove();
   ['fT','fP','fN','fD','fW','fS'].forEach(function(i){$(i).value=''});
   $('fPr').value='B';$('fR').value='';owner('我')}
+/** 桌機點日期欄位只會跳到那一段數字，日曆得去點右邊那顆小圖示。
+    點欄位任何地方就把原生日曆叫出來，跟手機一樣。 */
+function pickDate(el){
+  if(!el||!el.showPicker)return;      // 舊版 Safari 沒有這支，讓它照原本的行為
+  try{el.showPicker()}catch(e){}}     // 已經開著或不算使用者手勢會丟例外，不用理
+
 function owner(o){
   OWNER=o;
   $('ow1').classList.toggle('on',o==='我');
@@ -1702,9 +1709,10 @@ function submit(){
     if(EDITL){d2.id=EDITL;var lid=EDITL;
       p=mutate('log_update',d2,function(){return applyLog(lid,d2)})}
     else{d2.source='手動';d2.status='完成';p=mutate('log',d2)}}
-  p.then(function(){toast('已儲存');closeAdd()})
-   .catch(function(e){toast(e.message)})
-   .then(function(){$('fSave').disabled=false})}
+  // 按下儲存就關窗，不等伺服器回來。Apps Script 一趟要一兩秒，視窗停在那邊
+  // 會讓人以為沒存到又按一次；畫面已經先樂觀更新過了，失敗的話 mutate 會 toast 並重抓。
+  closeAdd();$('fSave').disabled=false;
+  p.then(function(r){if(r)toast('已儲存')})}
 
 /* ---------------- 拖曳換欄 ----------------
    丟到「AI 正執行工作」＝開始做；丟到今日/明日＝改到期日。
