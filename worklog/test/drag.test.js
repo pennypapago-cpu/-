@@ -11,7 +11,10 @@ function El(cls,drop){this.className=cls;this.dataset=drop?{drop:drop}:{};this.c
   toggle(c){this._s.has(c)?this._s.delete(c):this._s.add(c)}, contains(c){return this._s.has(c)}}}
 const cols={run:new El('col c-run','run'),today:new El('col c-today','today'),tmr:new El('col c-tmr','tmr')};
 
-function mkStub(){return{className:'',dataset:{},style:{},classList:{add(){},remove(){},toggle(){}},
+function mkStub(){return{className:'',dataset:{},style:{},classList:{
+  _s:new Set(), add(c){this._s.add(c)}, remove(c){this._s.delete(c)},
+  toggle(c,on){on===undefined?(this._s.has(c)?this._s.delete(c):this._s.add(c)):(on?this._s.add(c):this._s.delete(c))},
+  contains(c){return this._s.has(c)}},
   addEventListener(){},appendChild(){},remove(){},cloneNode(){return this},
   getBoundingClientRect(){return{left:0,top:0,width:100}},focus(){},querySelectorAll(){return[]},
   closest(){return null},value:'',innerHTML:'',textContent:'',disabled:false,
@@ -26,8 +29,10 @@ const ctx={
   window:{},localStorage:{getItem(){return 'tok'},setItem(){},removeItem(){}},
   setTimeout(f,ms){return 0},clearTimeout(){},location:{reload(){}},
   google:{script:{run:{withSuccessHandler(f){this._s=f;return this},
-    withFailureHandler(f){return this},
-    uiCall(tok,action,params){sent={action,params};this._s({ok:true})}}}}};
+    withFailureHandler(f){this._f=f;return this},
+    uiCall(tok,action,params){sent={action,params};
+      FAIL?this._f(new Error('伺服器掛了')):this._s({ok:true})}}}}};
+let FAIL=0;
 ctx.window=ctx;vm.createContext(ctx);
 vm.runInContext(js.replace(/^boot\(\);$/m,''),ctx);
 ctx.load=function(){loaded++};ctx.toast=function(m){toasts.push(m)};
@@ -723,3 +728,40 @@ assert.strictEqual(ctx.nextToast({spawned:{due:'2026-09-14'}}),'已完成，下�
 assert.strictEqual(ctx.nextToast({}),'已完成');
 assert.strictEqual(ctx.nextToast(null),'已完成');
 console.log('重複      表單、卡片記號、完成後的提示都在');
+
+// ---- 儲存就關窗、日期欄位點了就開日曆 ----
+// Apps Script 一趟要一兩秒。視窗如果等回應才關，使用者會以為沒存到又按一次
+{
+  const V=ctx.$('veil');
+  ctx.EDIT=null;ctx.EDITL=null;ctx.KIND='task';
+  ctx.openAdd('task');
+  assert(V.classList.contains('on'),'開窗');
+  ctx.$('fT').value='新任務';
+  sent=null;ctx.submit();
+  assert(sent,'儲存要真的送出去');
+  assert(!V.classList.contains('on'),'按下儲存的當下就關窗，不等伺服器');
+}
+
+// 桌機點日期欄位只會跳到那段數字，日曆得點右邊那顆圖示；改成點哪裡都叫得出來
+{
+  const fld=src.match(/<input id="fD"[^>]*>/)[0];
+  assert(/onclick="pickDate\(this\)"/.test(fld),'到期日欄位要能點開日曆：'+fld);
+  let opened=0;
+  ctx.pickDate({showPicker(){opened++}});
+  assert.strictEqual(opened,1,'pickDate 要叫原生日曆');
+  ctx.pickDate({});                                    // 舊 Safari 沒有 showPicker
+  ctx.pickDate({showPicker(){throw new Error('not allowed')}});  // 不算手勢會丟例外
+}
+
+// 失敗時不能在錯誤訊息後面再蓋一句「已儲存」——那會讓人以為存好了
+(async()=>{
+  // 先把前面那些送出的 mutation 都跑完，不然它們的 toast 會混進來
+  for(let i=0;i<20;i++)await Promise.resolve();
+  FAIL=1;toasts=[];
+  ctx.openAdd('task');ctx.$('fT').value='會失敗的';
+  ctx.submit();
+  for(let i=0;i<20;i++)await Promise.resolve();
+  FAIL=0;
+  assert(!toasts.includes('已儲存'),'失敗了就別說已儲存：'+toasts.join('/'));
+  console.log('存檔      按下就關窗，日期點得開日曆，失敗不會謊報已儲存');
+})();
