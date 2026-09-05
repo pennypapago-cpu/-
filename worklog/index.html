@@ -246,6 +246,8 @@
   .col.drop{background:rgba(59,130,246,.08);border-color:var(--acc)}
   .chip2[data-id]{cursor:grab;touch-action:pan-y}
   .mc.drop{background:rgba(59,130,246,.14);outline:2px dashed var(--acc);outline-offset:-2px}
+  .mgrid.mweek .mc.drop{border-color:var(--acc);outline-offset:-3px;
+    box-shadow:var(--sh2),var(--rim2),0 0 0 3px rgba(59,130,246,.18)}
   .chip2.ghost{position:fixed;z-index:40;pointer-events:none;margin:0;cursor:grabbing;
     box-shadow:0 12px 30px rgba(0,0,0,.55);opacity:.95}
   .col.drop>h3 b{color:var(--acc)}
@@ -350,8 +352,9 @@
   .nowline::before{content:"";position:absolute;left:-4px;top:-5px;width:8px;height:8px;
     border-radius:50%;background:var(--bad)}
   .mgrid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:1px;background:var(--line)}
-  .mgrid>.mh{background:var(--panel);text-align:center;font-size:0.875rem;color:var(--dim);padding:7px 0}
-  .mc{background:var(--panel);min-height:7rem;padding:5px 5px 6px}
+  .mgrid>.mh{background:linear-gradient(180deg,#191d26,#12151b);text-align:center;
+    font-size:0.875rem;color:var(--dim);padding:7px 0;box-shadow:var(--rim)}
+  .mc{background:linear-gradient(180deg,#14171e,#0f1116);min-height:7rem;padding:5px 5px 6px}
   .mc.out{background:rgba(0,0,0,.22)}
   .mc.tdy{background:rgba(59,130,246,.06)}
   .mc .d{font-size:0.9062rem;color:var(--dim);font-weight:600;margin-bottom:3px;text-align:right}
@@ -360,14 +363,47 @@
   .mc .more{font-size:0.7812rem;color:var(--dim);padding-left:2px}
   /* 修飾詞別再叫 wk——那個名字被統計列的週長條圖佔走了（.wk{display:flex}），
      同權重又寫在後面，會把 .mgrid 的 display:grid 蓋掉，七格擠成一排 */
-  .mgrid.mweek .mc{min-height:13rem}
-  .mgrid.mweek .wd{font-size:0.8125rem;color:var(--dim);text-align:center;margin-bottom:1px}
-  .mgrid.mweek .d{text-align:center;font-size:1.0625rem;color:var(--ink)}
-  .mgrid.mweek .mc.tdy .d{margin:0 auto 4px}
+  /* 週檢視：七天各自是一張卡，不是表格的七個儲存格。
+     一天就是一個容器，有自己的邊界跟影子，比一堆 1px 細線好讀得多。 */
+  /* 欄寬用 rem 當下限：字級放大時七欄會自己收成三欄、兩欄，
+     而不是硬擠成七條 65px 的細長條（那時候一行只放得下一個字）。
+     視窗寬度的 media query 管不到這件事——放大的是字，不是視窗。 */
+  .mgrid.mweek{grid-template-columns:repeat(auto-fit,minmax(9.5rem,1fr));
+    gap:10px;background:none;padding:14px 0 2px}
+  /* 高度交給同一列最高的那格去撐（grid 預設就會拉齊），
+     這裡只給一個下限，不然沒事的日子會空出一大塊 */
+  .mgrid.mweek .mc{min-height:7rem;background:var(--face2);border:1px solid var(--line);
+    border-radius:12px;padding:0 0 8px;box-shadow:var(--sh2),var(--rim);
+    display:flex;flex-direction:column;transition:box-shadow .14s,border-color .12s}
+  /* 日期是這張卡的抬頭，給它自己的一條底線跟略亮的表面 */
+  .mgrid.mweek .dh{padding:8px 1.7rem 7px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,rgba(255,255,255,.028),transparent);
+    border-radius:12px 12px 0 0;position:relative;text-align:center}
+  .mgrid.mweek .wd{font-size:0.8125rem;color:var(--dim);margin-bottom:1px}
+  .mgrid.mweek .d{font-size:1.1875rem;font-weight:600;color:var(--ink);text-align:center}
+  .mgrid.mweek .mc.tdy{border-color:rgba(59,130,246,.55);
+    box-shadow:var(--sh2),var(--rim2),0 0 0 1px rgba(59,130,246,.35)}
+  .mgrid.mweek .mc.tdy .wd{color:#8fc4ff}
+  .mgrid.mweek .mc.tdy .d{margin:0 auto}
+  /* 過去的日子壓暗一點，一眼看得出這週走到哪了 */
+  .mgrid.mweek .mc.pst .dh{opacity:.55}
+  /* 幾件事的小數字放右上角，不跟日期搶中間 */
+  .mgrid.mweek .cnt2{position:absolute;top:7px;right:7px;font-size:0.75rem;font-weight:600;
+    color:var(--dim);background:var(--card2);border-radius:999px;padding:1px 7px;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.06)}
+  .mgrid.mweek .lst{padding:7px 7px 0;flex:1;min-height:0}
+  .mgrid.mweek .non{color:var(--dim);opacity:.4;font-size:0.875rem;padding:12px 0;text-align:center}
+  /* 格子裡的任務也是實體：左邊一條優先級色帶，滑過去浮起來 */
+  .mgrid.mweek .chip2{padding:6px 8px;border-radius:8px;margin-bottom:5px;font-size:0.875rem;
+    border-left-width:4px;box-shadow:var(--sh1),var(--rim);
+    transition:transform .14s,box-shadow .14s}
+  .mgrid.mweek .chip2:hover{transform:translateY(-2px);box-shadow:var(--sh2),var(--rim2)}
+  .mgrid.mweek .chip2:active{transform:translateY(0)}
+  body.dragging .mgrid.mweek .chip2:hover{transform:none}
   /* 週檢視一格只有整寬的七分之一，標題截斷就完全看不出是什麼；
      格子有 13rem 高，讓它換行比較有用。月檢視格子矮，維持截斷。 */
   .mgrid.mweek .chip2{white-space:normal;overflow-wrap:anywhere;text-overflow:clip}
-  @media(max-width:980px){.mgrid.mweek{grid-template-columns:repeat(2,minmax(0,1fr))}
+  @media(max-width:980px){.mgrid.mweek{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
     .mgrid.mweek .mc{min-height:6rem}}
   .legend{display:flex;gap:14px;flex-wrap:wrap;padding:9px 4px 0;font-size:0.875rem;color:var(--dim)}
   .legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:-1px}
@@ -1210,9 +1246,13 @@ function weekGrid(r,f){
   var h='<div class="mgrid mweek">',wd='日一二三四五六';
   for(var d=parse(r.from);ymd(d)<=r.to;d.setDate(d.getDate()+1)){
     var k=ymd(d),ts=by[k]||[];
-    h+='<div class="mc'+(k===td?' tdy':'')+'" data-date="'+k+'">'+
-      '<div class="wd">週'+wd[d.getDay()]+'</div><div class="d">'+d.getDate()+'</div>'+
-      (ts.length?ts.map(dayChip).join(''):'<div class="more">—</div>')+'</div>'}
+    h+='<div class="mc'+(k===td?' tdy':k<td?' pst':'')+'" data-date="'+k+'">'+
+      '<div class="dh"><div class="wd">週'+wd[d.getDay()]+'</div>'+
+        '<div class="d">'+d.getDate()+'</div>'+
+        (ts.length?'<span class="cnt2">'+ts.length+'</span>':'')+'</div>'+
+      '<div class="lst">'+
+        (ts.length?ts.map(dayChip).join(''):'<div class="non">—</div>')+
+      '</div></div>'}
   return h+'</div>'}
 
 function kpi(k,v){return '<div><div class="k" style="font-size:12px;color:var(--dim)">'+esc(k)+
