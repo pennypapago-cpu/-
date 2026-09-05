@@ -182,6 +182,32 @@ assert(/html\{font-size:calc\(16px \* var\(--z,2\)\)\}/.test(cssZ),'縮放的根
 const leftover=(cssZ.match(/font-size:[\d.]+px/g)||[]);
 assert.deepStrictEqual(leftover,[],'還有寫死 px 的字級：'+leftover.join(' '));
 assert((cssZ.match(/font-size:[\d.]+rem/g)||[]).length>60,'字級都轉成 rem 了');
+// 跟著字一起變大的尺寸也不能寫死 px。營運數字那五格的 flex 基準寬度就踩過：
+// 寫 150px 的話字級 200% 時五格還是硬擠一排，$71,325 被切掉一半。
+{
+  const px=(cssZ.match(/flex:[^;}]*?\b\d[\d.]*px/g)||[]);
+  assert.deepStrictEqual(px,[],'flex 基準寬度寫死 px，放大字級會擠爆：'+px.join(' '));
+}
+
+// ---- 立體感 ----
+// 深色介面靠三件事看出厚度：上緣亮邊、往下落的影子、由上而下略暗的表面。
+// 只要有人把其中一層拔掉，卡片就會塌回貼紙，所以這裡釘住。
+{
+  ['--face','--face2','--rim','--sh1','--sh2','--sh3'].forEach(function(v){
+    assert(cssZ.includes(v+':'),'少了 '+v+' 這個立體感的 token')});
+  [['.col{','--sh2'],['.t{','--sh1'],['.mx .m{','--sh1'],['.panelbox{','--sh2'],['.sheet{','--sh3']]
+    .forEach(function(pair){
+      const i=cssZ.indexOf(pair[0]);
+      assert(i>=0,'找不到規則 '+pair[0]);
+      const rule=cssZ.slice(i,cssZ.indexOf('}',i));
+      assert(rule.includes('box-shadow')&&rule.includes(pair[1]),
+        pair[0]+' 要有影子（'+pair[1]+'）：'+rule.replace(/\s+/g,' ').slice(0,90))});
+  // 滑過去要浮起來，按下去要壓回原位——沒有這一下，立體感只是靜態的圖
+  assert(/\.t:hover\{[^}]*translateY\(-/.test(cssZ),'卡片滑過去要浮起來');
+  assert(/\.t:active\{[^}]*translateY\(0\)/.test(cssZ),'按下去要壓回去');
+  // 拖曳中底下的卡片不能跟著跳，不然瞄不準要放哪
+  assert(/body\.dragging \.t:hover[^{]*\{[^}]*transform:none/.test(cssZ),'拖曳中要關掉浮起');
+}
 
 // ---- CSS 類別撞名 ----
 // 「今天到期」的卡片日期是 class="dd now"，日曆的現在時間線本來也叫 .now，
