@@ -38,25 +38,47 @@
   /* ---------------- shell ---------------- */
   #app{display:none}
   .shell{display:flex;min-height:100vh}
-  .side{width:16.375rem;flex:0 0 16.375rem;background:var(--panel);border-right:1px solid var(--line);
+  /* 側欄是整個介面最底的那一層，所以表面比內容區更暗，
+     右緣一條細亮線把它跟內容分開（像兩片疊在一起的板子） */
+  .side{width:16.375rem;flex:0 0 16.375rem;
+    background:linear-gradient(180deg,#12151c,#0b0d11);border-right:1px solid var(--line);
+    box-shadow:inset -1px 0 0 rgba(255,255,255,.022);
     display:flex;flex-direction:column;position:sticky;top:0;height:100vh}
   .side.hide{display:none}
-  .me{display:flex;align-items:center;gap:10px;padding:15px 16px 13px;flex:0 0 auto}
-  .av{width:2.0625rem;height:2.0625rem;border-radius:9px;background:linear-gradient(135deg,#3b82f6,#8b5cf6);
-    display:grid;place-items:center;font-weight:700;font-size:0.9688rem;color:#fff;flex:0 0 auto}
+  .me{display:flex;align-items:center;gap:0.625rem;padding:0.9375rem 1rem 0.875rem;flex:0 0 auto;
+    border-bottom:1px solid var(--line)}
+  .av{width:2.0625rem;height:2.0625rem;border-radius:10px;background:linear-gradient(160deg,#5b9bff,#7c4ddb);
+    display:grid;place-items:center;font-weight:700;font-size:0.9688rem;color:#fff;flex:0 0 auto;
+    box-shadow:var(--sh1),inset 0 1px 0 rgba(255,255,255,.28)}
   .me b{font-size:1.125rem;font-weight:600}
-  .nav{padding:0 8px;flex:0 0 auto}
-  .nav button{display:flex;align-items:center;gap:11px;width:100%;padding:9px 10px;margin-bottom:1px;
-    border-radius:9px;color:var(--mute);font-size:1.0625rem;text-align:left}
-  .nav button:hover{background:var(--card);color:var(--ink)}
+  .nav{padding:0.625rem 0.5rem 0;flex:0 0 auto}
+  /* 分組標題：小、暗、拉開字距，是路標不是選項，不要跟項目搶 */
+  .ngrp{padding:0.625rem 0.625rem 0.3125rem;font-size:0.75rem;font-weight:600;letter-spacing:.09em;color:var(--dim)}
+  .ngrp:first-child{padding-top:2px}
+  /* 沒選到的項目是平的，選到的才凸起來——都凸就等於都不凸。
+     左邊那條強調色是「你在這裡」，比只換底色好認。 */
+  .nav button{position:relative;display:flex;align-items:center;gap:11px;width:100%;
+    padding:0.5625rem 0.625rem;margin-bottom:0.125rem;border:1px solid transparent;
+    border-radius:0.625rem;color:var(--mute);font-size:1.0625rem;text-align:left;
+    transition:transform .12s,box-shadow .12s,background .12s,color .12s}
+  .nav button:hover{background:var(--face);color:var(--ink);
+    box-shadow:var(--sh1),var(--rim);transform:translateY(-1px)}
+  .nav button:active{transform:translateY(0);box-shadow:inset 0 2px 5px rgba(0,0,0,.35)}
   .nav button.on{background:var(--face);color:var(--ink);font-weight:600;
-    box-shadow:var(--sh1),var(--rim)}
-  .nav i{font-style:normal;width:17px;text-align:center;font-size:1.0625rem;flex:0 0 auto;opacity:.85}
-  .nav button.on i{opacity:1}
+    border-color:var(--line2);box-shadow:var(--sh1),var(--rim2);transform:none}
+  .nav button.on::before{content:"";position:absolute;left:-1px;top:50%;transform:translateY(-50%);
+    width:3px;height:1.375rem;border-radius:0 3px 3px 0;background:var(--acc);
+    box-shadow:0 0 10px rgba(59,130,246,.55)}
+  .nav i{font-style:normal;flex:0 0 auto;width:1.25rem;height:1.25rem;
+    display:grid;place-items:center;opacity:.75}
+  .nav .ic{width:100%;height:100%}
+  .nav button:hover i{opacity:1}
+  .nav button.on i{opacity:1;color:#7fb4ff}
   .side .nav{flex:1;min-height:0;overflow-y:auto}
-  .fold{flex:0 0 auto;padding:10px 14px;border-top:1px solid var(--line);color:var(--dim);font-size:0.9062rem;
-    display:flex;align-items:center;gap:7px}
-  .fold:hover{color:var(--ink)}
+  .fold{flex:0 0 auto;padding:0.6875rem 0.875rem;border-top:1px solid var(--line);color:var(--dim);
+    font-size:0.9062rem;display:flex;align-items:center;gap:7px;
+    background:linear-gradient(180deg,transparent,rgba(0,0,0,.25))}
+  .fold:hover{color:var(--ink);background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(0,0,0,.25))}
 
   /* ---------------- header ---------------- */
   .main{flex:1;min-width:0;display:flex;flex-direction:column}
@@ -696,15 +718,42 @@
 
 <script>
 var SHEET='https://docs.google.com/spreadsheets/d/136z3S0ADQHRda3q8O_B_GFBlBlBuE-oEg0mxIeT0FVc/edit';
+/* 側欄圖示。原本七個項目裡有四個都是 ▦▥▤▤ 這種方塊，掃過去分不出誰是誰，
+   等於沒有圖示。改成線稿：每個形狀講的是那一頁在做什麼（三欄＝看板、
+   月曆＝總覽、時鐘＝時間表、火花＝AI、卡片＝資料、打勾＝完成、推桿＝設定）。
+   用 currentColor 描邊，所以選到的時候會跟著文字一起變成強調色。 */
+var ICON={
+  board:'<rect x="3" y="4" width="5" height="16" rx="1.3"/>'+
+        '<rect x="9.5" y="4" width="5" height="16" rx="1.3"/>'+
+        '<rect x="16" y="4" width="5" height="16" rx="1.3"/>',
+  overview:'<rect x="3" y="5" width="18" height="16" rx="2.2"/>'+
+        '<path d="M3 10h18M8 3v4M16 3v4"/>',
+  projects:'<circle cx="12" cy="12" r="8.6"/><path d="M12 6.8V12l3.4 2.1"/>',
+  pool:'<path d="M10 3l1.7 4.6L16 9.3l-4.3 1.7L10 15.6 8.3 11 4 9.3 8.3 7.6z"/>'+
+        '<path d="M17.6 14l.9 2.4 2.4.9-2.4.9-.9 2.4-.9-2.4-2.4-.9 2.4-.9z"/>',
+  outputs:'<ellipse cx="12" cy="6" rx="7.4" ry="3"/>'+
+        '<path d="M4.6 6v12c0 1.7 3.3 3 7.4 3s7.4-1.3 7.4-3V6"/>'+
+        '<path d="M4.6 12c0 1.7 3.3 3 7.4 3s7.4-1.3 7.4-3"/>',
+  notes:'<rect x="3" y="4" width="18" height="16" rx="2.2"/><path d="M3 9.5h18M9.5 9.5V20"/>',
+  done:'<circle cx="12" cy="12" r="8.6"/><path d="M8.2 12.3l2.6 2.6 5-5.4"/>',
+  settings:'<path d="M4 7.5h9M18.5 7.5H20M4 16.5h5M14.5 16.5H20"/>'+
+        '<circle cx="15.5" cy="7.5" r="2.4"/><circle cx="11.5" cy="16.5" r="2.4"/>'
+};
+function icon(k){
+  return '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" '+
+    'stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'+(ICON[k]||'')+'</svg>'}
+
+/* g 是側欄的分組標題。七個項目連成一長條看不出層次，
+   分成「工作」（每天在看的）跟「資料」（偶爾才去的）兩區。 */
 var VIEWS=[
-  {v:'board',    i:'▦', n:'每日看板',  t:'Penny 每日高產值工作看板', ic:'🎯'},
-  {v:'overview', i:'▥', n:'看板總覽',  t:'看板總覽',      ic:'▥'},
-  {v:'projects', i:'▤', n:'AI 工作時間表', t:'AI 工作時間表', ic:'▤'},
-  {v:'pool',     i:'✦', n:'AI 專案池', t:'AI 專案池',     ic:'✦'},
-  {v:'outputs',  i:'🗄', n:'資料庫',    t:'產出資料庫',    ic:'🗄️', hide:1},   // 從設定進去就好
-  {v:'notes',    i:'▤', n:'資料區',    t:'資料區',        ic:'🗂️'},
-  {v:'done',     i:'✓', n:'完成項目',  t:'完成項目',      ic:'✅'},
-  {v:'settings', i:'⚙', n:'設定',      t:'設定',          ic:'⚙'}
+  {v:'board',    i:'board',    g:'工作', n:'每日看板',  t:'Penny 每日高產值工作看板', ic:'🎯'},
+  {v:'overview', i:'overview', g:'工作', n:'看板總覽',  t:'看板總覽',      ic:'▥'},
+  {v:'projects', i:'projects', g:'工作', n:'AI 工作時間表', t:'AI 工作時間表', ic:'▤'},
+  {v:'pool',     i:'pool',     g:'工作', n:'AI 專案池', t:'AI 專案池',     ic:'✦'},
+  {v:'outputs',  i:'outputs',  n:'資料庫',    t:'產出資料庫',    ic:'🗄️', hide:1},   // 從設定進去就好
+  {v:'notes',    i:'notes',    g:'資料', n:'資料區',    t:'資料區',        ic:'🗂️'},
+  {v:'done',     i:'done',     g:'資料', n:'完成項目',  t:'完成項目',      ic:'✅'},
+  {v:'settings', i:'settings', g:'資料', n:'設定',      t:'設定',          ic:'⚙'}
 ];
 var PN={A:'A 優先處理',B:'B 推進型',C:'C 維護型'};
 var TOKEN='',VIEW='board',KIND='task',OWNER='我',EDIT=null,EDITL=null,COL='',DATE=null,PJDATE=null,PJRANGE='week',OVDATE=null,OVRANGE='week',SRC='',ALL=0,D=null,RAW=null;
@@ -749,8 +798,12 @@ function call(a,p){return new Promise(function(res,rej){
 function boot(){
   if(!TOKEN){$('gate').style.display='block';return}
   $('gate').style.display='none';$('app').style.display='block';
+  var grp='';
   $('nav').innerHTML=VIEWS.filter(function(x){return !x.hide}).map(function(x){
-    return '<button data-v="'+x.v+'" onclick="go(\''+x.v+'\')"><i>'+x.i+'</i>'+x.n+'</button>'}).join('');
+    var head='';
+    if(x.g&&x.g!==grp){grp=x.g;head='<div class="ngrp">'+x.g+'</div>'}
+    return head+'<button data-v="'+x.v+'" onclick="go(\''+x.v+'\')">'+
+      '<i>'+icon(x.i)+'</i>'+x.n+'</button>'}).join('');
   go('board')}
 function saveTok(){var v=$('tok').value.trim();if(!v)return;
   TOKEN=v;$('err').textContent='';
