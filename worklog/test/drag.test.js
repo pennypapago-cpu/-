@@ -154,6 +154,28 @@ ctx.VIEWS.forEach(v=>assert(painted.includes("VIEW==='"+v.v+"'"),
   'paint() 沒有處理「'+v.n+'」'));
 console.log('側欄      '+ctx.VIEWS.map(v=>v.n).join(' / ')+' 都有渲染函式');
 
+// ---- 側欄圖示與分組 ----
+// 原本七個項目裡有四個都是 ▦▥▤▤ 這種方塊，掃過去分不出誰是誰，等於沒有圖示。
+{
+  const shown=ctx.VIEWS.filter(v=>!v.hide);
+  ctx.VIEWS.forEach(v=>assert(ctx.ICON[v.i],'側欄「'+v.n+'」沒有圖示，會畫出一個空框'));
+  const seen={};
+  ctx.VIEWS.forEach(v=>{
+    const d=ctx.ICON[v.i];
+    assert(!seen[d],'「'+v.n+'」跟「'+seen[d]+'」用同一個圖示，掃過去分不出來');
+    seen[d]=v.n});
+  assert(/^<svg class="ic" viewBox="0 0 24 24"/.test(ctx.icon('board')),'圖示是線稿 svg');
+  assert(/stroke="currentColor"/.test(ctx.icon('board')),'描邊跟著文字顏色，選到才會一起變藍');
+  assert(ctx.icon('沒這個 key').includes('<svg'),'沒有的 key 回一個空 svg 就好，不要噴錯');
+  // 每個看得到的項目都要屬於某一組，不然它會落在標題外面變孤兒
+  shown.forEach(v=>assert(v.g,'側欄「'+v.n+'」沒有分組'));
+  const boot=src.split('function boot()')[1].split('function ')[0];
+  assert(boot.includes('class="ngrp"'),'側欄要有分組標題');
+  assert(boot.includes('icon(x.i)'),'側欄項目要畫圖示');
+  assert(boot.includes('data-v="'),'項目要留 data-v，go() 靠它標目前這頁');
+  console.log('側欄圖示  '+shown.map(v=>v.g+'/'+v.n).join(' ')+'，七個圖示都不一樣');
+}
+
 // ---- 統計列開關 ----
 // 預設收起來；早晨簡報改放頂部橫幅，所以不會跟著一起消失
 assert.strictEqual(ctx.STATS,0,'統計列預設不顯示');
