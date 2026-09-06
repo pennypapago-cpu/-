@@ -222,6 +222,8 @@ function doGet(e) {
 }
 
 function doPost(e) {
+  // LINE 的 webhook 沒辦法帶 token，也讀不到 header，所以走自己的入口
+  if (e && e.parameter && e.parameter.line) return lineHook_(e);
   var body = {};
   try {
     body = JSON.parse((e && e.postData && e.postData.contents) || '{}');
@@ -230,6 +232,91 @@ function doPost(e) {
   }
   var p = Object.assign({}, (e && e.parameter) || {}, body);
   return json_(handle_(p.action, p, p.token));
+}
+
+// ---------------------------------------------------------------- LINE
+/**
+ * 自己的 LINE 官方帳號傳一句話進來，就變成今天的一件任務，出現在今日工作最下面。
+ *
+ * 為什麼不用 LINE 的 X-Line-Signature 驗簽：Apps Script 的 doPost 讀不到 request
+ * header，那個簽章根本拿不到，在這個平台上做不出 HMAC 驗證。所以改成兩道：
+ *
+ *   1. webhook 網址上帶一段隨機字串（?line=xxxx），只有你和 LINE 知道
+ *   2. 只認自己的 userId（指令碼屬性 LINE_USER）
+ *
+ * 第一道擋掉亂打這個網址的人；第二道擋掉「網址外流」——外流了，別人傳進來也只是被
+ * 無視。**那段網址本身就是密碼**，不要貼給別人；真的外流就換一段、重設 webhook。
+ *
+ * 指令碼屬性要填三個：
+ *   LINE_SECRET  網址上那段隨機字串
+ *   LINE_TOKEN   Messaging API 的 channel access token（用來回話）
+ *   LINE_USER    你自己的 userId；先留空，傳第一則訊息它會回給你，再貼進來鎖定
+ */
+function lineHook_(e) {
+  try {
+    var props = PropertiesService.getScriptProperties();
+    var secret = props.getProperty('LINE_SECRET');
+    // 沒設定就一律不收。預設開放等於把新增任務的權限送給任何知道網址的人
+    if (!secret || String(e.parameter.line) !== String(secret)) return lineOk_();
+
+    var body = JSON.parse((e.postData && e.postData.contents) || '{}');
+    var events = body.events || [];
+    var only = String(props.getProperty('LINE_USER') || '').trim();
+
+    for (var i = 0; i < events.length; i++) {
+      var ev = events[i];
+      if (ev.type !== 'message' || !ev.replyToken) continue;
+      var uid = (ev.source && ev.source.userId) || '';
+
+      // 還沒鎖定就先把 userId 回給使用者，讓他貼進 LINE_USER——
+      // 不然會卡在雞生蛋：不傳訊息就拿不到 userId，沒 userId 就不能設定
+      if (!only) {
+        lineReply_(ev.replyToken, '設定用：你的 userId 是\n' + uid +
+          '\n\n把它填進 Apps Script 的指令碼屬性 LINE_USER，之後就只有你傳的話會被記下來。');
+        continue;
+      }
+      if (uid !== only) continue;                     // 不是本人，安靜地無視
+
+      if (!ev.message || ev.message.type !== 'text') {
+        lineReply_(ev.replyToken, '目前只認文字訊息，貼一句話給我就會變成今天的一件事。');
+        continue;
+      }
+      var t = lineTask_(String(ev.message.text || ''));
+      lineReply_(ev.replyToken, t ? '已加到今日工作：' + t.title : '訊息是空的，沒有東西可以記。');
+    }
+  } catch (err) {
+    // 回錯誤碼只會讓 LINE 一直重送同一則，變成重複的任務。錯誤留在紀錄裡就好
+    console.error('LINE webhook: ' + ((err && err.message) || err));
+  }
+  return lineOk_();
+}
+
+/** LINE 只在意有沒有回 200，內容不看 */
+function lineOk_() { return ContentService.createTextOutput('ok'); }
+
+/**
+ * 一則訊息變成一件任務：第一行當標題，其餘放備註（貼一整段進來也不會把卡片撐爆）。
+ * 到期日就是今天——從 LINE 丟進來的本來就是「現在想到、今天要處理」的事。
+ */
+function lineTask_(text) {
+  var lines = String(text).split('\n');
+  var title = clip_(lines.shift() || '', 80);
+  if (!title) return null;
+  var note = lines.join('\n').trim();
+  return addTask_({ title: title, due: fmtDate_(new Date()), priority: 'B',
+                    owner: OWNER_SELF, note: note, project: 'LINE' });
+}
+
+function lineReply_(replyToken, text) {
+  var token = PropertiesService.getScriptProperties().getProperty('LINE_TOKEN');
+  if (!token) return;                                  // 沒設就不回話，任務還是記得下來
+  UrlFetchApp.fetch('https://api.line.me/v2/bot/message/reply', {
+    method: 'post',
+    contentType: 'application/json',
+    headers: { Authorization: 'Bearer ' + token },
+    payload: JSON.stringify({ replyToken: replyToken, messages: [{ type: 'text', text: text }] }),
+    muteHttpExceptions: true
+  });
 }
 
 /** 網頁介面用：google.script.run.uiCall(token, action, params) */

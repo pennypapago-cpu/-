@@ -9,9 +9,10 @@ node test/drag.test.js       # index.html 拖曳換欄、「移到」按鈕、�
 node test/perf.test.js       # 一次請求讀幾次試算表（介面順不順的關鍵）
 node test/sync.test.js       # 前端就地分欄與後端 board_ 是否一致
 node test/cache.test.js      # 切一次頁面要打幾次伺服器（快取保鮮期、背景預抓）
+node test/line.test.js       # LINE webhook：誰可以寫進來、一則訊息怎麼變成一件任務
 ```
 
-改完 `Code.gs` 或 `index.html` 六支都要過。`migrate.test.js` 特別重要：它驗證既有資料在加欄位後不會錯位。
+改完 `Code.gs` 或 `index.html` 七支都要過。`migrate.test.js` 特別重要：它驗證既有資料在加欄位後不會錯位。
 
 `perf.test.js` 數的是 `getValues()` 的次數。Apps Script 每一次讀表都是一趟慢的 API，
 一個 `board` 請求本來要讀五次（任務兩次、紀錄三次），介面按一下要等兩秒就是這樣來的。
@@ -34,3 +35,8 @@ node test/cache.test.js      # 切一次頁面要打幾次伺服器（快取保�
 第二條特別容易壞得很安靜：預抓存的鍵必須跟頁面實際會讀的鍵一模一樣，否則抓了也讀不到，
 畫面照樣會動、使用者照樣要等，而且沒有任何錯誤訊息。所以預抓和真正切頁共用同一組
 `vkey()` / `fetchView()`。
+
+`line.test.js` 最在意的是「誰可以寫進來」。Apps Script 讀不到 request header，
+LINE 的簽章驗不了，擋人的只剩網址上那段字串和 userId 兩道，所以兩道都各有一條
+測試釘住——把任何一道拿掉都會有測試紅掉。另外釘住「壞掉也要回 200」：
+回非 200 會被 LINE 重送，同一句話就變成好幾張卡片。
