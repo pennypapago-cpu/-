@@ -282,7 +282,7 @@ function lineHook_(e) {
         continue;
       }
       var t = lineTask_(String(ev.message.text || ''));
-      lineReply_(ev.replyToken, t ? '已加到今日工作：' + t.title : '訊息是空的，沒有東西可以記。');
+      lineReply_(ev.replyToken, t ? lineWhenSaid_(t.due) + '：' + t.title : '訊息是空的，沒有東西可以記。');
     }
   } catch (err) {
     // 回錯誤碼只會讓 LINE 一直重送同一則，變成重複的任務。錯誤留在紀錄裡就好
@@ -300,11 +300,69 @@ function lineOk_() { return ContentService.createTextOutput('ok'); }
  */
 function lineTask_(text) {
   var lines = String(text).split('\n');
-  var title = clip_(lines.shift() || '', 80);
+  var when = lineWhen_(lines.shift() || '');
+  var title = clip_(when.rest, 80);
   if (!title) return null;
   var note = lines.join('\n').trim();
-  return addTask_({ title: title, due: fmtDate_(new Date()), priority: 'B',
+  return addTask_({ title: title, due: when.due, priority: 'B',
                     owner: OWNER_SELF, note: note, project: 'LINE' });
+}
+
+// 訊息開頭可以寫日期：今天／明天／後天／大後天、週三／下週三、9/15、2026-09-15
+var LINE_DAYS = { '今天': 0, '今日': 0, '明天': 1, '明日': 1, '後天': 2, '大後天': 3 };
+var LINE_WD = { '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6, '日': 0, '天': 0 };
+
+/**
+ * 從第一行的開頭認日期，認到就把那幾個字從標題拿掉。
+ *
+ * 只認開頭，不在整句話裡找：「明天要問的事」是標題不是日期，
+ * 硬解會把使用者寫的字吃掉，而且他不會發現。認不出來就是今天——
+ * 從 LINE 丟進來的本來就多半是「現在想到、今天要處理」的事。
+ */
+function lineWhen_(line) {
+  var s = String(line).replace(/^\s+/, '');
+  var today = new Date();
+  var none = { due: fmtDate_(today), rest: s };
+  // 日期後面一定要斷開（空白或標點），否則「明天要問的事」會被吃掉前兩個字，
+  // 變成一件叫「要問的事」的任務——而且使用者不會發現
+  var eat = function (n, d) {
+    var next = s.charAt(n);
+    if (next && !/[\s,，、:：。·・-]/.test(next)) return null;
+    return { due: fmtDate_(d), rest: s.slice(n).replace(/^[\s,，、:：。·・-]+/, '').trim() };
+  };
+  var got;
+
+  for (var k in LINE_DAYS) {
+    if (s.indexOf(k) === 0) return eat(k.length, shiftDays_(today, LINE_DAYS[k])) || none;
+  }
+
+  // 週三／下週三／禮拜三／星期三。沒有「下」就是下一個週三（今天是週三就算下週）
+  var m = s.match(/^(下)?(週|周|禮拜|星期)([一二三四五六日天])/);
+  if (m) {
+    var want = LINE_WD[m[3]], gap = (want - today.getDay() + 7) % 7 || 7;
+    return eat(m[0].length, shiftDays_(today, gap + (m[1] ? 7 : 0))) || none;
+  }
+
+  m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (m) return eat(m[0].length, new Date(+m[1], +m[2] - 1, +m[3])) || none;
+
+  // 9/15。已經過了就當明年——待辦寫日期指的都是還沒到的那一天
+  m = s.match(/^(\d{1,2})\/(\d{1,2})/);
+  if (m) {
+    var d = new Date(today.getFullYear(), +m[1] - 1, +m[2]);
+    if (fmtDate_(d) < fmtDate_(today)) d = new Date(today.getFullYear() + 1, +m[1] - 1, +m[2]);
+    return eat(m[0].length, d) || none;
+  }
+
+  return none;
+}
+
+/** 回話要講出實際排到哪一天。寫「明天」卻回「已加到今日工作」，使用者會以為沒解析到。 */
+function lineWhenSaid_(due) {
+  var today = fmtDate_(new Date());
+  if (due === today) return '已加到今日工作';
+  if (due === fmtDate_(shiftDays_(new Date(), 1))) return '已加到明日工作';
+  return '已排到 ' + String(due).slice(5).replace('-', '/');
 }
 
 function lineReply_(replyToken, text) {
