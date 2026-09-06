@@ -1,5 +1,14 @@
 # 給下一個 Claude 的交接
 
+在這個 repo 開的 Claude Code session 會自動讀到這一份。**不是**在 repo 裡工作的 AI
+（Cowork、ChatGPT、Gemini…），請它先讀這兩個檔就接得上：
+
+- `CLAUDE.md`（這一份）：規矩與禁忌，先讀
+- `worklog/README.md`：每個功能怎麼運作、當初為什麼這樣決定
+
+repo 是 **公開的**，任何人不用登入都讀得到。所以下面第三條（憑證不進 repo）不是潔癖，
+是這個 repo 的前提。
+
 Penny 的個人工作看板。程式全都在 `worklog/`：`Code.gs`（Apps Script 後端）、
 `index.html`（整個介面，單一檔案）、`test/`（七支測試）、`skills/`（Cowork 用）、
 `hooks/`（Claude Code 用）。細節看 `worklog/README.md`，那份一直跟著程式更新。
