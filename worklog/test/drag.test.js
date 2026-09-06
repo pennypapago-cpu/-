@@ -844,3 +844,4 @@ console.log('重複      表單、卡片記號、完成後的提示都在');
   assert(!toasts.includes('已儲存'),'失敗了就別說已儲存：'+toasts.join('/'));
   console.log('存檔      按下就關窗，日期點得開日曆，失敗不會謊報已儲存');
 })();
+
