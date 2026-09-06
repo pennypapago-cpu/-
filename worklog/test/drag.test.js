@@ -775,6 +775,26 @@ assert.strictEqual(ctx.$('pgT').value,'生命','標題獨立一格');
 assert.strictEqual(ctx.$('pgB').value,'生命\n這是舊資料，第一行就是標題','內文原封不動');
 assert(ctx.$('pgS').innerHTML.includes('test 2'),'分區可以直接在頁面上換');
 assert(ctx.$('pgS').innerHTML.includes('未分類'));
+assert.strictEqual(ctx.$('pgWhen').textContent,'2026-09-03 10:00','建立時間放在屬性列');
+assert.strictEqual(ctx.$('pgWhenRow').style.display,'','有時間就顯示');
+// 沒有建立時間就整個屬性藏起來，不要留一個「建立」配一片空白
+ctx.RAW.items.push({id:'D2',section:'S1',title:'沒時間的',body:''});
+ctx.openItem('D2');
+assert.strictEqual(ctx.$('pgWhen').textContent,'');
+assert.strictEqual(ctx.$('pgWhenRow').style.display,'none','沒時間就整個藏起來');
+ctx.openItem('D1');
+// 這一頁要長得像文件：大標題、成對的屬性、一條分隔線，然後整片內文
+{
+  const page=src.split('<div class="page">')[1].split('</div>\n</div>')[0];
+  assert(page.includes('class="ptitle"'),'標題是頁面的標題，不是一個有 label 的欄位');
+  assert.strictEqual((page.match(/class="pp"/g)||[]).length,2,'分區和建立各是一組屬性');
+  assert(page.includes('class="psep"'),'屬性和內文之間要有一條分隔線');
+  assert(!/<label[^>]*>\s*標題/.test(page),'標題上面不要再掛一個「標題」的 label');
+  const css=src.split('<style>')[1].split('</style>')[0];
+  const rule=k=>css.slice(css.indexOf(k),css.indexOf('}',css.indexOf(k)));
+  assert(/font-size:2(\.\d+)?rem/.test(rule('.ptitle{')),'標題要夠大才像文件：'+rule('.ptitle{'));
+  assert(!/border-top/.test(rule('.pfoot{')),'底下那排不要拉線把文件切斷');
+}
 
 ctx.$('pgT').value='生命';ctx.$('pgB').value='生命\n改過的內文';ctx.$('pgS').value='S2';
 sent=null;ctx.savePage();
