@@ -573,6 +573,33 @@ assert(noA.includes('沒有交給 AI 的 A 級工作'),'A 掛零要點出來');
 }
 console.log('專案池    昨天分 Cowork / Claude Code 兩欄，還剩什麼並排成 A/B/C 三欄');
 
+// ---- 國定假日 ----
+{
+  const HOL={holidays:[{date:'2026-09-25',name:'中秋節'}],
+             nextHolidays:[{date:'2026-09-28',name:'教師節'}],holidayGap:[]};
+  const W=Object.assign({},OV,{range:'week',from:'2026-09-21',to:'2026-09-27',
+    tasks:[{id:'H1',title:'節前盤點',due:'2026-09-24',priority:'A',status:'待辦'}]},HOL);
+  const wv=ctx.overview(W,'');
+  // 那一格要標成假日，而且寫出名字——只有變色的話看不出是什麼節
+  assert(/class="mc[^"]*hol"/.test(wv),'假日那格要有 hol');
+  assert(wv.includes('<span class="hn">中秋節</span>'),'格子上要寫出節日名稱');
+  assert.strictEqual((wv.match(/class="hn"/g)||[]).length,1,'只有那一天是假日');
+  // 前一週就要看得到下一週的假，還要看得出是星期幾——不然排不了事
+  assert(wv.includes('下週有假'),'週檢視提醒下一週');
+  assert(wv.includes('9/28（一）教師節'),'日期、星期、名稱三個都要有：'+wv.slice(wv.indexOf('hnote'),wv.indexOf('hnote')+160));
+  // 月檢視提醒的是下個月
+  const mv=ctx.overview(Object.assign({},W,{range:'month',from:'2026-09-01',to:'2026-09-30'}),'');
+  assert(mv.includes('下個月有假')&&!mv.includes('下週有假'),'月檢視講下個月');
+  // 沒建資料的年份要講出來，不然「沒標假日」跟「沒建資料」長得一模一樣
+  const gap=ctx.overview(Object.assign({},W,{nextHolidays:[],holidayGap:['2029']}),'');
+  assert(gap.includes('2029 年的假日還沒更新'),'缺資料要直說');
+  assert(!gap.includes('下週有假'),'沒有假就不要硬擠一條提醒');
+  // 舊版後端沒有這些欄位，不能整頁掛掉
+  const old=ctx.overview(OV,'');
+  assert(old.indexOf('mgrid mweek')>=0&&!/hnote/.test(old),'沒有假日資料就當作沒有');
+  console.log('假日      格子標紅寫名字，前一週提醒下一週，缺資料會直說');
+}
+
 // ---- CSS 撞名守門員（第二版）----
 // 第一版只比對「絕對定位」的裸類別，抓不到這次的 bug：
 // weekGrid 用 class="mgrid wk"，但 .wk 早就是統計列的週長條圖（display:flex），
