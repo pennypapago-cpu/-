@@ -665,10 +665,67 @@ function stats_(today, week, open, logsToday) {
  * 專案總覽：某一天／週／月裡各專案有哪些任務。含已完成的，才看得出那段時間做了多少。
  * 沒排日期的另外裝一袋，不然它們會從所有區間裡消失。
  */
+// ---------------------------------------------------------------- 國定假日
+/**
+ * 台灣的國定假日與補假。這串只能照抄，算不出來——補假、調整放假是行政院人事行政
+ * 總處每年公告的，農曆的那幾個又要換算農曆。資料來源是政府行政機關辦公日曆表
+ * （取自 TaiwanCalendar 的整理版，非政府網站直接提供的 API）。
+ *
+ * 每年年底要補下一年。沒補的話畫面會直說「XXXX 年的假日還沒更新」，
+ * 而不是靜靜地當作那年沒有假日——後者會讓人以為排開的那週真的可以上班。
+ */
+var HOLIDAYS = {
+  '2026-01-01': '開國紀念日',
+  '2026-02-15': '小年夜',      '2026-02-16': '農曆除夕',
+  '2026-02-17': '春節',        '2026-02-18': '春節',       '2026-02-19': '春節',
+  '2026-02-20': '春節補假',    '2026-02-27': '和平紀念日補假',
+  '2026-02-28': '和平紀念日',
+  '2026-04-03': '兒童節補假',  '2026-04-04': '兒童節',     '2026-04-05': '清明節',
+  '2026-04-06': '清明節補假',
+  '2026-05-01': '勞動節',      '2026-06-19': '端午節',     '2026-09-25': '中秋節',
+  '2026-09-28': '教師節',
+  '2026-10-09': '國慶日補假',  '2026-10-10': '國慶日',
+  '2026-10-25': '臺灣光復節',  '2026-10-26': '臺灣光復節補假',
+  '2026-12-25': '行憲紀念日',
+
+  '2027-01-01': '開國紀念日',
+  '2027-02-04': '小年夜',      '2027-02-05': '農曆除夕',
+  '2027-02-06': '春節',        '2027-02-07': '春節',       '2027-02-08': '春節',
+  '2027-02-09': '春節補假',    '2027-02-10': '春節補假',
+  '2027-02-28': '和平紀念日',  '2027-03-01': '和平紀念日補假',
+  '2027-04-04': '兒童節',      '2027-04-05': '清明節',     '2027-04-06': '清明節補假',
+  '2027-04-30': '勞動節補假',  '2027-05-01': '勞動節',
+  '2027-06-09': '端午節',      '2027-09-15': '中秋節',     '2027-09-28': '教師節',
+  '2027-10-10': '國慶日',      '2027-10-11': '國慶日補假',
+  '2027-10-25': '臺灣光復節',
+  '2027-12-24': '行憲紀念日補假', '2027-12-25': '行憲紀念日',
+  '2027-12-31': '開國紀念日補假'
+};
+var HOLIDAY_YEARS = { '2026': 1, '2027': 1 };
+
+/** 區間內的假日，照日期排好。回傳 [{date, name}]。 */
+function holidaysIn_(from, to) {
+  var out = [];
+  Object.keys(HOLIDAYS).forEach(function (d) {
+    if (d >= from && d <= to) out.push({ date: d, name: HOLIDAYS[d] });
+  });
+  return out.sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+}
+
+/** 這段區間有沒有落在還沒更新的年份上。有的話要講出來，不要假裝沒有假日。 */
+function holidayGap_(from, to) {
+  var miss = {}, y = Number(String(from).slice(0, 4)), end = Number(String(to).slice(0, 4));
+  for (; y <= end; y++) if (!HOLIDAY_YEARS[String(y)]) miss[y] = 1;
+  return Object.keys(miss);
+}
+
 function projects_(range, date) {
   var r = ['day', 'week', 'month'].indexOf(String(range)) >= 0 ? String(range) : 'week';
   var span = span_(r, date);
   var from = fmtDate_(span.from), to = fmtDate_(shiftDays_(span.to, -1));
+  // 下一段同樣長度的區間：週看下一週、月看下個月。前一週就是靠這個提醒下一週的假。
+  var nextSpan = span_(r, fmtDate_(span.to));
+  var nextFrom = fmtDate_(nextSpan.from), nextTo = fmtDate_(shiftDays_(nextSpan.to, -1));
   var all = readAll_(SHEET_TASK, TASK_KEYS).filter(function (t) { return t.status !== '取消'; });
 
   var inRange = all.filter(function (t) {
@@ -705,7 +762,11 @@ function projects_(range, date) {
       return !t.due && TASK_OPEN.indexOf(t.status) >= 0;
     })),
     total: inRange.length,
-    done: inRange.filter(function (t) { return t.status === '完成'; }).length
+    done: inRange.filter(function (t) { return t.status === '完成'; }).length,
+    holidays: holidaysIn_(from, to),
+    nextHolidays: holidaysIn_(nextFrom, nextTo),
+    nextFrom: nextFrom,
+    holidayGap: holidayGap_(from, nextTo)
   };
 }
 

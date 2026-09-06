@@ -362,6 +362,28 @@ assert(dn2.items.some(x=>x.title==='替 T2 做的'&&x.path==='/Users/penny/報�
   assert(r3.row.end&&r3.row.end!=='','沒給 end 就填現在');
 }
 
+// ---- 國定假日 ----
+// 補假、調整放假算不出來，只能照抄公告，所以這裡驗的是「有沒有正確地被讀出來」
+{
+  const pj=ctx.handle_('projects',{range:'week',date:'2026-09-21'},'tok');
+  assert(pj.ok,'projects: '+pj.error);
+  // vm 裡建的物件跟外面不同 realm，deepStrictEqual 會失敗，改比 JSON
+  assert.strictEqual(JSON.stringify(pj.holidays),
+    JSON.stringify([{date:'2026-09-25',name:'中秋節'}]),'這週的假');
+  assert.strictEqual(JSON.stringify(pj.nextHolidays),
+    JSON.stringify([{date:'2026-09-28',name:'教師節'}]),
+    '下一段區間的假——前一週提醒下一週就靠這個');
+  assert.strictEqual(pj.holidayGap.length,0,'2026 有資料，不該說沒更新');
+  // 月看下個月，不是下一週
+  const mo=ctx.handle_('projects',{range:'month',date:'2026-09-10'},'tok');
+  assert.strictEqual(mo.nextFrom,'2026-10-01','月檢視的「下一段」是下個月');
+  assert(mo.nextHolidays.some(h=>h.name==='國慶日'),'十月要有國慶日');
+  // 沒建資料的年份要講出來，不能靜靜地當作那年沒有假日
+  const far=ctx.handle_('projects',{range:'week',date:'2029-05-01'},'tok');
+  assert.strictEqual(far.holidays.length,0,'沒資料就是空的');
+  assert(far.holidayGap.indexOf('2029')>=0,'要點出 2029 還沒更新');
+}
+
 // ---- 營運數字：廣告佔比 ----
 // 「總 ROAS」翻過來講：營業額裡有幾成付給廣告。是成本，愈低愈好。
 {
