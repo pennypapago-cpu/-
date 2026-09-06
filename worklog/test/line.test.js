@@ -90,6 +90,74 @@ assert(reply().includes('已加到今日工作：跟 PN 確認合約'),'回一�
 assert.strictEqual(sent[0].auth,'Bearer ch-tok','回話要帶 channel access token');
 assert.strictEqual(sent[0].body.replyToken,'RT');
 
+// ---- 開頭寫日期就照著排 ----
+// Cowork 實測抓到的：訊息寫「明天」，到期日卻被設成今天
+{
+  const day=n=>{const d=new Date();d.setDate(d.getDate()+n);return fmt(d,'','yyyy-MM-dd')};
+  const add=t=>{reset({LINE_SECRET:'s',LINE_TOKEN:'k',LINE_USER:'U-penny'});
+    post({line:'s'},msg(t));const r=tasks()[0];
+    return r?{due:r[TASK_H.indexOf('到期日')],title:r[TASK_H.indexOf('標題')]}:null};
+
+  let r=add('明天 交報告');
+  assert.strictEqual(r.due,day(1),'「明天」就是明天');
+  assert.strictEqual(r.title,'交報告','日期那幾個字要從標題拿掉');
+  assert(reply().includes('已加到明日工作'),'回話要講排到哪天，不然看不出有沒有解析到：'+reply());
+
+  assert.strictEqual(add('今天 回信').due,day(0));
+  assert.strictEqual(add('後天 出貨').due,day(2));
+  assert.strictEqual(add('大後天 結帳').due,day(3));
+  assert.strictEqual(add('明日 開會').title,'開會','明日跟明天一樣');
+
+  // 沒寫日期就是今天——從 LINE 丟進來的多半是現在想到、今天要處理的事
+  r=add('買紙箱');
+  assert.strictEqual(r.due,day(0));
+  assert.strictEqual(r.title,'買紙箱');
+
+  // 只認開頭。「明天要問的事」是標題，不是日期——硬解會把使用者的字吃掉
+  r=add('明天要問的事');
+  assert.strictEqual(r.title,'明天要問的事','中間的日期字不能亂吃');
+  assert.strictEqual(r.due,day(0));
+
+  // 週三：下一個週三；今天就是週三的話算下週
+  {
+    const wd=new Date().getDay();
+    const gap=(3-wd+7)%7||7;
+    assert.strictEqual(add('週三 盤點').due,day(gap),'週三＝下一個週三');
+    assert.strictEqual(add('下週三 盤點').due,day(gap+7),'下週三再加一週');
+    assert.strictEqual(add('星期三 盤點').due,day(gap),'星期三同義');
+    assert.strictEqual(add('禮拜三 盤點').due,day(gap),'禮拜三同義');
+  }
+
+  // 明確日期
+  assert.strictEqual(add('2026-12-25 尾牙場地').due,'2026-12-25');
+  assert.strictEqual(add('2026-12-25 尾牙場地').title,'尾牙場地');
+  {
+    const t=new Date(),y=t.getFullYear();
+    const mmdd=(m,d)=>y+'-'+String(m).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+    const soon=new Date(t);soon.setDate(t.getDate()+20);
+    const M=soon.getMonth()+1,D=soon.getDate();
+    assert.strictEqual(add(M+'/'+D+' 對帳').due,fmt(soon,'','yyyy-MM-dd'),'M/D 認今年');
+    // 已經過的日期當明年——待辦寫日期指的都是還沒到的那一天
+    const past=new Date(t);past.setDate(t.getDate()-20);
+    const pm=past.getMonth()+1,pd=past.getDate();
+    const want=past.getFullYear()===y?mmdd(pm,pd).replace(String(y),String(y+1)):fmt(past,'','yyyy-MM-dd');
+    if(past.getFullYear()===y)
+      assert.strictEqual(add(pm+'/'+pd+' 補件').due,want,'過去的日期滾到明年');
+  }
+  // 日期後面沒有斷開就不算日期。「明天要問的事」整句都是標題
+  assert.strictEqual(add('明天要問的事').title,'明天要問的事');
+  assert.strictEqual(add('9/15對帳').title,'9/15對帳','數字也一樣');
+  assert.strictEqual(add('週三盤點').title,'週三盤點');
+  // 標點也算斷開
+  assert.strictEqual(add('明天，交報告').title,'交報告');
+  assert.strictEqual(add('明天：交報告').title,'交報告');
+
+  // 只有日期沒有內容就不記，不要生出一張沒有標題的卡
+  reset({LINE_SECRET:'s',LINE_TOKEN:'k',LINE_USER:'U-penny'});
+  post({line:'s'},msg('明天'));
+  assert.strictEqual(tasks().length,0,'只有日期沒有事情就不記');
+}
+
 // 空訊息不要生出一張空卡片
 reset({LINE_SECRET:'s3cret',LINE_TOKEN:'ch-tok',LINE_USER:'U-penny'});
 post({line:'s3cret'},msg('   \n  '));
@@ -123,6 +191,6 @@ const r=ctx.doPost({parameter:{},postData:{contents:JSON.stringify(
 assert(JSON.parse(r._t).ok,'沒帶 line 參數就走原本的 token 那條路');
 assert.strictEqual(tasks().length,1);
 
-console.log('LINE      網址＋userId 兩道關卡，第一行當標題其餘進備註，到期日今天');
+console.log('LINE      網址＋userId 兩道關卡，開頭寫日期就照著排，沒寫就今天');
 console.log('');
 console.log('LINE PASS');
