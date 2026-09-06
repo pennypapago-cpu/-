@@ -166,34 +166,51 @@
   @media(max-width:980px){.mx{margin:10px 14px 0;gap:8px}.mx .m{flex:1 1 42%}}
   /* 資料區的卡片點進去是一整頁，寫多長都行 */
   .pveil{align-items:stretch;justify-content:center}
-  .page{background:var(--panel);border:1px solid var(--line);border-radius:16px;
+  /* 資料區的整頁編輯。這裡刻意長得像一份文件，不像一張表單：
+     大標題、下面一排安靜的屬性、然後整片可以寫字的地方。
+     邊框和框線愈少，愈像在寫東西而不是在填格子。 */
+  .page{position:relative;background:var(--face2);border:1px solid var(--line);border-radius:16px;
     width:min(52rem,100%);margin:3vh 16px;display:flex;flex-direction:column;
-    max-height:94vh;padding:18px 20px 14px}
-  .phead{display:flex;align-items:flex-start;gap:10px}
+    max-height:94vh;padding:2.25rem 3rem 1rem;box-shadow:var(--sh3),var(--rim2)}
+  .phead{display:flex;align-items:flex-start}
   .ptitle{flex:1 1 auto;min-width:0;background:none;border:0;color:var(--ink);
-    font-size:1.75rem;font-weight:700;line-height:1.3;padding:2px 0}
+    font-size:2.125rem;font-weight:700;line-height:1.25;letter-spacing:-.02em;padding:0}
   .ptitle:focus{outline:none}
   .ptitle::placeholder{color:var(--line2)}
-  .page .x{flex:0 0 auto;background:none;border:0;color:var(--dim);font-size:1.375rem;
-    line-height:1;padding:4px 6px}
-  .page .x:hover{color:var(--ink)}
-  .prow{display:flex;align-items:center;gap:9px;margin:8px 0 12px;
-    padding-bottom:12px;border-bottom:1px solid var(--line);font-size:0.875rem;color:var(--dim)}
-  .prow select{background:var(--card);border:1px solid var(--line);border-radius:8px;
-    color:var(--ink);padding:4px 8px;font-size:0.875rem}
-  .prow span{margin-left:auto}
-  .pbody{flex:1 1 auto;min-height:16rem;background:none;border:0;resize:none;
-    color:var(--ink);font-size:1.0625rem;line-height:1.75;padding:0;white-space:pre-wrap}
+  /* 關閉鈕退到角落當幽靈，不要跟標題排在同一行搶位置 */
+  .page .x{position:absolute;top:0.75rem;right:0.875rem;background:none;border:0;
+    color:var(--dim);font-size:1.375rem;line-height:1;padding:4px 8px;border-radius:8px}
+  .page .x:hover{color:var(--ink);background:var(--card)}
+  /* 屬性列：左邊淡淡的欄位名、右邊值。像 Notion 那樣是資訊不是輸入框 */
+  .prow{display:flex;align-items:center;flex-wrap:wrap;gap:6px 22px;margin:14px 0 0;
+    font-size:0.875rem;color:var(--dim)}
+  .prow .pp{display:flex;align-items:center;gap:9px;min-width:0}
+  .prow label{flex:0 0 auto}
+  .prow select{background:none;border:1px solid transparent;border-radius:7px;
+    color:var(--ink);padding:3px 7px;font-size:0.875rem;max-width:14rem;
+    transition:background .12s,border-color .12s}
+  .prow select:hover,.prow select:focus{background:var(--card);border-color:var(--line)}
+  .prow .val{color:var(--mute)}
+  .psep{height:1px;background:var(--line);margin:14px 0 6px}
+  /* 內文：整片留白，行距放寬，寫起來像文件 */
+  .pbody{flex:1 1 auto;min-height:18rem;background:none;border:0;resize:none;
+    color:var(--ink);font-size:1.0625rem;line-height:1.85;padding:8px 0 0;white-space:pre-wrap}
   .pbody:focus{outline:none}
-  .pfoot{display:flex;align-items:center;gap:10px;padding-top:12px;
-    border-top:1px solid var(--line);margin-top:12px}
+  .pbody::placeholder{color:var(--line2)}
+  /* 底下那排不要再拉一條線把文件切斷，讓它輕輕浮在下面就好 */
+  .pfoot{display:flex;align-items:center;gap:10px;padding-top:14px;margin-top:8px}
   .pfoot .hint{margin-left:auto;font-size:0.8125rem;color:var(--dim)}
-  .pfoot .del{background:none;border:1px solid var(--line2);border-radius:9px;
-    color:#ff8b8b;padding:7px 13px;font-size:0.9375rem}
-  .pfoot .pri{background:var(--acc2);color:#fff;border:0;border-radius:9px;
-    padding:8px 18px;font-size:1rem;font-weight:600}
+  .pfoot .del{background:none;border:0;border-radius:8px;
+    color:var(--dim);padding:7px 11px;font-size:0.9375rem}
+  .pfoot .del:hover{color:#ff8b8b;background:rgba(240,85,109,.1)}
+  .pfoot .pri{background:linear-gradient(180deg,#3d7ff0,#2159cf);color:#fff;border:0;border-radius:9px;
+    padding:8px 18px;font-size:1rem;font-weight:600;
+    box-shadow:var(--sh1),inset 0 1px 0 rgba(255,255,255,.22)}
+  .pfoot .pri:hover{filter:brightness(1.08)}
+  .pfoot .pri:active{transform:translateY(1px)}
   @media(max-width:980px){.page{margin:0;border-radius:0;max-height:100vh;height:100vh;
-    width:100%;padding:14px 14px 10px}.ptitle{font-size:1.4375rem}}
+    width:100%;padding:1.5rem 1.125rem 0.75rem}.ptitle{font-size:1.625rem}
+    .pfoot .hint{display:none}}
   .brief{margin:12px 24px 0;padding:10px 13px 11px;
     background:var(--face2);border:1px solid var(--line);border-left:3px solid var(--acc);
     border-radius:11px;font-size:0.875rem;color:var(--mute);line-height:1.6;
@@ -672,10 +689,10 @@
       <button class="x" onclick="closePage()" title="關閉">×</button>
     </div>
     <div class="prow">
-      <label for="pgS">分區</label>
-      <select id="pgS"></select>
-      <span id="pgWhen"></span>
+      <div class="pp"><label for="pgS">分區</label><select id="pgS"></select></div>
+      <div class="pp" id="pgWhenRow"><label>建立</label><span class="val" id="pgWhen"></span></div>
     </div>
+    <div class="psep"></div>
     <textarea id="pgB" class="pbody" placeholder="在這裡寫內容，多長都可以。"></textarea>
     <div class="pfoot">
       <button class="del" onclick="delPage()">刪除</button>
@@ -1604,7 +1621,9 @@ function openItem(id){
     ((RAW&&RAW.sections)||[]).map(function(s){
       return '<option value="'+esc(s.id)+'"'+(s.id===x.section?' selected':'')+'>'+esc(s.name)+'</option>'
     }).join('');
-  $('pgWhen').textContent=x.created?String(x.created).slice(0,16):'';
+  var when=x.created?String(x.created).slice(0,16):'';
+  $('pgWhen').textContent=when;
+  $('pgWhenRow').style.display=when?'':'none';   // 沒有時間就別留一個「建立」配空白
   $('pveil').classList.add('on');
   setTimeout(function(){$(x.title?'pgB':'pgT').focus()},60)}
 
