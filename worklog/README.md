@@ -135,6 +135,49 @@ Claude Code 或 Cowork 對某個任務寫了紀錄（`log` 帶 `task_id`），�
 補成 AI，不用手動維護。只在目前還標「我」時才改——已經標「一起」的是刻意的，不會被蓋掉；
 手動紀錄也不算，那是自己做的。補標記失敗不會讓寫紀錄整個失敗，紀錄本身比較重要。
 
+## 從 LINE 丟一句話進來
+
+自己的 LINE 官方帳號傳一句話給它，就變成今天的一件任務，出現在今日工作最下面，
+它會回你「已加到今日工作：XXX」。第一行當標題、其餘放備註（貼一整段也不會撐爆卡片），
+到期日今天、優先 B、執行者「我」、專案標成 `LINE`。
+
+### 身分怎麼驗
+
+**不是用 LINE 的 X-Line-Signature。** Apps Script 的 `doPost` 讀不到 request header，
+那個簽章根本拿不到，HMAC 在這個平台上做不出來。所以改成兩道：
+
+1. webhook 網址上帶一段隨機字串（`?line=xxxx`），只有你和 LINE 知道
+2. 只認自己的 userId（指令碼屬性 `LINE_USER`）
+
+第一道擋掉亂打這個網址的人；第二道擋掉「網址外流」——外流了，別人傳進來也只是被無視。
+**那段網址本身就是密碼**，不要貼給別人；真的外流就換一段、重設 webhook。
+沒設 `LINE_SECRET` 的話整個入口是關的：預設開放等於把新增任務的權限送給任何知道網址的人。
+
+### 設定（做一次）
+
+1. [LINE Developers](https://developers.line.biz/) 建一個 Messaging API channel，
+   拿到 **channel access token**（長期）。
+2. Apps Script → 專案設定 → 指令碼屬性，加三個：
+
+   | 屬性 | 值 |
+   |---|---|
+   | `LINE_SECRET` | 自己想一段夠長的隨機字串，例如 32 個英數字 |
+   | `LINE_TOKEN` | 上一步的 channel access token |
+   | `LINE_USER` | 先留空 |
+
+3. 重新部署一次（新版本）。這次會多要一個「連線至外部服務」的權限——回話要打 LINE 的 API。
+4. LINE Developers 的 Messaging API 頁把 Webhook URL 設成
+   `https://script.google.com/macros/s/XXXX/exec?line=你的LINE_SECRET`，打開 Use webhook，
+   並把「自動回覆訊息」關掉（不然官方帳號會用罐頭訊息回你）。
+5. 加自己的官方帳號好友，傳一則訊息。它會回你的 `userId`，把那串貼進 `LINE_USER`。
+   從這一刻起只有你傳的話會被記下來。
+
+### 壞掉的時候
+
+webhook 回非 200 會被 LINE 重送，同一句話就變成好幾張卡片，所以**任何錯誤都回 200**，
+錯誤留在 Apps Script 的執行紀錄裡。沒設 `LINE_TOKEN` 時不會回話，但任務照記——
+回不了話不該連記都不記。
+
 ## 從別的工具匯入
 
 Notion 之類的工作項目搬進來，見 [NOTION-IMPORT.md](NOTION-IMPORT.md)。
