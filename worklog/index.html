@@ -763,7 +763,10 @@ var $=function(i){return document.getElementById(i)};
 
 /** 字級縮放。所有字級都是 rem，改 html 的 font-size 就整份跟著縮放。
     存在這台裝置，手機和桌機可以各自設不同大小。 */
-var STATS=0,Z=2,DRANGE='week',VC={};
+var STATS=0,Z=2,DRANGE='week',VC={},VCT={},PREF=null;
+// 快取還新的話直接用，連問都不用問伺服器。Apps Script 一趟一兩秒，
+// 那一兩秒才是「切頁面很慢」的全部原因。
+var FRESH=60000;
 var BOPEN=localStorage.getItem('briefOpen')!=='0';
 var MXOPEN=localStorage.getItem('mxOpen')!=='0';
 var LOPEN={};      // 昨天的紀錄哪幾筆是展開的，key 是紀錄 id
@@ -820,7 +823,7 @@ function backfill(){
     toast(r.rows?('掃了 '+r.rows+' 筆：補 id '+r.id+'、建立時間 '+r.created+
       '、優先 '+r.priority+'、狀態 '+r.status+'、日期 '+r.due+
       (r.dueBad?'；'+r.dueBad+' 筆日期看不懂，原文已移到備註':'')):'「任務」工作表是空的');
-    VC={};load()})
+    vclear();load()})
    .catch(function(e){done();toast(e.message)})}
 
 function logout(){try{localStorage.removeItem('worklog_token')}catch(e){}location.reload()}
@@ -839,6 +842,15 @@ function go(v){
   if(v!=='board')$('brief').style.display='none';
   $('q').value='';
   load()}
+
+/* 快取的三個入口都走這裡：時間戳一定要跟著資料一起動，
+   不然會發生「資料換了但時間戳還很新」，於是一分鐘內都讀到舊的。 */
+function vset(k,r){VC[k]=r;VCT[k]=Date.now()}
+function vclear(){VC={};VCT={}}
+/** 寫入之後其他頁的快取就不準了（改一件任務，專案池和完成項目都會變），
+    只留剛剛從伺服器拿回來的那一頁。 */
+function vdrop(keep){
+  Object.keys(VC).forEach(function(k){if(k!==keep){delete VC[k];delete VCT[k]}})}
 
 /** 每個頁面（含它的參數）各自一份快取的鍵 */
 function vkey(){
@@ -875,15 +887,43 @@ function busy(on){$('busy').style.display=on?'':'none'}
 function load(){
   if(VIEW==='settings'){RAW=null;paint();return}
   var k=vkey(),had=VC[k];
-  if(had)settle(had);
+  if(had){
+    settle(had);
+    // 一分鐘內看過的頁面就不再問伺服器了。切回去是瞬間的，
+    // 而且畫面本來就已經是這份資料，重抓一次也不會有不同的東西。
+    if(Date.now()-(VCT[k]||0)<FRESH){schedPrefetch(1500);return}
+  }
   else $('view').innerHTML='<div class="spin">載入中…</div>';
   busy(1);
-  fetchView().then(function(r){VC[k]=r;settle(r);busy(0)})
+  fetchView().then(function(r){vset(k,r);settle(r);busy(0);schedPrefetch(1200)})
    .catch(function(e){
      busy(0);
      if(!had)$('view').innerHTML='<div class="spin">錯誤：'+esc(e.message)+'</div>';
      else toast(e.message);
      if(/token/.test(e.message))logout()})}
+
+/* 把 VIEW 暫時借過去，用同一組 vkey()/fetchView() 算鍵和發請求。
+   自己另外抄一份的話，哪天 vkey() 改了就會存到永遠讀不到的鍵——
+   預抓照跑，使用者照樣等，而且完全看不出來哪裡壞了。 */
+function asView(v,fn){var old=VIEW;VIEW=v;try{return fn()}finally{VIEW=old}}
+
+/** 目前這頁畫完之後，趁使用者在看，把其他頁默默抓回來放著。
+    一次一頁、中間留空檔，不要跟前景的請求搶 Apps Script。 */
+function schedPrefetch(ms){
+  if(PREF)clearTimeout(PREF);
+  PREF=setTimeout(function(){PREF=null;prefetch()},ms||1200)}
+
+function prefetch(){
+  if(!TOKEN)return;
+  var list=VIEWS.filter(function(x){return !x.hide&&x.v!=='settings'&&x.v!==VIEW}),i=0;
+  (function next(){
+    if(i>=list.length)return;
+    var v=list[i++].v,k=asView(v,vkey);
+    if(VC[k]&&Date.now()-(VCT[k]||0)<FRESH)return next();   // 已經有新的就跳過
+    asView(v,fetchView)
+      .then(function(r){vset(k,r)})
+      .catch(function(){})                                  // 預抓失敗就算了，不要打擾使用者
+      .then(function(){setTimeout(next,350)})}())}
 
 function shift(n){
   if(VIEW==='projects'){
@@ -1686,12 +1726,15 @@ function mutate(action,params,opt){
   busy(1);
   return call(action,params).then(function(r){
     busy(0);
-    if(r.board){VC['board:'+(DATE||today())]=r.board;settle(r.board)}
-    else if(r.data){VC.notes=r.data;settle(r.data)}
-    else if(did)VC[vkey()]=RAW;        // 已經就地更新過了，不用整頁重抓
-    else{VC={};load()}
+    // 寫入會影響到別頁（改一件任務，專案池、看板總覽、完成項目都跟著變），
+    // 所以只留這一頁的快取，其他丟掉，等背景再暖起來。
+    if(r.board){var bk='board:'+(DATE||today());vset(bk,r.board);vdrop(bk);settle(r.board)}
+    else if(r.data){vset('notes',r.data);vdrop('notes');settle(r.data)}
+    else if(did){var vk=vkey();vset(vk,RAW);vdrop(vk)}   // 已經就地更新過了，不用整頁重抓
+    else{vclear();load()}
+    schedPrefetch(2500);
     return r})
-   .catch(function(e){busy(0);toast(e.message);VC={};load();
+   .catch(function(e){busy(0);toast(e.message);vclear();load();
      return null})}   // 失敗回 null：呼叫端才不會在錯誤訊息後面再蓋一句「已儲存」
 
 /** 把一筆紀錄的改動就地套進目前這頁的資料，日曆才會馬上改字 */
