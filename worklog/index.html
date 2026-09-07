@@ -370,6 +370,9 @@
   .chip2.B{background:rgba(224,160,58,.16);border-color:var(--b);color:#e8b45c}
   .chip2.C{background:rgba(78,163,245,.16);border-color:var(--c);color:#8cc4ff}
   .chip2.dn2{opacity:.4;text-decoration:line-through}
+  /* 重複任務的預告：還沒長出來的那幾次。虛線＋淡色，一眼看出來它不是真的在那天。
+     不能叫 .ghost——那個名字已經是拖曳時跟著手指跑的那一片了。 */
+  .chip2.pre{background:transparent;opacity:.5;border-style:dashed;box-shadow:none;cursor:default}
   .cbody{max-height:min(62vh,660px);overflow-y:auto;position:relative}
   .cbody .crow{position:relative}
   .gut{border-right:0}
@@ -445,6 +448,7 @@
     border-left-width:4px;box-shadow:var(--sh1),var(--rim);
     transition:transform .14s,box-shadow .14s}
   .mgrid.mweek .chip2:hover{transform:translateY(-2px);box-shadow:var(--sh2),var(--rim2)}
+  .mgrid.mweek .chip2.pre:hover{transform:none;box-shadow:none}
   .mgrid.mweek .chip2:active{transform:translateY(0)}
   body.dragging .mgrid.mweek .chip2:hover{transform:none}
   /* 週檢視一格只有整寬的七分之一，標題截斷就完全看不出是什麼；
@@ -1330,6 +1334,7 @@ function monthCal(r,f,showTasks){
 
   var tByDay={},nByDay={};
   f(r.tasks).forEach(function(t){if(t.due)(tByDay[t.due]=tByDay[t.due]||[]).push(t)});
+  f(r.ghosts||[]).forEach(function(t){if(t.due)(tByDay[t.due]=tByDay[t.due]||[]).push(t)});
   f(r.logs).forEach(function(l){var d=String(l.start).slice(0,10);nByDay[d]=(nByDay[d]||0)+1});
 
   var hol=holMap(r);
@@ -1357,6 +1362,10 @@ function holLabel(x){
 
 /** 日曆格子裡的一件任務。點下去就是編輯，跟卡片同一套。 */
 function dayChip(t){
+  // 預告不是真的任務（要做完上一次才會長出來），所以不給 data-id：
+  // 拖曳和點擊都認 .chip2[data-id]，沒有它就自動碰不到，不必另外擋。
+  if(t.ghost) return '<div class="chip2 pre '+t.priority+'" title="'+
+    esc(t.title+'（'+t.repeat+'的預告，做完上一次才會真的排進來）')+'">🔁 '+esc(t.title)+'</div>';
   return '<button class="chip2 '+t.priority+(t.status==='完成'?' dn2':'')+
     '" data-id="'+esc(t.id)+'" title="'+esc(t.title)+'">'+esc(t.title)+'</button>'}
 
@@ -1400,20 +1409,22 @@ function holNote(r){
 
 /** 一週七格。任務照到期日放；已完成但沒排日期的，用完成日放。 */
 function weekGrid(r,f){
-  var td=today(),by={},hol=holMap(r);
+  var td=today(),by={},gh={},hol=holMap(r);
   f(r.tasks).forEach(function(t){
     var k=t.due||String(t.done_at||'').slice(0,10);
     if(k)(by[k]=by[k]||[]).push(t)});
+  // 預告排在真的任務後面。右上角的數字只算真的那幾件，不然「這週有 3 件」會灌水。
+  f(r.ghosts||[]).forEach(function(t){if(t.due)(gh[t.due]=gh[t.due]||[]).push(t)});
   var h='<div class="mgrid mweek">',wd='日一二三四五六';
   for(var d=parse(r.from);ymd(d)<=r.to;d.setDate(d.getDate()+1)){
-    var k=ymd(d),ts=by[k]||[];
+    var k=ymd(d),ts=by[k]||[],gs=gh[k]||[];
     h+='<div class="mc'+(k===td?' tdy':k<td?' pst':'')+(hol[k]?' hol':'')+'" data-date="'+k+'">'+
       '<div class="dh"><div class="wd">週'+wd[d.getDay()]+'</div>'+
         '<div class="d">'+d.getDate()+'</div>'+
         (hol[k]?'<span class="hn">'+esc(hol[k])+'</span>':'')+
         (ts.length?'<span class="cnt2">'+ts.length+'</span>':'')+'</div>'+
       '<div class="lst">'+
-        (ts.length?ts.map(dayChip).join(''):'<div class="non">—</div>')+
+        (ts.length||gs.length?ts.concat(gs).map(dayChip).join(''):'<div class="non">—</div>')+
       '</div></div>'}
   return h+'</div>'}
 

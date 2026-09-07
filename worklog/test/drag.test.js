@@ -253,6 +253,24 @@ const clash=[...emitted].filter(c=>floating.has(c));
 assert.deepStrictEqual(clash,[],
   '卡片用的類別跟會脫離文件流的裸 CSS 規則撞名了：'+clash.join(', ')+
   '\n（卡片用到：'+[...emitted].join(' ')+'）');
+// 同一條通則往下延伸到日曆格子裡的 chip——以前只檢查卡片，chip 沒人管。
+// chip 還多一個坑：拖曳時會複製一片出去，className 換成「D.cls ＋ 拖曳自己的類別」。
+// 那個名字要是被 chip 借去用，靜靜躺著的 chip 會突然套上 position:fixed 飛出去。
+const dragOwned=new Set();
+(src.match(/className=D\.cls\+' ([\w-]+)'/g)||[]).forEach(m=>
+  dragOwned.add(m.match(/' ([\w-]+)'/)[1]));
+assert(dragOwned.size,'找不到拖曳時那一片用的類別，這條守門要跟著改');
+const chipCls=new Set();
+[ctx.dayChip({id:'x',title:'t',priority:'A',status:'待辦'}),
+ ctx.dayChip({id:'x',title:'t',priority:'B',status:'完成'}),
+ ctx.dayChip({title:'t',priority:'A',repeat:'每週',ghost:true})].forEach(h=>
+  (h.match(/class="([^"]+)"/g)||[]).forEach(m=>
+    m.slice(7,-1).split(/\s+/).forEach(c=>c&&chipCls.add(c))));
+const chipClash=[...chipCls].filter(c=>dragOwned.has(c)||floating.has(c));
+assert.deepStrictEqual(chipClash,[],
+  '日曆 chip 的類別跟拖曳那一片／絕對定位的規則撞名了：'+chipClash.join(', ')+
+  '\n（chip 用到：'+[...chipCls].join(' ')+'；拖曳那片用：'+[...dragOwned].join(' ')+'）');
+
 assert(floating.has('nowline'),'現在時間線本身還是絕對定位');
 assert(emitted.has('now'),'今天到期的卡片仍帶 now 修飾類別');
 console.log('CSS 類別  卡片用 '+emitted.size+' 個，絕對定位的裸類別 '+floating.size+' 個，沒有撞名');
@@ -452,6 +470,26 @@ assert((ov.match(/class="mc pst"/g)||[]).length>=1,'過去的日子標 pst，會
 assert.strictEqual((ov.match(/class="non"/g)||[]).length,4,'剩下四天放一個淡淡的破折號');
 // 搜尋要吃得到
 assert(!ctx.overview(OV,'週一').includes('週四的事'));
+// ---- 重複任務的預告 ----
+// 重複要按「完成」才長出下一次，往後翻的那幾週本來一片空白。預告先畫出來，
+// 但它不是真的任務：不能拖、點了也不能編輯、不算件數。
+{
+  const P=Object.assign({},OV,{ghosts:[{id:'T1',title:'週一的事',due:'2026-09-04',
+    priority:'A',status:'待辦',repeat:'每週',ghost:true}]});
+  const pv=ctx.overview(P,'');
+  assert(/class="chip2 pre A"/.test(pv),'預告畫成虛線那一款');
+  const chip=pv.match(/<div class="chip2 pre[^>]*>/)[0];
+  assert(!/data-id=/.test(chip),
+    '預告不能帶 data-id——拖曳和點擊都是認 .chip2[data-id]，帶了就會去改一筆還不存在的任務');
+  assert(!/<button[^>]*chip2 pre/.test(pv),'預告不是按鈕');
+  assert.strictEqual((pv.match(/class="cnt2"/g)||[]).length,3,'預告不灌水到右上角的件數');
+  assert.strictEqual((pv.match(/class="non"/g)||[]).length,3,'放了預告的那天不再是破折號');
+  assert(!/chip2 pre/.test(ctx.overview(P,'週四')),'搜尋也要吃得到預告');
+  assert(/chip2 pre/.test(ctx.overview(Object.assign({},P,
+    {range:'month',from:'2026-09-01',to:'2026-09-30'}),'')),'月曆格也要畫預告');
+  assert(/chip2 pre/.test(ctx.overview(P,'週一')),'搜尋命中時預告還在');
+}
+
 // 月改用月曆格
 const ovm=ctx.overview(Object.assign({},OV,{range:'month',from:'2026-09-01',to:'2026-09-30'}),'');
 assert(ovm.includes('<div class="mgrid">')&&!ovm.includes('mgrid mweek'),'月用月曆格');

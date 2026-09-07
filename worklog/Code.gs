@@ -95,11 +95,14 @@ function nextDue_(due, rule, today) {
   if (!rule) return '';
   var base = parseDate_(due) || parseDate_(today) || new Date();
   var stop = parseDate_(today) || new Date();
-  for (var i = 0; i < 400; i++) {
-    base = REPEAT_OK[rule] ? shiftDays_(base, REPEAT_OK[rule]) : addMonths_(base, REPEAT_MONTHS[rule]);
-    if (base > stop) break;
+  // 每一步都從原本那天算「第 i 次」，不是拿上一次的結果再疊一次。疊的話會把「幾號」弄丟：
+  // 1/31 被夾成 2/28 之後，再往後推就成了 3/28、4/28，月底的事一路愈跑愈早。
+  var next = base;
+  for (var i = 1; i <= 400; i++) {
+    next = REPEAT_OK[rule] ? shiftDays_(base, REPEAT_OK[rule] * i) : addMonths_(base, REPEAT_MONTHS[rule] * i);
+    if (next > stop) break;
   }
-  return fmtDate_(base);
+  return fmtDate_(next);
 }
 
 /** 加月份要夾住月底：1/31 加一個月是 2/28，不是 3/3 */
@@ -898,9 +901,29 @@ function projects_(range, date) {
     return a.name < b.name ? -1 : 1;
   });
 
+  // 重複任務要按「完成」才長出下一筆，所以往後翻的那幾週看起來是空的——
+  // 明明設了每週，下週卻什麼都沒有。這裡照規則把還沒發生的那幾次算出來當預告，
+  // 只給畫面標，不寫進試算表、也不算進統計：它們還不是真的任務。
+  var ghosts = [];
+  var dayBefore = fmtDate_(shiftDays_(span.from, -1));
+  all.forEach(function (t) {
+    if (TASK_OPEN.indexOf(t.status) < 0 || !t.due) return;
+    var rule = normRepeat_(t.repeat);
+    if (!rule) return;
+    var d = nextDue_(t.due, rule, dayBefore);
+    for (var i = 0; d && d <= to && i < 60; i++) {
+      ghosts.push({
+        id: t.id, title: t.title, project: t.project || '', due: d,
+        priority: t.priority, owner: t.owner, repeat: rule, ghost: true
+      });
+      d = nextDue_(d, rule, d);
+    }
+  });
+
   return {
     range: r, from: from, to: to,
     tasks: inRange,                       // 扁平一份，日曆用
+    ghosts: ghosts,                       // 重複任務的預告，畫面另外標
     logs: readLogsBetween_(from, to),     // 實際做了什麼，放到時間軸上
     projects: projects,
     unscheduled: sortTasks_(all.filter(function (t) {
