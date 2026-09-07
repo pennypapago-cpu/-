@@ -193,16 +193,34 @@
   .prow .val{color:var(--mute)}
   .psep{height:1px;background:var(--line);margin:14px 0 6px}
   /* 內文：整片留白，行距放寬，寫起來像文件 */
-  .pbody{flex:1 1 auto;min-height:18rem;background:none;border:0;resize:none;
-    color:var(--ink);font-size:1.0625rem;line-height:1.85;padding:8px 0 0;white-space:pre-wrap}
-  .pbody:focus{outline:none}
-  .pbody::placeholder{color:var(--line2)}
+  /* 內文是一疊區塊：段落是 textarea，表格是真的表格。存回去的還是純文字。 */
+  .pbody{flex:1 1 auto;min-height:18rem;overflow:auto;padding:8px 0 0}
+  .pblk{display:block;width:100%;min-height:1.85em;background:none;border:0;resize:none;overflow:hidden;
+    color:var(--ink);font-size:1.0625rem;line-height:1.85;padding:0;white-space:pre-wrap}
+  .pblk:focus{outline:none}
+  .pblk::placeholder{color:var(--line2)}
+  .ptw{margin:10px 0 14px;overflow-x:auto}
+  .ptbl{border-collapse:collapse;width:100%;font-size:1rem;line-height:1.6}
+  .ptbl th,.ptbl td{border:1px solid var(--line2);padding:7px 10px;min-width:5rem;
+    vertical-align:top;text-align:left}
+  .ptbl th{background:var(--card);font-weight:600}
+  .ptbl th:focus,.ptbl td:focus{outline:2px solid var(--acc);outline-offset:-2px}
+  /* 加列加欄平常收起來，滑到表格上或游標在格子裡才出現，不然文件裡三顆鈕一直在那邊 */
+  .ptb{display:flex;gap:6px;margin-top:6px;opacity:0;transition:opacity .12s}
+  .ptw:hover .ptb,.ptw:focus-within .ptb{opacity:1}
+  @media(hover:none){.ptb{opacity:1}}
+  .ptb button{background:var(--card2);border:1px solid var(--line2);border-radius:7px;
+    color:var(--dim);padding:4px 10px;font-size:0.8125rem}
+  .ptb button:hover{color:var(--ink);border-color:var(--dim)}
   /* 底下那排不要再拉一條線把文件切斷，讓它輕輕浮在下面就好 */
   .pfoot{display:flex;align-items:center;gap:10px;padding-top:14px;margin-top:8px}
   .pfoot .hint{margin-left:auto;font-size:0.8125rem;color:var(--dim)}
   .pfoot .del{background:none;border:0;border-radius:8px;
     color:var(--dim);padding:7px 11px;font-size:0.9375rem}
   .pfoot .del:hover{color:#ff8b8b;background:rgba(240,85,109,.1)}
+  .pfoot .tbl{background:none;border:0;border-radius:8px;
+    color:var(--dim);padding:7px 11px;font-size:0.9375rem}
+  .pfoot .tbl:hover{color:var(--ink);background:var(--card)}
   .pfoot .pri{background:linear-gradient(180deg,#3d7ff0,#2159cf);color:#fff;border:0;border-radius:9px;
     padding:8px 18px;font-size:1rem;font-weight:600;
     box-shadow:var(--sh1),inset 0 1px 0 rgba(255,255,255,.22)}
@@ -697,9 +715,10 @@
       <div class="pp" id="pgWhenRow"><label>建立</label><span class="val" id="pgWhen"></span></div>
     </div>
     <div class="psep"></div>
-    <textarea id="pgB" class="pbody" placeholder="在這裡寫內容，多長都可以。"></textarea>
+    <div id="pgB" class="pbody"></div>
     <div class="pfoot">
       <button class="del" onclick="delPage()">刪除</button>
+      <button class="tbl" onclick="addTbl()">＋ 表格</button>
       <span class="hint">⌘/Ctrl + Enter 存檔 · Esc 關閉</span>
       <button class="pri" onclick="savePage()">儲存</button>
     </div>
@@ -1541,8 +1560,10 @@ function bodyPreview(x){
   return lines.join('\n').trim()}
 
 /** 第一行當標題，整段存進 body */
+/** 沒填標題就用第一行頂著。表格那幾行不算——「| 品名 | 數量 |」當標題沒人看得懂 */
 function head1(t){
-  var l=String(t).split('\n').filter(function(x){return x.trim()})[0]||'';
+  var l=String(t).split('\n').filter(function(x){
+    return x.trim()&&!TBL_LINE.test(x)})[0]||'';
   return l.trim().slice(0,60)}
 
 /**
@@ -1624,11 +1645,124 @@ function newItem(sect,btn){
    之前是在卡片上長一個三行的 textarea，寫長一點就看不到自己在打什麼。 */
 var PAGE=null;
 
+/* 內文存回試算表的還是一整塊純文字，表格寫成 | a | b | 那種一行一列的寫法。
+   這樣搜尋、卡片預覽、以前寫的東西全都不用動——只有畫面上把那幾行變成真的格子。 */
+var TBL_LINE=/^\s*\|.*\|\s*$/;
+var TBL_SEP=/^\s*\|[\s:|-]+\|\s*$/;
+
+/** 一行拆成幾格。\| 是「這一格裡真的有一根直線」，不是欄位分隔 */
+function splitRow(line){
+  var s=line.replace(/^\s*\|/,'').replace(/\|\s*$/,''),cells=[],cur='';
+  for(var i=0;i<s.length;i++){
+    var ch=s.charAt(i);
+    if(ch==='\\'&&s.charAt(i+1)==='|'){cur+='|';i++;continue}
+    if(ch==='|'){cells.push(cur.trim());cur='';continue}
+    cur+=ch}
+  cells.push(cur.trim());
+  return cells}
+
+/** 純文字拆成區塊。單獨一行有直線不算表格——「A|B 都可以」是句子，連兩行以上才是表格 */
+function parseBlocks(text){
+  var lines=String(text==null?'':text).split('\n'),out=[],buf=[];
+  var flush=function(){if(buf.length){out.push({type:'text',text:buf.join('\n')});buf=[]}};
+  for(var i=0;i<lines.length;i++){
+    if(TBL_LINE.test(lines[i])&&TBL_LINE.test(lines[i+1]||'')){
+      var rows=[];
+      while(i<lines.length&&TBL_LINE.test(lines[i])){
+        if(!TBL_SEP.test(lines[i]))rows.push(splitRow(lines[i]));
+        i++}
+      i--;
+      flush();out.push({type:'table',rows:rows})}
+    else buf.push(lines[i])}
+  flush();
+  return out}
+
+/** 表格寫回文字。每一列補到同樣的欄數，不然再讀回來會缺格 */
+function tblText(rows){
+  var w=rows.reduce(function(n,r){return Math.max(n,r.length)},0)||1;
+  var cell=function(v){return String(v==null?'':v).replace(/\|/g,'\\|').replace(/\s*\n\s*/g,' ')};
+  var line=function(r){var c=[];for(var i=0;i<w;i++)c.push(cell(r[i]));return '| '+c.join(' | ')+' |'};
+  var sep=[];for(var i=0;i<w;i++)sep.push('---');
+  var out=[line(rows[0]||[]),'| '+sep.join(' | ')+' |'];
+  for(var j=1;j<rows.length;j++)out.push(line(rows[j]));
+  return out.join('\n')}
+
+function blocksText(bs){
+  return bs.map(function(b){return b.type==='table'?tblText(b.rows):b.text}).join('\n')}
+
+function txtHTML(t){
+  return '<textarea class="pblk" placeholder="在這裡寫內容，多長都可以。">'+esc(t||'')+'</textarea>'}
+
+function tblHTML(rows){
+  var w=rows.reduce(function(n,r){return Math.max(n,r.length)},0)||1;
+  var cell=function(v,tag){
+    return '<'+tag+' contenteditable="plaintext-only">'+esc(v==null?'':v)+'</'+tag+'>'};
+  var tr=function(r,tag){var c='';for(var i=0;i<w;i++)c+=cell(r[i],tag);return '<tr>'+c+'</tr>'};
+  return '<div class="ptw"><table class="ptbl"><thead>'+tr(rows[0]||[],'th')+'</thead><tbody>'+
+    rows.slice(1).map(function(r){return tr(r,'td')}).join('')+'</tbody></table>'+
+    '<div class="ptb"><button type="button" onclick="tblRow(this)">＋ 列</button>'+
+    '<button type="button" onclick="tblCol(this)">＋ 欄</button>'+
+    '<button type="button" onclick="tblDel(this)">刪除表格</button></div></div>'}
+
+function bodyHTML(text){
+  var h=parseBlocks(text).map(function(b){
+    return b.type==='table'?tblHTML(b.rows):txtHTML(b.text)}).join('');
+  return h||txtHTML('')}
+
+/** 表格後面永遠留一塊段落，不然表格排在最後就沒地方接著打字了 */
+function paintBody(text){
+  var host=$('pgB');
+  host.innerHTML=bodyHTML(text);
+  if(host.lastChild&&host.lastChild.className==='ptw')host.appendChild(mkEl(txtHTML('')));
+  growAll()}
+
+/** 視窗還沒顯示的時候 scrollHeight 是 0，量出來每一段都會變成零高度。
+    所以開好之後要再量一次，不能只在畫的時候量。 */
+function growAll(){[].forEach.call($('pgB').querySelectorAll('.pblk'),grow)}
+
+function readBody(){
+  var out=[];
+  [].forEach.call($('pgB').children,function(el){
+    if(el.tagName==='TEXTAREA')return out.push(el.value);
+    var rows=[];
+    [].forEach.call(el.querySelectorAll('tr'),function(tr){
+      rows.push([].map.call(tr.children,function(c){return c.textContent}))});
+    out.push(tblText(rows))});
+  // 頭尾的空段落不用存進去——表格前後各留一塊是畫面上的需要，不是內容
+  return out.join('\n').replace(/^\n+/,'').replace(/\n+$/,'')}
+
+function mkEl(html){var d=document.createElement('div');d.innerHTML=html;return d.firstChild}
+function grow(t){t.style.height='auto';t.style.height=t.scrollHeight+'px'}
+
+function tblOf(btn){return btn.closest('.ptw').querySelector('table')}
+function newCell(head){
+  var c=document.createElement(head?'th':'td');c.contentEditable='plaintext-only';return c}
+function tblRow(btn){
+  var t=tblOf(btn),n=t.rows[0].cells.length,tr=t.tBodies[0].insertRow(-1);
+  for(var i=0;i<n;i++)tr.appendChild(newCell(0));
+  tr.cells[0].focus();return tr}
+function tblCol(btn){
+  var t=tblOf(btn);
+  [].forEach.call(t.rows,function(r){r.appendChild(newCell(r.parentNode.tagName==='THEAD'))})}
+function tblDel(btn){
+  if(!confirm('刪掉這個表格？'))return;
+  btn.closest('.ptw').remove()}
+
+/** 底下那顆「＋ 表格」：接在游標所在的那一塊後面長一個 2×2，游標直接進第一格 */
+function addTbl(){
+  if(!PAGE)return;
+  var host=$('pgB'),tw=mkEl(tblHTML([['',''],['','']]));
+  var at=document.activeElement,blk=at&&at.closest?at.closest('.pblk,.ptw'):null;
+  if(blk&&blk.parentNode===host)host.insertBefore(tw,blk.nextSibling);
+  else host.appendChild(tw);
+  if(!tw.nextSibling)host.appendChild(mkEl(txtHTML('')));
+  tw.querySelector('th').focus()}
+
 function openItem(id){
   var x=findItem(id);if(!x)return;
   PAGE=id;
   $('pgT').value=x.title||'';
-  $('pgB').value=x.body||'';
+  paintBody(x.body||'');
   $('pgS').innerHTML='<option value="">未分類</option>'+
     ((RAW&&RAW.sections)||[]).map(function(s){
       return '<option value="'+esc(s.id)+'"'+(s.id===x.section?' selected':'')+'>'+esc(s.name)+'</option>'
@@ -1637,13 +1771,16 @@ function openItem(id){
   $('pgWhen').textContent=when;
   $('pgWhenRow').style.display=when?'':'none';   // 沒有時間就別留一個「建立」配空白
   $('pveil').classList.add('on');
-  setTimeout(function(){$(x.title?'pgB':'pgT').focus()},60)}
+  setTimeout(function(){
+    growAll();
+    var first=$('pgB').querySelector('.pblk');
+    (x.title&&first?first:$('pgT')).focus()},60)}
 
 function closePage(){PAGE=null;$('pveil').classList.remove('on')}
 
 function savePage(){
   if(!PAGE)return;
-  var id=PAGE,t=$('pgT').value.trim(),b=$('pgB').value,s=$('pgS').value;
+  var id=PAGE,t=$('pgT').value.trim(),b=readBody(),s=$('pgS').value;
   if(!t&&!b.trim()){toast('標題或內容至少要有一個');return}
   var d={id:id,title:t||head1(b),body:b,section:s};
   closePage();
@@ -2083,11 +2220,32 @@ $('view').addEventListener('click',function(e){
   var nc=e.target.closest&&e.target.closest('.nc[data-item]');
   if(nc)openItem(nc.dataset.item)});
 
+// 段落要跟著內容長高；表格裡 Tab 跳下一格、Enter 跳下一列，跳到底就自己長一列
+$('pgB').addEventListener('input',function(e){
+  if(e.target.classList&&e.target.classList.contains('pblk'))grow(e.target)});
+$('pgB').addEventListener('keydown',function(e){
+  if(e.metaKey||e.ctrlKey)return;          // ⌘/Ctrl + Enter 是存檔，別在這裡攔下來
+  var c=e.target.closest&&e.target.closest('td,th');if(!c)return;
+  var t=c.closest('table'),plus=t.parentNode.querySelector('.ptb button');
+  var cells=[].slice.call(t.querySelectorAll('th,td')),i=cells.indexOf(c);
+  if(e.key==='Tab'){
+    e.preventDefault();
+    var n=cells[i+(e.shiftKey?-1:1)];
+    if(n)return n.focus();
+    if(!e.shiftKey)tblRow(plus)}
+  else if(e.key==='Enter'){
+    e.preventDefault();
+    var w=t.rows[0].cells.length,below=cells[i+w];
+    if(below)return below.focus();
+    var row=tblRow(plus);
+    row.cells[Math.min(i%w,row.cells.length-1)].focus()}});
+
 document.addEventListener('click',function(){$('menu').classList.remove('on')});
 document.addEventListener('keydown',function(e){
   if(e.key==='Escape'){if(PAGE)closePage();closeAdd();$('menu').classList.remove('on')}
   if(PAGE&&e.key==='Enter'&&(e.metaKey||e.ctrlKey)){e.preventDefault();return savePage()}
-  if(/input|textarea|select/i.test(e.target.tagName))return;
+  // 表格的格子是 contenteditable，tagName 是 TD/TH——不擋的話打字會觸發 n 和 /
+  if(/input|textarea|select/i.test(e.target.tagName)||e.target.isContentEditable)return;
   if(e.key==='n'){e.preventDefault();openAdd('task')}
   if(e.key==='/'){e.preventDefault();$('q').focus()}});
 
