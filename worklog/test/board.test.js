@@ -47,6 +47,9 @@ const ctx={Utilities:{formatDate:f,getUuid:()=>'u'+String(++UUID).padStart(7,'0'
   PropertiesService:{getScriptProperties:()=>({getProperty:()=>'tok',setProperty(){}})},
   LockService:{getScriptLock:()=>({waitLock(){},releaseLock(){}})}};
 vm.createContext(ctx);vm.runInContext(fs.readFileSync(SRC,'utf8'),ctx);
+// 測試不看真實時鐘。沒寫時間的那些紀錄本來會蓋上「跑測試那一天」，日子一過就有測試
+// 莫名其妙開始失敗（同一份程式，昨天綠今天紅）。把 now_ 釘在 T，測的才是程式不是日曆。
+ctx.now_=function(){return T+' 09:00'};
 
 const b=ctx.handle_('board',{date:T},'tok');
 assert(b.ok,'board failed: '+b.error);
@@ -170,6 +173,19 @@ assert.strictEqual(pl.order.length,3,'池子裡就這三件');
   assert(ctx.nextDue_('2026-06-01','每週','2026-09-03')>'2026-09-03','要推到今天之後');
   // 月底要夾住：1/31 加一個月是 2/28，不是 3/3
   assert.strictEqual(ctx.nextDue_('2026-01-31','每月','2026-01-31'),'2026-02-28');
+  // 但夾月底只夾那一次，不能把「幾號」永久弄丟：拖到 5 月才做完，下一次是 5/31 不是 5/28
+  assert.strictEqual(ctx.nextDue_('2026-01-31','每月','2026-05-15'),'2026-05-31','夾月底不能把 31 號弄丟');
+  assert.strictEqual(ctx.nextDue_('2026-01-31','每月','2026-04-01'),'2026-04-30','4 月沒有 31 號才夾');
+  // 通則：不管往後推幾次，日子只會落在原本那一天，或該月最後一天（那個月沒那天才夾）
+  ['每月','每季','每年'].forEach(function(rule){
+    for(var m=1;m<=12;m++){
+      var d=ctx.nextDue_('2026-01-31',rule,'2026-'+String(m).padStart(2,'0')+'-15');
+      var day=Number(d.slice(8)), last=new Date(Number(d.slice(0,4)),Number(d.slice(5,7)),0).getDate();
+      assert(day===31||day===last,rule+' 推到 '+d+'：既不是 31 號也不是月底，日子被推丟了');
+    }
+  });
+  // 每天／每週同理：星期幾不能跑掉
+  assert.strictEqual(new Date(ctx.nextDue_('2026-09-07','每週','2026-11-01')).getDay(),1,'每週推很多次還是星期一');
   assert.strictEqual(ctx.nextDue_('2026-09-03','','2026-09-03'),'','不重複就不算');
   assert.strictEqual(ctx.normRepeat_('每周'),'每週');
   assert.strictEqual(ctx.normRepeat_('weekly'),'每週');

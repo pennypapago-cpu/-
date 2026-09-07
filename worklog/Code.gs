@@ -95,11 +95,14 @@ function nextDue_(due, rule, today) {
   if (!rule) return '';
   var base = parseDate_(due) || parseDate_(today) || new Date();
   var stop = parseDate_(today) || new Date();
-  for (var i = 0; i < 400; i++) {
-    base = REPEAT_OK[rule] ? shiftDays_(base, REPEAT_OK[rule]) : addMonths_(base, REPEAT_MONTHS[rule]);
-    if (base > stop) break;
+  // 每一步都從原本那天算「第 i 次」，不是拿上一次的結果再疊一次。疊的話會把「幾號」弄丟：
+  // 1/31 被夾成 2/28 之後，再往後推就成了 3/28、4/28，月底的事一路愈跑愈早。
+  var next = base;
+  for (var i = 1; i <= 400; i++) {
+    next = REPEAT_OK[rule] ? shiftDays_(base, REPEAT_OK[rule] * i) : addMonths_(base, REPEAT_MONTHS[rule] * i);
+    if (next > stop) break;
   }
-  return fmtDate_(base);
+  return fmtDate_(next);
 }
 
 /** 加月份要夾住月底：1/31 加一個月是 2/28，不是 3/3 */
