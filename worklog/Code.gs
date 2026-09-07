@@ -901,9 +901,29 @@ function projects_(range, date) {
     return a.name < b.name ? -1 : 1;
   });
 
+  // 重複任務要按「完成」才長出下一筆，所以往後翻的那幾週看起來是空的——
+  // 明明設了每週，下週卻什麼都沒有。這裡照規則把還沒發生的那幾次算出來當預告，
+  // 只給畫面標，不寫進試算表、也不算進統計：它們還不是真的任務。
+  var ghosts = [];
+  var dayBefore = fmtDate_(shiftDays_(span.from, -1));
+  all.forEach(function (t) {
+    if (TASK_OPEN.indexOf(t.status) < 0 || !t.due) return;
+    var rule = normRepeat_(t.repeat);
+    if (!rule) return;
+    var d = nextDue_(t.due, rule, dayBefore);
+    for (var i = 0; d && d <= to && i < 60; i++) {
+      ghosts.push({
+        id: t.id, title: t.title, project: t.project || '', due: d,
+        priority: t.priority, owner: t.owner, repeat: rule, ghost: true
+      });
+      d = nextDue_(d, rule, d);
+    }
+  });
+
   return {
     range: r, from: from, to: to,
     tasks: inRange,                       // 扁平一份，日曆用
+    ghosts: ghosts,                       // 重複任務的預告，畫面另外標
     logs: readLogsBetween_(from, to),     // 實際做了什麼，放到時間軸上
     projects: projects,
     unscheduled: sortTasks_(all.filter(function (t) {

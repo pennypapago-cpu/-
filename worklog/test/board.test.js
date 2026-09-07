@@ -463,4 +463,47 @@ console.log('週專案    ', wk.projects.map(p=>`${p.name}:${p.done}/${p.count}`
 console.log('建議順序  ', pl.order.slice(0,4).map((o,i)=>`${i+1}.${o.task.title}(${o.reason})`).join(' '));
 console.log('產出      ', out.rows.map(r=>r.title+'→'+r.link).join(' '));
 
+// ---- 重複任務的預告 ----
+// 重複是「按完成才長出下一次」，所以往後翻的那幾週本來一片空白，看起來像重複沒設定成功。
+// 後端照規則把還沒發生的那幾次算出來，只給畫面標，不寫進試算表也不算進統計。
+{
+  const g=(x,id)=>x.ghosts.filter(y=>y.id===id);
+  task('G1','每週例會','Shopline','2026-09-07','B','待辦','','','','','每週');
+
+  const nx=ctx.handle_('projects',{range:'week',date:'2026-09-14'},'tok');
+  assert(!nx.tasks.some(t=>t.id==='G1'),'下一週沒有真的那一筆——它還沒長出來');
+  assert.strictEqual(g(nx,'G1').map(x=>x.due).join(),'2026-09-14','但看得到預告');
+  assert.strictEqual(g(nx,'G1')[0].ghost,true,'要標出來這是預告');
+  assert.strictEqual(g(nx,'G1')[0].repeat,'每週','預告要說得出自己是哪一種重複');
+  assert.strictEqual(nx.total,nx.tasks.length,'預告不算進件數');
+  assert.strictEqual(nx.done,nx.tasks.filter(t=>t.status==='完成').length,'也不算進完成數');
+  assert(!nx.projects.some(p=>p.tasks.some(t=>t.ghost)),'專案統計裡不能混進預告');
+
+  const th=ctx.handle_('projects',{range:'week',date:'2026-09-07'},'tok');
+  assert(th.tasks.some(t=>t.id==='G1'),'本週是真的任務');
+  assert.strictEqual(g(th,'G1').length,0,'同一週不要真的跟預告各一份');
+
+  // 不是只算下一次：隔幾週、隔幾個月翻過去都要接得上
+  const far=ctx.handle_('projects',{range:'week',date:'2026-10-12'},'tok');
+  assert.strictEqual(g(far,'G1').map(x=>x.due).join(),'2026-10-12','五週後那一次也算得出來');
+  const mo=ctx.handle_('projects',{range:'month',date:'2026-10-01'},'tok');
+  assert.strictEqual(g(mo,'G1').map(x=>x.due).join(),
+    '2026-10-05,2026-10-12,2026-10-19,2026-10-26','10 月的每個週一都要標');
+
+  // 每月的預告也要照月底規則走，不能自己另算一套
+  task('G4','月底對帳','Shopline','2026-01-31','B','待辦','','','','','每月');
+  const feb=ctx.handle_('projects',{range:'month',date:'2026-02-10'},'tok');
+  assert.strictEqual(g(feb,'G4').map(x=>x.due).join(),'2026-02-28','2 月沒有 31 號');
+  const mar=ctx.handle_('projects',{range:'month',date:'2026-03-10'},'tok');
+  assert.strictEqual(g(mar,'G4').map(x=>x.due).join(),'2026-03-31','3 月要回到 31 號');
+
+  // 做完的、沒設重複的都不預告
+  task('G2','做完的每週','Shopline','2026-09-07','B','完成','','','2026-09-07 10:00','','每週');
+  task('G3','不重複的','Shopline','2026-09-07','B','待辦');
+  const nx2=ctx.handle_('projects',{range:'week',date:'2026-09-14'},'tok');
+  assert.strictEqual(g(nx2,'G2').length,0,'完成的不預告——它按完成的時候已經長出真的下一筆了');
+  assert.strictEqual(g(nx2,'G3').length,0,'沒設重複的不預告');
+  console.log('重複預告  下週看到 '+nx.ghosts.length+' 筆預告，件數仍是 '+nx.total);
+}
+
 console.log('\nALL PASS');
