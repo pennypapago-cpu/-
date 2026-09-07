@@ -838,11 +838,53 @@ ctx.RAW={sections:[{id:'S1',name:'test 1'},{id:'S2',name:'test 2'}],
 ctx.openItem('D1');
 assert.strictEqual(ctx.PAGE,'D1');
 assert.strictEqual(ctx.$('pgT').value,'生命','標題獨立一格');
-assert.strictEqual(ctx.$('pgB').value,'生命\n這是舊資料，第一行就是標題','內文原封不動');
+assert(ctx.$('pgB').innerHTML.includes('生命\n這是舊資料，第一行就是標題'),'內文原封不動');
+assert(/<textarea class="pblk"/.test(ctx.$('pgB').innerHTML),'純文字就是一塊段落，沒有表格');
 assert(ctx.$('pgS').innerHTML.includes('test 2'),'分區可以直接在頁面上換');
 assert(ctx.$('pgS').innerHTML.includes('未分類'));
 assert.strictEqual(ctx.$('pgWhen').textContent,'2026-09-03 10:00','建立時間放在屬性列');
 assert.strictEqual(ctx.$('pgWhenRow').style.display,'','有時間就顯示');
+// ---- 內文裡的表格 ----
+// 存回試算表的還是純文字（| a | b | 那種），所以搜尋、卡片預覽、舊資料都不用動。
+{
+  const B=ctx.parseBlocks('前言\n| 品名 | 數量 |\n| --- | --- |\n| 巴斯克 | 3 |\n後記');
+  assert.strictEqual(B.length,3,'段落、表格、段落');
+  assert.strictEqual(B[0].text,'前言');assert.strictEqual(B[2].text,'後記');
+  assert.strictEqual(B[1].type,'table');
+  assert.strictEqual(JSON.stringify(B[1].rows),
+    JSON.stringify([['品名','數量'],['巴斯克','3']]),'分隔線那一列不是資料');
+
+  // 一行有直線是句子，不是表格。連兩行以上才算
+  assert.strictEqual(ctx.parseBlocks('| A|B 兩種都可以').length,1);
+  assert.strictEqual(ctx.parseBlocks('| A|B 兩種都可以')[0].type,'text');
+
+  // 來回一趟要穩定：存回去再讀出來，格子內容不能變
+  const txt='| 品名 | 備註 |\n| --- | --- |\n| 起司 | 甜的 |';
+  const again=ctx.blocksText(ctx.parseBlocks(txt));
+  assert.strictEqual(JSON.stringify(ctx.parseBlocks(again)),JSON.stringify(ctx.parseBlocks(txt)),
+    '存一次讀一次不會愈跑愈歪');
+
+  // 格子裡真的打了一根直線，不能被當成多一欄
+  const pipe=ctx.tblText([['a|b','c']]);
+  assert.strictEqual(JSON.stringify(ctx.parseBlocks(pipe)[0].rows),
+    JSON.stringify([['a|b','c']]),'格子裡的直線要跳脫，不然欄位會多一格');
+
+  // 缺格的列要補齊，不然讀回來欄數對不上
+  assert.strictEqual(ctx.tblText([['a','b','c'],['d']]),
+    '| a | b | c |\n| --- | --- | --- |\n| d |  |  |');
+
+  // 表格是真的格子：可編輯、有加列加欄的入口
+  const html=ctx.tblHTML([['x','y'],['1','2']]);
+  assert.strictEqual((html.match(/contenteditable="plaintext-only"/g)||[]).length,4,'每一格都能點進去打字');
+  assert(/<th /.test(html)&&/<td /.test(html),'第一列是表頭');
+  ['tblRow','tblCol','tblDel'].forEach(f=>assert(html.includes(f+'(this)'),'要有 '+f+' 的入口'));
+
+  // 通則：可以打字的地方都不能觸發單鍵快捷鍵，不然在格子裡打 n 會跳出新增任務
+  const key=src.split("if(e.key==='n')")[0];
+  assert(/isContentEditable/.test(key),
+    '單鍵快捷鍵要連 contenteditable 一起擋——表格的格子 tagName 是 TD/TH，不是 input');
+}
+
 // 沒有建立時間就整個屬性藏起來，不要留一個「建立」配一片空白
 ctx.RAW.items.push({id:'D2',section:'S1',title:'沒時間的',body:''});
 ctx.openItem('D2');
@@ -862,7 +904,12 @@ ctx.openItem('D1');
   assert(!/border-top/.test(rule('.pfoot{')),'底下那排不要拉線把文件切斷');
 }
 
-ctx.$('pgT').value='生命';ctx.$('pgB').value='生命\n改過的內文';ctx.$('pgS').value='S2';
+// 內文現在是一疊區塊：字串＝一段文字，二維陣列＝一個表格
+const setBody=(...bs)=>{ctx.$('pgB').children=bs.map(b=>typeof b==='string'
+  ?{tagName:'TEXTAREA',value:b}
+  :{tagName:'DIV',querySelectorAll:()=>b.map(r=>({children:r.map(c=>({textContent:c}))}))})};
+
+ctx.$('pgT').value='生命';setBody('生命\n改過的內文');ctx.$('pgS').value='S2';
 sent=null;ctx.savePage();
 assert.strictEqual(sent.action,'item_save');
 assert.strictEqual(sent.params.title,'生命');
@@ -871,11 +918,22 @@ assert.strictEqual(sent.params.section,'S2');
 assert.strictEqual(ctx.PAGE,null,'存完就關掉');
 // 標題留空時退回用第一行，跟以前的行為一致
 ctx.RAW.items[0].title='';ctx.openItem('D1');
-ctx.$('pgT').value='';ctx.$('pgB').value='沒有標題的第一行\n第二行';
+ctx.$('pgT').value='';setBody('沒有標題的第一行\n第二行');
 sent=null;ctx.savePage();
 assert.strictEqual(sent.params.title,'沒有標題的第一行');
+// 表格存回去是純文字，跟段落接在一起
+ctx.openItem('D1');
+setBody('前言',[['品名','數量'],['起司','3']],'');
+sent=null;ctx.savePage();
+assert.strictEqual(sent.params.body,
+  '前言\n| 品名 | 數量 |\n| --- | --- |\n| 起司 | 3 |','表格寫成純文字存回試算表');
+// 標題留空、內文從表格開頭：不能拿「| 品名 | 數量 |」當標題
+ctx.openItem('D1');ctx.$('pgT').value='';
+setBody('',[['品名','數量'],['起司','3']],'現貨盤點');
+sent=null;ctx.savePage();
+assert.strictEqual(sent.params.title,'現貨盤點','表格那幾行不能拿來當標題');
 // 兩個都空就不送
-ctx.openItem('D1');ctx.$('pgT').value='';ctx.$('pgB').value='   ';
+ctx.openItem('D1');ctx.$('pgT').value='';setBody('   ');
 sent=null;ctx.savePage();
 assert.strictEqual(sent,null,'標題和內容都空就不要送');
 ctx.closePage();
