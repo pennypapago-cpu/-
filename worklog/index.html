@@ -1482,6 +1482,7 @@ function pool(r,q){
       (od?'<span class="tag A ovf">逾期 '+od+'</span>':'')+'</h3>'+
       (ts.length?ts.map(function(t){return taskCard(t,'')}).join('')
         :'<div class="none">'+(p==='A'?'沒有交給 AI 的 A 級工作。':'沒有')+'</div>')+
+      '<button class="add" onclick="addPool(\''+p+'\')">＋ 新增</button>'+
       '</section>'});
   return h+'</div></div>'}
 
@@ -1928,6 +1929,13 @@ function closeAdd(){
 function pickDate(el){
   if(!el||!el.showPicker)return;      // 舊版 Safari 沒有這支，讓它照原本的行為
   try{el.showPicker()}catch(e){}}     // 已經開著或不算使用者手勢會丟例外，不用理
+
+/** 從 AI 專案池那三欄新增。優先級跟著欄位走，「誰做」直接是 AI——
+    這一頁看的就是交給 AI 的事，每次都要自己再點一次 🤖 很煩。 */
+function addPool(p){
+  openAdd('task');
+  $('fPr').value=p;
+  owner('AI')}
 
 function owner(o){
   OWNER=o;

@@ -577,6 +577,34 @@ const POOL={backlog:4,overdue:2,yesterdayHours:3.5,
       {id:'T3',title:'合約等 PN 回覆',project:'行銷構圖',priority:'C',status:'待辦',due:T}]}]};
 const pv=ctx.pool(POOL,'');
 
+// ---- AI 專案池的三欄要能新增 ----
+// 卡片本來就點得開編輯（走 .t[data-id] 的委派），但沒有新增入口——
+// 想丟一件事給 AI 得先跑回每日看板開，再把「誰做」改成 AI。
+{
+  const ph=ctx.pool(POOL,'');
+  assert.strictEqual((ph.match(/class="add"/g)||[]).length,3,'A/B/C 三欄各一顆新增鈕');
+  ['A','B','C'].forEach(p=>assert(ph.includes("addPool('"+p+"')"),p+' 欄的新增要帶自己的優先級'));
+  // 帶進表單的預設值：優先級跟著欄位，誰做直接是 AI
+  ctx.closeAdd();
+  ctx.addPool('A');
+  assert.strictEqual(ctx.$('fPr').value,'A','A 欄新增就預設 A');
+  assert.strictEqual(ctx.OWNER,'AI','專案池新增的預設就是交給 AI');
+  assert.strictEqual(ctx.$('shTitle').textContent,'新增任務','是新增不是編輯');
+  ctx.closeAdd();
+  assert.strictEqual(ctx.$('fPr').value,'B','關掉要回到預設，不然下次開起來還記得上一次');
+  assert.strictEqual(ctx.OWNER,'我');
+}
+
+// 通則：放得下卡片的欄位都要有新增入口。少一個就只能繞路去別頁開，再回來改。
+{
+  const cols=h=>(h.match(/<section class="(?:col|ncol)[ "]/g)||[]).length;
+  const adds=h=>(h.match(/class="add"/g)||[]).length;
+  [['每日看板',ctx.board(R,'')],['AI 專案池',ctx.pool(POOL,'')],
+   ['資料區',ctx.notes({sections:[{id:'S1',name:'一'}],items:[]},'')]].forEach(([name,h])=>
+    assert.strictEqual(adds(h),cols(h),name+'：欄位數跟新增鈕數對不起來'));
+}
+
+
 // 昨天：兩個 AI 各自一欄，看得出誰在做事、誰整天沒動靜
 assert(pv.includes('class="srcs"'),'昨天的紀錄分欄');
 assert.strictEqual((pv.match(/class="srcc"/g)||[]).length,3,'Cowork、Claude Code，加上手動那欄');
