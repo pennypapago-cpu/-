@@ -446,6 +446,57 @@ assert(!late.includes('逾期 '),'不再只寫「逾期」');
 // 今天到期的還是寫「今天」，不要被順延那條吃掉
 assert(ctx.taskCard({id:'TA',title:'今天的',due:T,priority:'B',status:'待辦'},'today').includes('今天'));
 
+// ---- 卡片上直接改優先級 ----
+// 以前要點進編輯視窗才看得到優先級，一整排卡片看不出誰先誰後。
+{
+  const card=ctx.taskCard({id:'T1',title:'某件事',priority:'B',status:'待辦',due:T},'today');
+  const sel=(card.match(/<select[^>]*>[\s\S]*?<\/select>/)||[])[0];
+  assert(sel,'卡片的動作列要有一顆改優先級的下拉，不用點進編輯視窗才看得到');
+  assert(/class="prisel"/.test(sel),'優先級那顆下拉要有自己的類別');
+  assert(!/class="[^"]*\bpri\b/.test(sel),
+    '不能叫 .pri——那是存檔鈕已經在用的名字，借去給別的東西遲早出事');
+  Object.keys(ctx.PN).forEach(k=>assert(sel.includes('value="'+k+'"'),k+' 要在下拉裡選得到'));
+  assert(/value="B" selected/.test(sel),'目前是哪一級要先選起來');
+  assert(sel.includes('setPri(event,'),'改了要送出去');
+
+  // 改完要真的送 task_update，而且畫面先更新
+  ctx.RAW={date:T,running:[],today:[{id:'T1',title:'某件事',priority:'B',status:'待辦',due:T}],
+    tomorrow:[],unscheduled:[]};
+  sent=null;
+  ctx.setPri({stopPropagation(){},target:{value:'S'}},'T1');
+  assert.strictEqual(JSON.stringify(sent),
+    JSON.stringify({action:'task_update',params:{id:'T1',priority:'S',board:1}}),
+    '送出去的只有優先級這一項');
+  assert.strictEqual(ctx.RAW.today[0].priority,'S','畫面先改，不等伺服器');
+}
+
+// 通則：樂觀排序要跟 PN 同一套順序。以前寫死 'ABC'，多加一級就會被排到不知道哪裡去
+{
+  assert.strictEqual(ctx.PORD,Object.keys(ctx.PN).join(''),'排序用的順序就是 PN 的順序');
+  const sortSrc=src.slice(src.indexOf('function applyTask'),src.indexOf('function applyTask')+900);
+  assert(!/'[SABC]{2,}'\.indexOf/.test(sortSrc),'不要把優先級的順序寫死在排序裡：'+
+    (sortSrc.match(/'[SABC]{2,}'\.indexOf/)||[''])[0]);
+}
+
+// ---- 任務也能寫摘要 ----
+// 試算表本來就有「備註」欄，但介面從來沒開過，寫進去的東西看不到。
+{
+  assert(/id="fB"/.test(src),'任務表單要有摘要那一格');
+  const taskF=src.slice(src.indexOf('id="taskF"'),src.indexOf('id="logF"'));
+  assert(taskF.includes('id="fB"'),'摘要要在任務表單裡，不是手動紀錄那張');
+  ctx.RAW={sections:[],items:[],date:T,running:[],tomorrow:[],unscheduled:[],
+    today:[{id:'T1',title:'某件事',priority:'B',status:'待辦',due:T,project:'',next:'',
+            waiting:'',repeat:'',owner:'我',note:'客人問的原話'}]};
+  ctx.D=ctx.RAW;
+  ctx.edit('T1');
+  assert.strictEqual(ctx.$('fB').value,'客人問的原話','編輯時要把原本寫的帶出來');
+  ctx.$('fB').value='改過的內容';
+  sent=null;ctx.submit();
+  assert.strictEqual(sent.params.note,'改過的內容','存檔要把摘要一起送出去');
+  ctx.closeAdd();
+  assert.strictEqual(ctx.$('fB').value,'','關掉要清空，不然下一筆會看到上一筆的內容');
+}
+
 // ---- Google 日曆的行程 ----
 // 行程不是任務：排在欄位最上面，不算件數，拖不動也點不開。
 {
@@ -867,8 +918,12 @@ assert(ovw.includes('data-id="T1"'),'任務要帶 id 才拖得動');
 assert(!/chip2[^>]*onclick=/.test(ovw),'不要掛 onclick——拖完那一下會誤觸發編輯');
 const clickH2=src.split("$('view').addEventListener('click'")[1].split('});')[0];
 assert(clickH2.includes(".chip2[data-id]"),'改走委派，才吃得到拖曳後的保護');
-assert(clickH2.indexOf('chip2')<clickH2.indexOf("closest('button')"),
-  'chip2 本身是按鈕，要排在「按鈕不處理」那道防線前面');
+assert(clickH2.indexOf('chip2')<clickH2.indexOf("closest('button"),
+  'chip2 本身是按鈕，要排在「表單控制項不處理」那道防線前面');
+// 卡片裡的下拉、輸入框自己有事要做，不能順便把編輯視窗也打開
+['select','input','textarea'].forEach(t=>assert(
+  new RegExp("closest\\('button[^']*\\b"+t+"\\b").test(clickH2),
+  '點卡片開編輯的那道防線要放過 '+t+'，不然卡片上的控制項一點就跳視窗'));
 
 // 放下去要改到期日，而且就地更新
 ctx.paint=function(){};
