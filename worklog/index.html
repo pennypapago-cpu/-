@@ -331,6 +331,11 @@
   .acts button{background:var(--card2);border:1px solid var(--line2);border-radius:7px;
     padding:4px 9px;font-size:0.9062rem;color:var(--mute)}
   .acts button:hover{color:var(--ink);border-color:var(--dim)}
+  /* 優先級的下拉長得跟動作列的按鈕一樣，不要在卡片上多冒出一種樣式。
+     名字不能叫 .pri——那是存檔鈕已經在用的。 */
+  .acts .prisel{background:var(--card2);border:1px solid var(--line2);border-radius:7px;
+    color:var(--dim);padding:5px 7px;font-size:0.875rem;font-family:inherit;cursor:pointer}
+  .acts .prisel:hover{color:var(--ink);border-color:var(--dim)}
   .acts button:active,.chip:active,.add:active{transform:scale(.96)}
   .t.busy{opacity:.5;pointer-events:none}
   .acts button.go{color:#8fc4ff;border-color:rgba(78,163,245,.32)}
@@ -760,6 +765,8 @@
         </select></div>
       </div>
       <div class="f"><label>等待者（卡在誰身上，沒有就留空）</label><input id="fW" placeholder="例：PN"></div>
+      <div class="f"><label>摘要（這件事的內容、細節）</label><textarea id="fB" rows="4"
+        placeholder="要記什麼都可以：客人原話、規格、待確認的問題"></textarea></div>
       <div class="f"><label>重複（做完會自動長出下一次）</label>
         <select id="fR">
           <option value="">不重複</option>
@@ -830,6 +837,8 @@ var VIEWS=[
   {v:'settings', i:'settings', g:'資料', n:'設定',      t:'設定',          ic:'⚙'}
 ];
 var PN={S:'S 最優先',A:'A 優先處理',B:'B 推進型',C:'C 維護型'};
+// 樂觀排序要跟 PN 同一套順序。寫死 'ABC' 的話，以後多加一級就會被排到不知道哪裡去
+var PORD=Object.keys(PN).join('');
 var TOKEN='',VIEW='board',KIND='task',OWNER='我',EDIT=null,EDITL=null,COL='',DATE=null,PJDATE=null,PJRANGE='week',OVDATE=null,OVRANGE='week',SRC='',ALL=0,D=null,RAW=null;
 try{TOKEN=localStorage.getItem('worklog_token')||''}catch(e){}
 
@@ -1231,7 +1240,12 @@ function taskCard(t,col){
     '<button class="ok" onclick="st(\''+t.id+'\',\'完成\')">完成 ✓</button>'+
     (col!=='today'?'<button onclick="event.stopPropagation();toCol(\''+t.id+'\',\'today\',\''+(col||'')+'\')">移到今日</button>':'')+
     (col!=='tmr'?'<button onclick="event.stopPropagation();toCol(\''+t.id+'\',\'tmr\',\''+(col||'')+'\')">移到明日</button>':'')+
-    '<button onclick="edit(\''+t.id+'\')">編輯</button>';
+    '<button onclick="edit(\''+t.id+'\')">編輯</button>'+
+    // 優先級直接在卡片上改。以前要點進編輯視窗才看得到，一整排卡片看不出輕重
+    '<select class="prisel" onchange="setPri(event,\''+t.id+'\')" title="改優先級">'+
+      Object.keys(PN).map(function(k){
+        return '<option value="'+k+'"'+(k===t.priority?' selected':'')+'>'+esc(PN[k])+'</option>'
+      }).join('')+'</select>';
   var sub=(t.project?'<em>'+esc(t.project)+'</em>':'')+
     (t.waiting?'<b>等待者：</b>'+esc(t.waiting):(t.next?'<b>下一步：</b>'+esc(t.next):''));
   return '<article class="t p'+t.priority+'" data-id="'+t.id+'" title="'+PN[t.priority]+'">'+
@@ -2017,7 +2031,7 @@ function applyTask(b,id,patch){
   open.sort(function(a,c){                     // 跟後端 sortTasks_ 同一套規則
     var da=a.due||'9999-99-99',dc=c.due||'9999-99-99';
     if(da!==dc)return da<dc?-1:1;
-    if(a.priority!==c.priority)return 'ABC'.indexOf(a.priority)-'ABC'.indexOf(c.priority);
+    if(a.priority!==c.priority)return PORD.indexOf(a.priority)-PORD.indexOf(c.priority);
     return a.id<c.id?-1:(a.id>c.id?1:0)});
   b.running=open.filter(function(x){return x.status==='進行中'});
   var rest=open.filter(function(x){return x.status!=='進行中'});
@@ -2028,6 +2042,13 @@ function applyTask(b,id,patch){
 
 function nextToast(r){
   return r&&r.spawned&&r.spawned.due?'已完成，下一次 '+md(r.spawned.due):'已完成'}
+
+/** 在卡片上改優先級。不用點進編輯視窗，一排卡片才看得出誰先誰後。 */
+function setPri(e,id){
+  e.stopPropagation();
+  var v=e.target.value;
+  mutate('task_update',{id:id,priority:v},function(){return applyTask(RAW,id,{priority:v})})
+    .then(function(r){if(r)toast('改成 '+PN[v])})}
 
 function st(id,s){event.stopPropagation();
   mutate('task_update',{id:id,status:s},function(){return applyTask(RAW,id,{status:s})})
@@ -2060,6 +2081,7 @@ function edit(id){
   EDIT=id;openAdd('task');$('shTitle').textContent='編輯任務';$('fDel').style.display='';
   $('fT').value=t.title;$('fP').value=t.project;$('fN').value=t.next;
   $('fD').value=t.due;$('fPr').value=t.priority;$('fW').value=t.waiting;$('fR').value=t.repeat||'';
+  $('fB').value=t.note||'';
   owner(t.owner||'我')}
 
 /** col 決定新任務的預設日期與狀態：今日欄＝今天、明日欄＝明天、
@@ -2102,7 +2124,7 @@ function closeAdd(){
   $('veil').classList.remove('on');EDIT=null;EDITL=null;COL='';
   $('fDel').style.display='none';
   var c=document.getElementById('confirmBox');if(c)c.remove();
-  ['fT','fP','fN','fD','fW','fS'].forEach(function(i){$(i).value=''});
+  ['fT','fP','fN','fD','fW','fS','fB'].forEach(function(i){$(i).value=''});
   $('fPr').value='B';$('fR').value='';owner('我')}
 /** 桌機點日期欄位只會跳到那一段數字，日曆得去點右邊那顆小圖示。
     點欄位任何地方就把原生日曆叫出來，跟手機一樣。 */
@@ -2137,7 +2159,7 @@ function submit(){
   if(KIND==='task'){
     var d={title:t,project:$('fP').value.trim(),next:$('fN').value.trim(),
       due:$('fD').value,priority:$('fPr').value,waiting:$('fW').value.trim(),owner:OWNER,
-      repeat:$('fR').value};
+      repeat:$('fR').value,note:$('fB').value.trim()};
     if(EDIT)d.id=EDIT;
     else if(COL==='run')d.status='進行中';       // 在「AI 正執行」那欄新增＝直接開工
     var eid=EDIT;
@@ -2255,7 +2277,8 @@ $('view').addEventListener('click',function(e){
   if(Date.now()-NODRAG<250)return;
   var chip=e.target.closest&&e.target.closest('.chip2[data-id]');
   if(chip)return edit(chip.dataset.id);      // 它本身是按鈕，要排在下面那道防線前面
-  if(e.target.closest('button')||e.target.closest('a'))return;
+  // 卡片裡的表單控制項（優先級那顆下拉）自己有事要做，不要順便把編輯視窗也開起來
+  if(e.target.closest('button,a,select,input,textarea,label'))return;
   var card=e.target.closest&&e.target.closest('.t[data-id]');
   if(card)return edit(card.dataset.id);
   var ev=e.target.closest&&e.target.closest('.ev[data-log]');
