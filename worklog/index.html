@@ -11,7 +11,7 @@
     --ink:#e9ecf2; --mute:#8b93a1; --dim:#646c7b;
     --acc:#3b82f6; --acc2:#2563eb;
     --s:#ff2d55; --a:#f0556d; --b:#e0a03a; --c:#4ea3f5;
-    --run:#f0556d; --today:#4ea3f5; --tmr:#a78bfa;
+    --run:#f0556d; --today:#4ea3f5; --tmr:#a78bfa; --cal:#3fb6a8;
     --ok:#34d399; --warn:#fbbf24; --bad:#f0556d;
     /* 立體感：光從上面來——上緣一條亮邊（rim），影子往下落（sh），
        表面本身由上而下略暗（face）。三個一起用才像有厚度，只加影子會像貼紙。 */
@@ -279,6 +279,17 @@
   .t.pA{border-left:3px solid var(--a)}
   .t.pB{border-left:3px solid var(--b)}
   .t.pC{border-left:3px solid var(--c)}
+  /* Google 日曆的行程。刻意跟任務卡長得不一樣——扁一點、淡一點、沒有動作列，
+     因為它不是待辦，是「這段時間已經被佔走了」。 */
+  .cal{display:flex;gap:8px;align-items:flex-start;background:var(--card2);
+    border:1px solid var(--line);border-left:3px solid var(--cal);border-radius:10px;
+    padding:8px 10px;margin-bottom:8px}
+  .cal i{font-style:normal;font-size:0.9375rem;line-height:1.45;flex:0 0 auto}
+  .cal .ct{font-size:1rem;font-weight:600;color:var(--mute);line-height:1.35;word-break:break-word}
+  .cal .cw{font-size:0.875rem;color:var(--dim);margin-top:2px;word-break:break-word}
+  .cal .cw b{color:var(--cal);font-weight:600}
+  .calx{font-size:0.875rem;color:var(--dim);background:var(--card2);border:1px dashed var(--line2);
+    border-radius:10px;padding:8px 10px;margin-bottom:8px;line-height:1.5}
   .t .ti{font-size:1.125rem;font-weight:600;line-height:1.4;word-break:break-word}
   .own{font-style:normal;margin-right:5px;font-size:0.9375rem;vertical-align:1px}
   .tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
@@ -1075,12 +1086,34 @@ function board(r,q){
   brief(r.note);mx(r.metrics);
   var f=function(a,c){return a.filter(function(x){return hit(x,q)}).map(function(t){return taskCard(t,c)})};
   var run=f(r.running,'run').concat(r.liveLogs.filter(function(l){return hit(l,q)}).map(logCard));
+  var td=r.date||today(),tm=ymd(new Date(parse(td).getTime()+864e5));
   return '<div class="sechead"><span>今天要做的</span><i></i></div>'+
     '<div class="cols">'+
     col('c-run','⏰','AI 正執行工作',run,'現在沒有進行中的工作')+
-    col('c-today','📅','今日工作',f(r.today,'today'),'今天沒有到期的任務')+
-    col('c-tmr','🕐','明日工作',f(r.tomorrow,'tmr').concat(f(r.unscheduled.slice(0,3),'tmr')),'明天空著')+
+    col('c-today','📅','今日工作',f(r.today,'today'),'今天沒有到期的任務',calFor(r,td,q)+calWarn(r))+
+    col('c-tmr','🕐','明日工作',f(r.tomorrow,'tmr').concat(f(r.unscheduled.slice(0,3),'tmr')),'明天空著',
+      calFor(r,tm,q))+
     '</div>'+(STATS?stats(r):'')}
+
+/* ---------------- Google 日曆 ----------------
+   只讀不寫。行程是「幾點到幾點被佔住」，任務是「該做完的事」，
+   混成同一種東西之後「今天還剩幾件」就沒有意義了。所以行程只是顯示在欄位最上面：
+   沒有 data-id（拖曳和點擊都認那個，所以它自然拖不動也點不開）、不進試算表、不算件數。 */
+function calCard(e){
+  var when=e.allDay?'整天':(e.time+(e.until&&e.until!==e.time?'–'+e.until:''));
+  return '<div class="cal"><i>🗓</i><div style="min-width:0"><div class="ct">'+esc(e.title)+'</div>'+
+    '<div class="cw"><b>'+esc(when)+'</b>'+(e.where?' · '+esc(e.where):'')+'</div></div></div>'}
+
+function calFor(r,date,q){
+  return ((r&&r.calendar)||[]).filter(function(e){
+    return e.date===date&&hit({title:e.title,project:e.where},q)}).map(calCard).join('')}
+
+/** 讀不到日曆要講出來。空白的一天和「根本沒授權」看起來一模一樣，
+    但下一步完全不同——一個是今天真的沒事，一個是要去按同意。 */
+function calWarn(r){
+  if(!r||!r.calError)return '';
+  return '<div class="calx">讀不到 Google 日曆，行程沒有顯示出來。'+
+    '看板剛更新過的話，要先到 Apps Script 編輯器重新授權一次（這版多要了日曆權限）。</div>'}
 
 /** 早晨簡報：統計列收起來之後，它就沒地方擺了，改成日期列下面一行。
     可以按 ✕ 收起來，收起後從標題列那顆「早晨簡報」鈕叫回來，選擇會記住。 */
@@ -1178,8 +1211,11 @@ function tile(label,val,sub,cls,tip){
     (tip?' title="'+esc(tip)+'"':'')+'><u>'+esc(label)+'</u><b>'+esc(val)+'</b>'+
     (sub?'<s>'+esc(sub)+'</s>':'')+'</div>'}
 
-function col(cls,icon,title,cards,empty){
+/** pre 是排在任務前面、但不算件數的東西（目前只有日曆行程）。
+    件數講的是「還有幾件事要做完」，行程不是待辦，算進去會讓那個數字失去意義。 */
+function col(cls,icon,title,cards,empty,pre){
   return '<section class="col '+cls+'" data-drop="'+cls.slice(2)+'"><h3><i>'+icon+'</i>'+title+'<b>'+cards.length+'</b></h3>'+
+    (pre||'')+
     (cards.length?cards.join(''):'<div class="none">'+esc(empty)+'</div>')+
     '<button class="add" onclick="openAdd(\'task\',\''+cls.slice(2)+'\')">＋ 新增任務</button></section>'}
 

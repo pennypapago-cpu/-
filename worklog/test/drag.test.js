@@ -446,6 +446,46 @@ assert(!late.includes('逾期 '),'不再只寫「逾期」');
 // 今天到期的還是寫「今天」，不要被順延那條吃掉
 assert(ctx.taskCard({id:'TA',title:'今天的',due:T,priority:'B',status:'待辦'},'today').includes('今天'));
 
+// ---- Google 日曆的行程 ----
+// 行程不是任務：排在欄位最上面，不算件數，拖不動也點不開。
+{
+  const CB={date:T,running:[],liveLogs:[],unscheduled:[],projects:[],logs:[],
+    today:[{id:'T9',title:'今天要做的事',priority:'B',status:'待辦',due:T}],
+    tomorrow:[],stats:{doneToday:0,totalToday:1,focusHours:0,focusHoursPrev:0,
+      highValuePct:0,overdue:0},
+    calendar:[{id:'cal:1',title:'早上的站會',date:T,time:'09:30',until:'09:45',allDay:false,where:'會議室'},
+              {id:'cal:2',title:'中秋連假',date:T,time:'',until:'',allDay:true,where:''},
+              {id:'cal:3',title:'明天的提案',date:tomorrow,time:'14:00',until:'15:00',allDay:false,where:''}],
+    calError:''};
+  const bh=ctx.board(CB,'');
+  assert(bh.includes('早上的站會')&&bh.includes('中秋連假'),'今天的行程要出現');
+  assert(bh.includes('09:30–09:45'),'有時段的要寫幾點到幾點');
+  assert(bh.includes('整天'),'整天的寫「整天」，不要印 00:00');
+  const cal=bh.match(/<div class="cal">[\s\S]*?<\/div><\/div><\/div>/)[0];
+  assert(!/data-id=/.test(cal),
+    '行程不能帶 data-id——拖曳和點擊都認那個，帶了就會去改一筆不存在的任務');
+  assert(!/<button/.test(cal),'行程沒有動作列，它不是待辦');
+
+  // 件數只算任務。行程算進去的話「今天還剩幾件」就沒有意義了
+  const today=bh.slice(bh.indexOf('今日工作'));
+  assert(/^今日工作<b>1<\/b>/.test(today),'件數是 1（一件任務），不是 3');
+  // 行程排在任務前面：那幾個時段已經被佔走，排今天做什麼要先看到
+  assert(today.indexOf('早上的站會')<today.indexOf('今天要做的事'),'行程排在任務上面');
+  // 明天的行程要進明天那一欄，不能全部擠在今天
+  const tmr=bh.slice(bh.indexOf('明日工作'));
+  assert(tmr.includes('明天的提案'),'明天的行程要放明天那欄');
+  assert(!today.slice(0,today.indexOf('明日工作')).includes('明天的提案'),'不能擠到今天');
+  // 搜尋也要吃得到
+  assert(!ctx.board(CB,'站會').includes('中秋連假'),'搜尋要濾得到行程');
+  // 讀不到日曆要講出來——空白的一天跟沒授權長得一模一樣，但下一步完全不同
+  assert(!bh.includes('calx'),'正常的時候不要囉唆');
+  assert(ctx.board(Object.assign({},CB,{calError:'沒授權'}),'').includes('class="calx"'),
+    '讀不到就要講，而且要說怎麼辦');
+  // 舊的後端沒有這個欄位，不能讓整頁掛掉
+  assert(ctx.board(Object.assign({},CB,{calendar:undefined,calError:undefined}),'')
+    .includes('今天要做的事'),'後端還是舊版時看板照常');
+}
+
 // ---- 看板總覽 ----
 // 跟時間表共用同一個 action，畫法不同：這裡只管任務排在哪天、做完沒。
 const OV={range:'week',from:'2026-08-31',to:'2026-09-06',
