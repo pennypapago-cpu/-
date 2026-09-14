@@ -582,17 +582,36 @@ const pv=ctx.pool(POOL,'');
 // 想丟一件事給 AI 得先跑回每日看板開，再把「誰做」改成 AI。
 {
   const ph=ctx.pool(POOL,'');
-  assert.strictEqual((ph.match(/class="add"/g)||[]).length,3,'A/B/C 三欄各一顆新增鈕');
-  ['A','B','C'].forEach(p=>assert(ph.includes("addPool('"+p+"')"),p+' 欄的新增要帶自己的優先級'));
+  assert.strictEqual((ph.match(/class="add"/g)||[]).length,4,'S/A/B/C 四欄各一顆新增鈕');
+  ['S','A','B','C'].forEach(p=>assert(ph.includes("addPool('"+p+"')"),p+' 欄的新增要帶自己的優先級'));
   // 帶進表單的預設值：優先級跟著欄位，誰做直接是 AI
   ctx.closeAdd();
-  ctx.addPool('A');
-  assert.strictEqual(ctx.$('fPr').value,'A','A 欄新增就預設 A');
+  ctx.addPool('S');
+  assert.strictEqual(ctx.$('fPr').value,'S','S 欄新增就預設 S');
   assert.strictEqual(ctx.OWNER,'AI','專案池新增的預設就是交給 AI');
   assert.strictEqual(ctx.$('shTitle').textContent,'新增任務','是新增不是編輯');
   ctx.closeAdd();
   assert.strictEqual(ctx.$('fPr').value,'B','關掉要回到預設，不然下次開起來還記得上一次');
   assert.strictEqual(ctx.OWNER,'我');
+}
+
+// 通則：優先級是一組會長大的東西。多一級就得同時補齊卡片色帶、標籤、專案池那一欄
+// 和新增表單的選項——少補一樣，畫面上就會有一格沒顏色，或新的那級根本選不到。
+{
+  const css2=src.split('<style>')[1].split('</style>')[0];
+  const ph2=ctx.pool(POOL,'');
+  Object.keys(ctx.PN).forEach(k=>{
+    assert(css2.includes('.t.p'+k+'{'),k+' 少了卡片色帶 .t.p'+k);
+    assert(css2.includes('.tag.'+k+'{'),k+' 少了標籤樣式 .tag.'+k);
+    assert(css2.includes('.c-p'+k+'{'),k+' 少了專案池欄位樣式 .c-p'+k);
+    assert(src.includes('<option value="'+k+'"'),k+' 在新增任務的下拉裡選不到');
+    assert(ph2.includes("addPool('"+k+"')"),k+' 在 AI 專案池沒有自己的欄');
+  });
+  // 最優先要整圈紅框，不是只有左邊一條色帶——要的就是掃一眼跳出來
+  const pS=css2.slice(css2.indexOf('.t.pS{'),css2.indexOf('}',css2.indexOf('.t.pS{')));
+  assert(/border:\s*[\d.]+px solid var\(--s\)/.test(pS),'最優先要整圈框起來：'+pS);
+  assert(ctx.taskCard({id:'X',title:'燒起來的事',priority:'S',status:'待辦',due:T},'today')
+    .includes('class="t pS"'),'S 的卡片要吃到 pS');
 }
 
 // 通則：放得下卡片的欄位都要有新增入口。少一個就只能繞路去別頁開，再回來改。
@@ -633,11 +652,12 @@ assert(noA.includes('沒有交給 AI 的 A 級工作'),'A 掛零要點出來');
 {
   const tail=pv.slice(pv.indexOf('還剩什麼'));
   const grid=tail.match(/<div class="cols">[\s\S]*$/);
-  assert(grid,'還剩什麼要放進 .cols（跟每日看板同一種三欄網格）');
-  assert.strictEqual((grid[0].match(/class="col c-p[ABC]"/g)||[]).length,3,'A/B/C 各一欄');
+  assert(grid,'還剩什麼要放進 .cols（跟每日看板同一種網格）');
+  assert.strictEqual((grid[0].match(/class="col c-p[SABC]"/g)||[]).length,4,'S/A/B/C 各一欄');
+  assert(grid[0].indexOf('c-pS')<grid[0].indexOf('c-pA'),'最優先排在最前面');
   assert(!tail.includes('panelbox'),'不要再用上下堆疊的區塊');
 }
-console.log('專案池    昨天分 Cowork / Claude Code 兩欄，還剩什麼並排成 A/B/C 三欄');
+console.log('專案池    昨天分 Cowork / Claude Code 兩欄，還剩什麼並排成 S/A/B/C 四欄');
 
 // ---- 國定假日 ----
 {
