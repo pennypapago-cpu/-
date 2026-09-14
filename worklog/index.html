@@ -10,7 +10,7 @@
     --line:#232733; --line2:#303647;
     --ink:#e9ecf2; --mute:#8b93a1; --dim:#646c7b;
     --acc:#3b82f6; --acc2:#2563eb;
-    --a:#f0556d; --b:#e0a03a; --c:#4ea3f5;
+    --s:#ff2d55; --a:#f0556d; --b:#e0a03a; --c:#4ea3f5;
     --run:#f0556d; --today:#4ea3f5; --tmr:#a78bfa;
     --ok:#34d399; --warn:#fbbf24; --bad:#f0556d;
     /* 立體感：光從上面來——上緣一條亮邊（rim），影子往下落（sh），
@@ -248,7 +248,8 @@
   .brief p{margin:0}
   @media(max-width:980px){.brief{margin:10px 14px 0}
     .brief .bs{display:block}.brief .bs>u{display:block;margin-bottom:1px}}
-  .cols{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;padding:16px 24px 8px;align-items:start}
+  .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(15rem,1fr));
+    gap:14px;padding:16px 24px 8px;align-items:start}
   .col{background:var(--face2);border:1px solid var(--line);border-radius:14px;padding:14px 12px 10px;
     min-width:0;box-shadow:var(--sh2),var(--rim)}
   .col>h3{display:flex;align-items:center;gap:6px 8px;margin:0 4px 12px;
@@ -259,8 +260,9 @@
   .col>h3 b{margin-left:auto;font-size:0.9688rem;color:var(--dim);font-weight:600}
   .c-run h3{color:var(--run)} .c-today h3{color:var(--today)} .c-tmr h3{color:var(--tmr)}
   /* AI 專案池的三欄用優先級的顏色，左邊那條也跟著 */
-  .c-pA{border-top:2px solid var(--a)} .c-pB{border-top:2px solid var(--b)} .c-pC{border-top:2px solid var(--c)}
-  .c-pA h3{color:#ff97a9} .c-pB h3{color:#e8b45c} .c-pC h3{color:#8cc4ff}
+  .c-pS{border-top:2px solid var(--s)} .c-pA{border-top:2px solid var(--a)}
+  .c-pB{border-top:2px solid var(--b)} .c-pC{border-top:2px solid var(--c)}
+  .c-pS h3{color:#ff5c7a} .c-pA h3{color:#ff97a9} .c-pB h3{color:#e8b45c} .c-pC h3{color:#8cc4ff}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
   .c-run h3 i{animation:pulse 2.4s infinite}
 
@@ -272,6 +274,8 @@
   .t:active{transform:translateY(0);box-shadow:var(--sh1),var(--rim)}
   .t.live{background:linear-gradient(180deg,rgba(240,85,109,.08),transparent 60%);border-color:rgba(240,85,109,.28)}
   /* 優先級改用左側色帶，不佔一整排標籤 */
+  .t.pS{border:2px solid var(--s);box-shadow:0 0 0 3px rgba(255,45,85,.13),var(--sh2),var(--rim2)}
+  .t.pS .ti{color:#ff8fa3}
   .t.pA{border-left:3px solid var(--a)}
   .t.pB{border-left:3px solid var(--b)}
   .t.pC{border-left:3px solid var(--c)}
@@ -279,6 +283,7 @@
   .own{font-style:normal;margin-right:5px;font-size:0.9375rem;vertical-align:1px}
   .tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
   .tag{font-size:0.875rem;font-weight:600;padding:2.5px 8px;border-radius:6px;white-space:nowrap}
+  .tag.S{background:rgba(255,45,85,.2);color:#ff6b85}
   .tag.A{background:rgba(240,85,109,.15);color:#ff8095}
   .tag.B{background:rgba(224,160,58,.15);color:#e8b45c}
   .tag.C{background:rgba(78,163,245,.15);color:#7bbcff}
@@ -739,7 +744,8 @@
       <div class="f2">
         <div class="f"><label>到期日</label><input id="fD" type="date" onclick="pickDate(this)"></div>
         <div class="f"><label>優先</label><select id="fPr">
-          <option value="A">A 優先處理</option><option value="B" selected>B 推進型</option><option value="C">C 維護型</option>
+          <option value="S">S 最優先</option><option value="A">A 優先處理</option>
+          <option value="B" selected>B 推進型</option><option value="C">C 維護型</option>
         </select></div>
       </div>
       <div class="f"><label>等待者（卡在誰身上，沒有就留空）</label><input id="fW" placeholder="例：PN"></div>
@@ -812,7 +818,7 @@ var VIEWS=[
   {v:'done',     i:'done',     g:'資料', n:'完成項目',  t:'完成項目',      ic:'✅'},
   {v:'settings', i:'settings', g:'資料', n:'設定',      t:'設定',          ic:'⚙'}
 ];
-var PN={A:'A 優先處理',B:'B 推進型',C:'C 維護型'};
+var PN={S:'S 最優先',A:'A 優先處理',B:'B 推進型',C:'C 維護型'};
 var TOKEN='',VIEW='board',KIND='task',OWNER='我',EDIT=null,EDITL=null,COL='',DATE=null,PJDATE=null,PJRANGE='week',OVDATE=null,OVRANGE='week',SRC='',ALL=0,D=null,RAW=null;
 try{TOKEN=localStorage.getItem('worklog_token')||''}catch(e){}
 
@@ -1493,14 +1499,15 @@ function pool(r,q){
   left=left.filter(function(t){return hit(t,q)});
   // 三個優先級並排成三欄，跟每日看板那三欄同一種樣子；上下堆疊的話一次只看得到一級
   h+='<div class="sechead"><span>還剩什麼</span><i></i></div><div class="cols">';
-  ['A','B','C'].forEach(function(p){
+  ['S','A','B','C'].forEach(function(p){
     var ts=left.filter(function(t){return t.priority===p});
     var od=ts.filter(function(t){return t.due&&t.due<today()}).length;
     h+='<section class="col c-p'+p+'"><h3><span class="tag '+p+'">'+p+'</span>'+
       '<span class="nm">'+esc(PN[p].slice(2))+'</span><b>'+ts.length+'</b>'+
       (od?'<span class="tag A ovf">逾期 '+od+'</span>':'')+'</h3>'+
       (ts.length?ts.map(function(t){return taskCard(t,'')}).join('')
-        :'<div class="none">'+(p==='A'?'沒有交給 AI 的 A 級工作。':'沒有')+'</div>')+
+        :'<div class="none">'+(p==='S'?'沒有燒起來的事。'
+          :p==='A'?'沒有交給 AI 的 A 級工作。':'沒有')+'</div>')+
       '<button class="add" onclick="addPool(\''+p+'\')">＋ 新增</button>'+
       '</section>'});
   return h+'</div></div>'}

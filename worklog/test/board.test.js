@@ -47,9 +47,18 @@ const ctx={Utilities:{formatDate:f,getUuid:()=>'u'+String(++UUID).padStart(7,'0'
   PropertiesService:{getScriptProperties:()=>({getProperty:()=>'tok',setProperty(){}})},
   LockService:{getScriptLock:()=>({waitLock(){},releaseLock(){}})}};
 vm.createContext(ctx);vm.runInContext(fs.readFileSync(SRC,'utf8'),ctx);
-// 測試不看真實時鐘。沒寫時間的那些紀錄本來會蓋上「跑測試那一天」，日子一過就有測試
-// 莫名其妙開始失敗（同一份程式，昨天綠今天紅）。把 now_ 釘在 T，測的才是程式不是日曆。
-ctx.now_=function(){return T+' 09:00'};
+// 測試不看真實時鐘。只釘 now_ 不夠——程式裡還有一堆 new Date() 在問「今天是哪天」
+// （重複任務推下一次就是一個），日曆往前走就有測試莫名其妙變紅，同一份程式昨天綠今天紅。
+// 所以整個 vm 的 Date 都釘在 T。
+const NOW=new Date(T+'T09:00:00');
+class FakeDate extends Date{
+  constructor(...a){super(...(a.length?a:[NOW.getTime()]))}
+  static now(){return NOW.getTime()}
+}
+// Code.gs 有 `v instanceof Date` 在認試算表給的日期物件。那些物件是在 vm 外面建的，
+// 不改 hasInstance 的話會全部判成 false，日期會被當成字串亂猜。
+Object.defineProperty(FakeDate,Symbol.hasInstance,{value:v=>v instanceof Date});
+ctx.Date=FakeDate;
 
 const b=ctx.handle_('board',{date:T},'tok');
 assert(b.ok,'board failed: '+b.error);
@@ -504,6 +513,33 @@ console.log('產出      ', out.rows.map(r=>r.title+'→'+r.link).join(' '));
   assert.strictEqual(g(nx2,'G2').length,0,'完成的不預告——它按完成的時候已經長出真的下一筆了');
   assert.strictEqual(g(nx2,'G3').length,0,'沒設重複的不預告');
   console.log('重複預告  下週看到 '+nx.ghosts.length+' 筆預告，件數仍是 '+nx.total);
+}
+
+// ---- S 最優先 ----
+// 多一級不是換個字而已：排序、占比、建議順序的理由都要跟著認得它。
+{
+  assert.strictEqual(ctx.normPriority_('S'),'S');
+  assert.strictEqual(ctx.normPriority_('最優先'),'S');
+  assert.strictEqual(ctx.normPriority_('特急'),'S');
+  // 別的工具的最高級維持對到 A。沒人要求把人家整批最高級的事默默升一階
+  assert.strictEqual(ctx.normPriority_('URGENT'),'A','URGENT 還是 A');
+  assert.strictEqual(ctx.normPriority_('P0'),'A','P0 還是 A');
+  assert.strictEqual(ctx.normPriority_('高'),'A','舊的「高」不變');
+  assert.strictEqual(ctx.normPriority_('看心情'),'B','認不出來還是 B');
+  assert(ctx.PRIORITY_RANK.S<ctx.PRIORITY_RANK.A,'S 要排在 A 前面');
+  assert.strictEqual(ctx.whyNow_({priority:'S'},T),'最優先','建議順序要說得出理由');
+
+  task('S1','燒起來的事','Shopline',T,'S','待辦');
+  const sb=ctx.handle_('board',{date:T},'tok');
+  const names=sb.today.map(x=>x.title);
+  // 逾期的還是排在前面（日期先於優先級），所以只比同一天到期的那幾件
+  assert(names.indexOf('燒起來的事')<names.indexOf('吳若樺貼文完成定稿'),
+    '同一天到期時 S 要排在 A 前面：'+names.join('、'));
+  // 優先任務占比要把 S 一起算——只看 A 的話最急的那幾件反而從占比裡消失
+  const sA=sb.today.concat(sb.running).filter(t=>t.priority==='S'||t.priority==='A').length;
+  assert.strictEqual(sb.stats.highValuePct,
+    Math.round(sA*100/(sb.today.length+sb.running.length)),'S 和 A 一起算優先任務');
+  console.log('最優先    S 排最前，占比算得到它');
 }
 
 console.log('\nALL PASS');

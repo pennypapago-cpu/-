@@ -41,11 +41,15 @@ var TASK_OPEN = ['待辦', '進行中'];
 var DATE_ONLY_KEYS = { due: true };
 
 // 優先級：A 優先處理（帶來結果）、B 推進型（讓事情前進）、C 維護型（不做會出事）
-var PRIORITY_RANK = { A: 0, B: 1, C: 2 };
+// S 是「今天不做會出事」，畫面上會給紅框。A 以下維持原本的意思，舊資料一個字都不用動。
+var PRIORITY_RANK = { S: 0, A: 1, B: 2, C: 3 };
 var PRIORITY_LEGACY = { 高: 'A', 中: 'B', 低: 'C' };
 // 從別的工具（Notion、Asana、Jira…）匯進來的優先級寫法。比對前會先轉大寫。
 // P0/P1 都當 A：那兩級在多數團隊都是「現在就要做」。
 var PRIORITY_ALIAS = {
+  // S 只認明講的那幾種寫法。URGENT / P0 這些維持對到 A——它們在別的工具裡就是最高級，
+  // 改對到 S 等於把人家整批最高級的事默默升一階，沒人要求過。
+  '最優先': 'S', '特急': 'S', '火燒眉毛': 'S', 'S': 'S',
   'HIGH': 'A', 'URGENT': 'A', 'CRITICAL': 'A', 'P0': 'A', 'P1': 'A', '1': 'A', '緊急': 'A', '重要': 'A',
   'MEDIUM': 'B', 'MED': 'B', 'NORMAL': 'B', 'P2': 'B', '2': 'B', '一般': 'B', '普通': 'B',
   'LOW': 'C', 'MINOR': 'C', 'P3': 'C', 'P4': 'C', '3': 'C', '次要': 'C'
@@ -787,7 +791,8 @@ function stats_(today, week, open, logsToday) {
   var doneToday = all.filter(function (t) { return String(t.done_at).slice(0, 10) === today; }).length;
   var dueToday = open.filter(function (t) { return t.due && t.due <= today; });
   var scope = dueToday.concat(open.filter(function (t) { return t.status === '進行中' && !(t.due && t.due <= today); }));
-  var high = scope.filter(function (t) { return t.priority === 'A'; }).length;
+  // 「優先任務」＝ S 和 A 一起算：多了一級之後只看 A 會讓最急的那幾件從占比裡消失
+  var high = scope.filter(function (t) { return PRIORITY_RANK[t.priority] <= PRIORITY_RANK.A; }).length;
 
   var weekFrom = fmtDate_(week.from), weekTo = fmtDate_(shiftDays_(week.to, -1));
   var inWeek = all.filter(function (t) {
@@ -1008,6 +1013,7 @@ function whyNow_(t, today) {
   if (t.due && t.due < today) return '逾期 ' + daysBetween_(t.due, today) + ' 天';
   if (t.status === '進行中') return '已經在做，收掉它';
   if (t.due === today) return '今天到期';
+  if (t.priority === 'S') return '最優先';
   if (t.priority === 'A') return 'A 優先處理';
   if (!t.due) return '還沒排日期';
   return t.due + ' 到期';
