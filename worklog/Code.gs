@@ -750,6 +750,7 @@ function board_(date) {
   var logsToday = readLogs_('day', today);
   var runningLogs = logsToday.filter(function (l) { return l.status === '進行中'; });
   var week = span_('week', today);
+  var cal = calEvents_(today, tomorrow);
 
   return {
     date: today,
@@ -762,8 +763,55 @@ function board_(date) {
     stats: stats_(today, week, open, logsToday),
     note: readBrief_(today),
     metrics: metrics_(today),
-    logs: logsToday
+    logs: logsToday,
+    calendar: cal.events,
+    // 讀不到要說出來。空陣列沒辦法分辨「今天真的沒行程」和「根本沒授權」，
+    // 那兩件事對使用者的下一步完全不同。
+    calError: cal.error
   };
+}
+
+/**
+ * Google 日曆上今天和明天的行程。看板只讀不寫：
+ * 行程是「幾點到幾點被佔住」，任務是「該做完的事」，混成同一種東西之後
+ * 「今天還剩幾件」就沒有意義了。所以它們只是顯示在欄位上方，不進試算表、不算件數。
+ *
+ * 讀不到就回空陣列：沒授權日曆、日曆被關掉、Google 那邊出錯，
+ * 都不該讓整個看板跟著打不開——那是每天早上第一個要看的畫面。
+ */
+function calEvents_(from, to) {
+  var out = [];
+  try {
+    var cal = CalendarApp.getDefaultCalendar();
+    if (!cal) return { events: out, error: '找不到預設日曆' };
+    var start = parseDate_(from), end = shiftDays_(parseDate_(to), 1);
+    cal.getEvents(start, end).forEach(function (e) {
+      try {
+        // 已經婉拒的會議不用再佔位置
+        if (e.getMyStatus && e.getMyStatus() === CalendarApp.GuestStatus.NO) return;
+      } catch (statusErr) { /* 自己開的、沒有與會者的行程問不到狀態，當作要去 */ }
+      var s = e.getStartTime(), allDay = e.isAllDayEvent();
+      out.push({
+        id: 'cal:' + e.getId(),
+        title: e.getTitle() || '（沒有標題的行程）',
+        date: fmtDate_(s),
+        // 整天的行程沒有「幾點」，硬印 00:00 會讓人以為是半夜的會
+        time: allDay ? '' : Utilities.formatDate(s, TZ, 'HH:mm'),
+        until: allDay ? '' : Utilities.formatDate(e.getEndTime(), TZ, 'HH:mm'),
+        allDay: allDay,
+        where: e.getLocation() || ''
+      });
+    });
+  } catch (err) {
+    return { events: [], error: String(err && err.message || err) };
+  }
+  out.sort(function (a, b) {
+    if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+    // 整天的排在當天最前面：它描述的是「這一天」，不是某個時段
+    if (!!a.time !== !!b.time) return a.time ? 1 : -1;
+    return a.time < b.time ? -1 : 1;
+  });
+  return { events: out, error: '' };
 }
 
 /** 每個專案聚合成一列：最急的下一步、最近的截止日、還有幾件 */

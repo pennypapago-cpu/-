@@ -3,7 +3,8 @@ const SRC=process.argv[2]||path.join(__dirname,'..','Code.gs');
 const fs=require('fs'),vm=require('vm'),assert=require('assert');
 let UUID=0;
 const pad=n=>String(n).padStart(2,'0');
-const f=(d,tz,fmt)=>fmt.includes('HH')
+const f=(d,tz,fmt)=>fmt==='HH:mm'?`${pad(d.getHours())}:${pad(d.getMinutes())}`
+  :fmt.includes('HH')
   ?`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
   :`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
 
@@ -540,6 +541,55 @@ console.log('產出      ', out.rows.map(r=>r.title+'→'+r.link).join(' '));
   assert.strictEqual(sb.stats.highValuePct,
     Math.round(sA*100/(sb.today.length+sb.running.length)),'S 和 A 一起算優先任務');
   console.log('最優先    S 排最前，占比算得到它');
+}
+
+// ---- Google 日曆 ----
+// 只讀不寫：行程是「幾點到幾點被佔住」，任務是「該做完的事」。
+{
+  // 還沒授權的時候，看板要照常回得來——那是每天早上第一個要看的畫面
+  const noCal=ctx.handle_('board',{date:T},'tok');
+  assert(noCal.ok,'讀不到日曆不能讓整個看板掛掉');
+  assert.strictEqual(JSON.stringify(noCal.calendar),'[]','讀不到就給空的');
+  assert(noCal.calError,'但要說得出讀不到，不能跟「今天真的沒行程」長得一樣');
+
+  const ev=(title,s,e,opt)=>Object.assign({
+    getTitle:()=>title, getStartTime:()=>s, getEndTime:()=>e,
+    isAllDayEvent:()=>false, getLocation:()=>'', getId:()=>title+'@g',
+    getMyStatus:()=>'YES'},opt||{});
+  const D=(d,h,m)=>new Date(2026,8,d,h||0,m||0);
+  const EVENTS=[
+    ev('下午的檢討會',D(3,15,0),D(3,16,0),{getLocation:()=>'會議室'}),
+    ev('早上的站會',D(3,9,30),D(3,9,45)),
+    ev('中秋連假',D(3,0,0),D(4,0,0),{isAllDayEvent:()=>true}),
+    ev('不去的活動',D(3,11,0),D(3,12,0),{getMyStatus:()=>'NO'}),
+    ev('明天的提案',D(4,14,0),D(4,15,0)),
+    ev('大後天的事',D(9,10,0),D(9,11,0))];
+  ctx.CalendarApp={GuestStatus:{NO:'NO'},getDefaultCalendar:()=>({
+    getEvents:(from,to)=>EVENTS.filter(e=>e.getStartTime()>=from&&e.getStartTime()<to)})};
+
+  const b=ctx.handle_('board',{date:T},'tok');
+  assert.strictEqual(b.calError,'','有日曆就不該報錯');
+  const titles=b.calendar.map(e=>e.title);
+  assert.strictEqual(titles.join(),'中秋連假,早上的站會,下午的檢討會,明天的提案',
+    '整天的排當天最前面，其他照時間；婉拒的不列；只拿今天和明天：'+titles.join());
+  const one=b.calendar.find(e=>e.title==='早上的站會');
+  assert.strictEqual(one.time,'09:30');assert.strictEqual(one.until,'09:45');
+  assert.strictEqual(one.date,T,'要標清楚是哪一天，畫面才知道放哪一欄');
+  const allDay=b.calendar.find(e=>e.title==='中秋連假');
+  assert.strictEqual(allDay.time,'','整天的沒有幾點——硬印 00:00 會被當成半夜的會');
+  assert.strictEqual(allDay.allDay,true);
+  assert.strictEqual(b.calendar.find(e=>e.title==='下午的檢討會').where,'會議室');
+
+  // 行程不是任務：不進統計、不進任何一份任務清單
+  assert(!b.today.some(t=>t.title==='早上的站會'),'行程不能混進今日工作的任務裡');
+  assert.strictEqual(b.stats.totalToday,noCal.stats.totalToday,'件數不算行程');
+
+  // 日曆爆炸也只是沒有行程，不能連看板都打不開
+  ctx.CalendarApp={GuestStatus:{NO:'NO'},getDefaultCalendar:()=>{throw new Error('沒授權')}};
+  const boom=ctx.handle_('board',{date:T},'tok');
+  assert(boom.ok&&boom.calError,'日曆丟例外，看板照樣要回得來');
+  assert.strictEqual(JSON.stringify(boom.today),JSON.stringify(noCal.today),'任務一件都不能少');
+  console.log('日曆      '+titles.length+' 筆行程，讀不到時看板照常');
 }
 
 console.log('\nALL PASS');
