@@ -34,8 +34,8 @@ var METRIC_NUMS    = ['revenue', 'orders', 'spend', 'clicks', 'carts'];
 // 表頭（中文，給人看）與欄位鍵（英文，給 API 用）一一對應
 var LOG_HEADERS = ['id', '開始時間', '結束時間', '來源', '專案', '標題', '狀態', '摘要', '產出連結', 'session_id', '任務id', '檔案位置'];
 var LOG_KEYS    = ['id', 'start',    'end',     'source', 'project', 'title', 'status', 'summary', 'link', 'session_id', 'task_id', 'path'];
-var TASK_HEADERS = ['id', '建立時間', '標題', '專案', '到期日', '優先', '狀態', '下一步', '等待者', '預估時數', '備註', '完成時間', '執行者', '重複'];
-var TASK_KEYS    = ['id', 'created', 'title', 'project', 'due', 'priority', 'status', 'next', 'waiting', 'estimate', 'note', 'done_at', 'owner', 'repeat'];
+var TASK_HEADERS = ['id', '建立時間', '標題', '專案', '到期日', '優先', '狀態', '下一步', '等待者', '預估時數', '備註', '完成時間', '執行者', '重複', '排序'];
+var TASK_KEYS    = ['id', 'created', 'title', 'project', 'due', 'priority', 'status', 'next', 'waiting', 'estimate', 'note', 'done_at', 'owner', 'repeat', 'order'];
 
 var TASK_OPEN = ['待辦', '進行中'];
 var DATE_ONLY_KEYS = { due: true };
@@ -415,6 +415,7 @@ function handle_(action, p, token) {
       case 'tasks':       return { ok: true, rows: readTasks_(p.status) };
       case 'task_add':    return withBoard_({ ok: true, row: addTask_(p) }, p);
       case 'task_update': return withBoard_({ ok: true, row: updateTask_(p) }, p);
+      case 'task_move':   return withBoard_({ ok: true, row: moveTask_(p) }, p);
       case 'backfill':    return Object.assign({ ok: true }, backfill_());
       case 'board':       return Object.assign({ ok: true }, board_(p.date));
       case 'projects':    return Object.assign({ ok: true }, projects_(p.range, p.date));
@@ -608,9 +609,48 @@ function addTask_(p) {
     row[col.done_at] = '';
     row[col.owner] = normOwner_(p.owner);
     row[col.repeat] = normRepeat_(p.repeat);
+    row[col.order] = Date.now();        // 新加的排最後面
     sh.appendRow(fill_(row, TASK_KEYS.length));
     dirty_(SHEET_TASK);
     return toObj_(TASK_KEYS, row);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * 把一筆搬到另一筆的前面或後面。前端傳「放在誰旁邊」，序號由後端算，
+ * 因為只有後端看得到全部的列——前端手上只有畫面上那一欄。
+ *
+ * 用中間值插進去（前一筆和後一筆的平均），不必把整欄重寫一遍。
+ * 兩邊都有的話取中間；只有一邊的話往外讓開一步。
+ */
+function moveTask_(p) {
+  if (!p.id) throw new Error('id 必填');
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    var sh = sheet_(SHEET_TASK);
+    var col = index_(TASK_KEYS);
+    var rowNum = findRow_(sh, col.id, p.id);
+    if (!rowNum) throw new Error('找不到任務 ' + p.id);
+
+    var all = readAll_(SHEET_TASK, TASK_KEYS);
+    var at = function (id) {
+      if (!id) return null;
+      for (var i = 0; i < all.length; i++) if (all[i].id === id) return orderOf_(all[i]);
+      return null;
+    };
+    var before = at(p.before), after = at(p.after);   // before＝排在它前面那一筆
+    var v;
+    if (before !== null && after !== null) v = (before + after) / 2;
+    else if (before !== null) v = before + 1000;      // 放到最後面
+    else if (after !== null) v = after - 1000;        // 放到最前面
+    else throw new Error('要放在哪一筆旁邊？');
+
+    sh.getRange(rowNum, col.order + 1).setValue(v);
+    dirty_(SHEET_TASK);
+    return { id: p.id, order: v };
   } finally {
     lock.releaseLock();
   }
@@ -663,7 +703,7 @@ function backfill_() {
     var sh = sheet_(SHEET_TASK);
     var col = index_(TASK_KEYS);
     var last = sh.getLastRow();
-    var n = { rows: 0, id: 0, created: 0, priority: 0, status: 0, owner: 0, repeat: 0, due: 0, dueBad: 0, samples: [] };
+    var n = { rows: 0, id: 0, created: 0, priority: 0, status: 0, owner: 0, repeat: 0, due: 0, dueBad: 0, order: 0, samples: [] };
     if (last < 2) return n;
     var rng = sh.getRange(2, 1, last - 1, TASK_KEYS.length);
     var vals = rng.getValues();
@@ -698,6 +738,33 @@ function backfill_() {
         n.dueBad++;
       }
     });
+
+    // 補「排序」：照現在畫面上的順序（到期日 → 優先級 → 建立時間）編號，
+    // 所以第一次跑完之後畫面不會重排，只是從此可以用拖的。
+    // 已經有序號的不動——那是使用者自己排過的。
+    var blank = [];
+    vals.forEach(function (row) {
+      if (!String(row[col.title]).trim()) return;
+      if (String(row[col.order]).trim() !== '' && isFinite(Number(row[col.order]))) return;
+      blank.push(row);
+    });
+    if (blank.length) {
+      blank.sort(function (a, b) {
+        var da = String(a[col.due] || '9999-99-99'), db = String(b[col.due] || '9999-99-99');
+        if (da !== db) return da < db ? -1 : 1;
+        var pa = PRIORITY_RANK[normPriority_(a[col.priority])], pb = PRIORITY_RANK[normPriority_(b[col.priority])];
+        if (pa !== pb) return pa - pb;
+        return String(a[col.created]) < String(b[col.created]) ? -1 : 1;
+      });
+      // 從既有最大值往後接，不要跟使用者排好的擠在一起
+      var max = 0;
+      vals.forEach(function (row) {
+        var v = Number(row[col.order]);
+        if (isFinite(v) && String(row[col.order]).trim() !== '' && v > max) max = v;
+      });
+      blank.forEach(function (row, i) { row[col.order] = max + (i + 1) * 1000; });
+      n.order = blank.length;
+    }
 
     rng.setValues(vals);
     dirty_(SHEET_TASK);
@@ -740,6 +807,7 @@ function spawnNext_(sh, col, row) {
   next[col.done_at] = '';
   next[col.owner] = normOwner_(row[col.owner]);
   next[col.repeat] = rule;
+  next[col.order] = Date.now();
   sh.appendRow(next);
   dirty_(SHEET_TASK);
   return toObj_(TASK_KEYS, next);
@@ -1087,19 +1155,25 @@ function daysBetween_(a, b) {
 }
 
 /**
- * 依到期日、再依優先級排序，就地改動並回傳同一個陣列。
+ * 「排序」欄是一個數字，愈小愈前面。順序完全由使用者決定——拖到哪裡就是哪裡，
+ * 系統不再依到期日或優先級插手。逾期的和 S 最優先因此不會自己浮上來，
+ * 這是她指定的取捨：自己排的清單不該被系統重排。
  *
- * 同一天同一級的最後用「建立時間」定序，新加的就排在最後面。
- * 以前是拿 id 定序，但 id 是隨機的 uuid——新增一件事會插進清單中間，
- * 看起來像亂跳。id 只留著當最後的平手處理，讓前後端排得出一樣的結果。
+ * 沒有排序值的（舊資料、或別的工具貼進來的）退回用建立時間當序，
+ * 所以在跑 backfill 之前也不會亂掉，只是還不能拖。
  */
+function orderOf_(t) {
+  var v = Number(t.order);
+  if (isFinite(v) && String(t.order).trim() !== '') return v;
+  var d = parseDate_(t.created);
+  return d ? d.getTime() : 0;
+}
+
+/** 照「排序」排。平手時用 id，前後端才排得出一樣的結果 */
 function sortTasks_(rows) {
   return rows.sort(function (a, b) {
-    var da = a.due || '9999-99-99', db = b.due || '9999-99-99';
-    if (da !== db) return da < db ? -1 : 1;
-    if (a.priority !== b.priority) return PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority];
-    var ca = String(a.created || ''), cb = String(b.created || '');
-    if (ca !== cb) return ca < cb ? -1 : 1;
+    var oa = orderOf_(a), ob = orderOf_(b);
+    if (oa !== ob) return oa - ob;
     return a.id < b.id ? -1 : (a.id > b.id ? 1 : 0);
   });
 }

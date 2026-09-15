@@ -20,12 +20,13 @@ Sheet.prototype.getLastColumn=function(){return this.rows[0]?this.rows[0].length
 Sheet.prototype.getRange=function(r,c,nr,nc){const s=this;return{
   getValues(){return s.rows.slice(r-1,r-1+nr).map(x=>x.slice(c-1,c-1+nc))},
   setValues(v){v.forEach((row,i)=>{row.forEach((val,j)=>{s.rows[r-1+i][c-1+j]=val})});return this},
+  setValue(v){s.rows[r-1][c-1]=v;return this},
   setFontWeight(){return this}}};
 
-const TASKS=[['id','建立時間','標題','專案','到期日','優先','狀態','下一步','等待者','預估時數','備註','完成時間','執行者','重複']];
+const TASKS=[['id','建立時間','標題','專案','到期日','優先','狀態','下一步','等待者','預估時數','備註','完成時間','執行者','重複','排序']];
 const LOGS=[['id','開始時間','結束時間','來源','專案','標題','狀態','摘要','產出連結','session_id','任務id']];
 const T='2026-09-03', Y='2026-09-02', TM='2026-09-04';
-function task(id,title,pj,due,pri,st,next,wait,done,owner,rep){TASKS.push([id,T,title,pj,due,pri,st,next||'',wait||'','','',done||'',owner||'',rep||''])}
+function task(id,title,pj,due,pri,st,next,wait,done,owner,rep){TASKS.push([id,T,title,pj,due,pri,st,next||'',wait||'','','',done||'',owner||'',rep||'',''])}
 function log(id,s,e,src,pj,title,st,sum,link){LOGS.push([id,s,e,src,pj,title,st,sum||'',link||'','sid'+id,''])}
 
 task('T1','Claude SEO 優化','Claude SEO','2026-09-10','B','進行中','優化內頁標題','','','AI');
@@ -514,6 +515,49 @@ console.log('產出      ', out.rows.map(r=>r.title+'→'+r.link).join(' '));
   assert.strictEqual(g(nx2,'G2').length,0,'完成的不預告——它按完成的時候已經長出真的下一筆了');
   assert.strictEqual(g(nx2,'G3').length,0,'沒設重複的不預告');
   console.log('重複預告  下週看到 '+nx.ghosts.length+' 筆預告，件數仍是 '+nx.total);
+}
+
+// ---- 手動排序 ----
+// 順序完全由使用者決定：拖到哪裡就是哪裡，系統不再依到期日或優先級插手。
+{
+  const H=TASKS[0],col=n=>H.indexOf(n);
+  const mk=(id,created,order,due,pri)=>{const r=new Array(H.length).fill('');
+    r[col('id')]=id;r[col('建立時間')]=created;r[col('標題')]=id;r[col('專案')]='手排';
+    r[col('到期日')]=due||T;r[col('優先')]=pri||'B';r[col('狀態')]='待辦';r[col('執行者')]='我';
+    r[col('排序')]=order;TASKS.push(r)};
+  mk('M1','2026-09-03 09:00',1000);
+  mk('M2','2026-09-03 09:01',2000);
+  mk('M3','2026-09-03 09:02',3000);
+  const seq=()=>ctx.handle_('board',{date:T},'tok').today
+    .filter(t=>t.project==='手排').map(t=>t.id).join();
+  assert.strictEqual(seq(),'M1,M2,M3','照排序欄，小的在前面');
+
+  // 拖到最前面：只給「後面是誰」
+  let r=ctx.handle_('task_move',{id:'M3',before:'',after:'M1'},'tok');
+  assert(r.ok,'task_move: '+r.error);
+  assert.strictEqual(seq(),'M3,M1,M2');
+  // 夾在兩筆中間：取中間值，不用把整欄重寫
+  r=ctx.handle_('task_move',{id:'M3',before:'M1',after:'M2'},'tok');
+  assert.strictEqual(seq(),'M1,M3,M2');
+  assert.strictEqual(r.row.order,1500,'中間值：'+r.row.order);
+  // 拖到最後面：只給「前面是誰」
+  ctx.handle_('task_move',{id:'M1',before:'M2',after:''},'tok');
+  assert.strictEqual(seq(),'M3,M2,M1');
+
+  // 手排要蓋過到期日和優先級——這是她指定的取捨
+  mk('M9','2026-09-03 09:09',900,'2026-08-01','S');   // 逾期又最優先，但排序值最小
+  assert.strictEqual(seq(),'M9,M3,M2,M1','逾期的 S 不會自己浮上來，它在使用者排的位置');
+
+  // 沒有排序值的退回用建立時間，跑 backfill 之前也不會亂掉
+  mk('N1','2026-09-03 08:00','');
+  mk('N2','2026-09-03 08:30','');
+  const withBlank=ctx.handle_('board',{date:T},'tok').today
+    .filter(t=>t.project==='手排').map(t=>t.id).join();
+  assert(withBlank.indexOf('N1')<withBlank.indexOf('N2'),'沒序號的照建立時間：'+withBlank);
+
+  assert.strictEqual(ctx.handle_('task_move',{id:'M1'},'tok').ok,false,'沒說放哪裡就要擋');
+  assert.strictEqual(ctx.handle_('task_move',{before:'M1',after:'M2'},'tok').ok,false,'沒帶 id 要擋');
+  console.log('手動排序  拖到哪就是哪，逾期和 S 都不會自己浮上來');
 }
 
 // ---- 新加的排最後面 ----
