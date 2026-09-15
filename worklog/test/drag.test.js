@@ -456,6 +456,22 @@ assert(ctx.taskCard({id:'TA',title:'今天的',due:T,priority:'B',status:'待辦
   assert(/id="pgB"[^>]*class="pbody"/.test(src),'資料區是整頁內文，還能放表格');
 }
 
+// ---- 會捲動的表單，儲存那排要固定在底部 ----
+// 字級放大之後表單比視窗高，儲存鈕被推到看不見的地方。使用者按不到，
+// 就會以為「按了存不起來」——實際踩到的是手動紀錄那張（摘要有 11rem 高）。
+{
+  const css3=src.split('<style>')[1].split('</style>')[0];
+  const rule=k=>css3.slice(css3.indexOf(k),css3.indexOf('}',css3.indexOf(k)));
+  assert(/max-height/.test(rule('.sheet{'))&&/overflow-y:\s*auto/.test(rule('.sheet{')),
+    '新增／編輯的表單是會捲動的');
+  assert(/position:\s*sticky/.test(rule('.foot{')),
+    '所以儲存那排要黏在底部，不能跟著內容捲走：'+rule('.foot{'));
+  assert(/background:/.test(rule('.foot{')),
+    '黏住的那排要有底色，不然捲動的內容會從它後面透出來');
+  // 文件那一頁是另一種做法：內文自己捲，底部那排本來就一直在，不需要 sticky
+  assert(/flex:\s*1/.test(rule('.pbody{')),'資料區是內文自己捲');
+}
+
 // ---- 拖到同一欄裡面＝改順序 ----
 // 前端只知道畫面上這一欄，所以它送的是「夾在誰和誰中間」，序號交給後端算。
 {
