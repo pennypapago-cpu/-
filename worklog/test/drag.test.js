@@ -446,6 +446,22 @@ assert(!late.includes('逾期 '),'不再只寫「逾期」');
 // 今天到期的還是寫「今天」，不要被順延那條吃掉
 assert(ctx.taskCard({id:'TA',title:'今天的',due:T,priority:'B',status:'待辦'},'today').includes('今天'));
 
+// ---- 有摘要的卡片要看得出來 ----
+// 從 LINE 貼三行進來，第一行當標題、其餘收進摘要。卡片上不標的話那幾行等於藏起來，
+// 使用者會以為根本沒存進去（她就是這樣回報的）。
+{
+  const withNote=ctx.taskCard({id:'T1',title:'檢查品號',priority:'B',status:'待辦',due:T,
+    project:'LINE',note:'TTCO-244\nTTCO-241'},'today');
+  assert(withNote.includes('📝'),'有摘要要標記號');
+  assert(/title="[^"]*TTCO-244/.test(withNote),'滑上去要看得到前幾行，不然還是得點進去猜');
+  const noNote=ctx.taskCard({id:'T2',title:'沒摘要的',priority:'B',status:'待辦',due:T},'today');
+  assert(!noNote.includes('📝'),'沒摘要就不要多一個記號');
+  // 很長的摘要不要整段塞進 title，浮出來的提示會長到蓋住畫面
+  const long=ctx.taskCard({id:'T3',title:'長的',priority:'B',status:'待辦',due:T,
+    note:'很長'.repeat(200)},'today');
+  assert(long.match(/title="([^"]*)"/)[1].length<200,'提示要截短');
+}
+
 // ---- 卡片上直接改優先級 ----
 // 以前要點進編輯視窗才看得到優先級，一整排卡片看不出誰先誰後。
 {
