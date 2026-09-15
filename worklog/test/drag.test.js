@@ -456,6 +456,50 @@ assert(ctx.taskCard({id:'TA',title:'今天的',due:T,priority:'B',status:'待辦
   assert(/id="pgB"[^>]*class="pbody"/.test(src),'資料區是整頁內文，還能放表格');
 }
 
+// ---- 拖到同一欄裡面＝改順序 ----
+// 前端只知道畫面上這一欄，所以它送的是「夾在誰和誰中間」，序號交給後端算。
+{
+  assert.strictEqual(typeof ctx.reorder,'function','同一欄裡面要能拖著改順序');
+  const card=id=>({dataset:{id}});
+  const colOf=ids=>({dataset:{drop:'today'},querySelectorAll:()=>ids.map(card),
+    classList:{add(){},remove(){}}});
+  const ids=['A','B','C','D'];
+  const moved=(id,at)=>{sent=null;ctx.reorder(id,at?card(at):null,colOf(ids));
+    return sent?JSON.stringify(sent.params):null};
+  ctx.RAW={date:T,running:[],tomorrow:[],unscheduled:[],today:ids.map(id=>
+    ({id,title:id,priority:'B',status:'待辦',due:T,created:'2026-09-03 09:00',order:ids.indexOf(id)*1000}))};
+  ctx.paint=function(){};
+
+  assert.strictEqual(moved('D','A'),
+    JSON.stringify({id:'D',before:'',after:'A',board:1}),'拖到最前面：前面沒有人');
+  assert.strictEqual(moved('A',null),
+    JSON.stringify({id:'A',before:'D',after:'',board:1}),'拖到最後面：後面沒有人');
+  assert.strictEqual(moved('A','C'),
+    JSON.stringify({id:'A',before:'B',after:'C',board:1}),'夾在中間：前後各報一個');
+  // 放回原位不要送——按一下沒移動也會走到這裡
+  assert.strictEqual(moved('B','C'),null,'沒真的移動就不送');
+  assert.strictEqual(moved('C','C'),null,'拖到自己身上也不送');
+}
+
+// ---- 新加的排最後面（前端的樂觀排序要跟後端同一套） ----
+// 這兩套排序是同一條規則的兩份拷貝，最容易各自漂走：後端改了前端沒改，
+// 存檔前後順序就會跳一次。
+{
+  const mk=(id,created)=>({id,title:id,priority:'B',status:'待辦',due:T,created,
+    project:'',next:'',waiting:''});
+  ctx.RAW={date:T,running:[],tomorrow:[],unscheduled:[],
+    today:[mk('Z1','2026-09-03 09:00'),mk('Z2','2026-09-03 11:00'),mk('Z3','2026-09-03 10:00')]};
+  ctx.paint=function(){};
+  assert(ctx.applyTask(ctx.RAW,'Z1',{}),'找得到那筆');
+  assert.strictEqual(ctx.RAW.today.map(t=>t.id).join(),'Z1,Z3,Z2',
+    '同一天同一級照建立時間排：'+ctx.RAW.today.map(t=>t.id).join());
+  // id 的字母順序在最前面，但建立時間最晚——要排最後
+  ctx.RAW.today.push(mk('A0','2026-09-03 23:00'));
+  ctx.applyTask(ctx.RAW,'A0',{});
+  assert.strictEqual(ctx.RAW.today[ctx.RAW.today.length-1].id,'A0',
+    '最新加的排最後，不是照 id：'+ctx.RAW.today.map(t=>t.id).join());
+}
+
 // ---- 有摘要的卡片要看得出來 ----
 // 從 LINE 貼三行進來，第一行當標題、其餘收進摘要。卡片上不標的話那幾行等於藏起來，
 // 使用者會以為根本沒存進去（她就是這樣回報的）。

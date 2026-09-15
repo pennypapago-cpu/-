@@ -273,6 +273,9 @@
     transform:translateY(-2px);box-shadow:var(--sh2),var(--rim2)}
   .t:active{transform:translateY(0);box-shadow:var(--sh1),var(--rim)}
   .t.live{background:linear-gradient(180deg,rgba(240,85,109,.08),transparent 60%);border-color:rgba(240,85,109,.28)}
+  /* 拖曳時的插入點。用 inset 陰影畫線，不佔空間，卡片不會被推來推去 */
+  .t.insb{box-shadow:inset 0 3px 0 0 var(--acc),var(--sh1),var(--rim)}
+  .col.inse>.add{box-shadow:inset 0 3px 0 0 var(--acc)}
   /* 優先級改用左側色帶，不佔一整排標籤 */
   .t.pS{border:2px solid var(--s);box-shadow:0 0 0 3px rgba(255,45,85,.13),var(--sh2),var(--rim2)}
   .t.pS .ti{color:#ff8fa3}
@@ -2027,6 +2030,14 @@ function applyLog(id,patch){
  * 把一筆任務的改動就地套進看板資料，分欄規則跟後端 board_ 一致
  * （drag.test.js 會拿同一批資料比對兩邊的分欄結果，避免這裡跟後端走鐘）。
  */
+/** 「排序」欄愈小愈前面。沒有的（舊資料）退回用建立時間，跟後端 orderOf_ 同一套。 */
+function orderOf(t){
+  var v=Number(t.order);
+  if(isFinite(v)&&String(t.order==null?'':t.order).trim()!=='')return v;
+  // 建立時間要連時分一起看，只取日期的話同一天加的全部平手，又變回照 id 亂排
+  var m=String(t.created||'').match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{2}))?/);
+  return m?new Date(+m[1],+m[2]-1,+m[3],+(m[4]||0),+(m[5]||0)).getTime():0}
+
 function applyTask(b,id,patch){
   if(!b||!b.running)return false;
   var all=b.running.concat(b.today,b.tomorrow,b.unscheduled),t=null;
@@ -2036,9 +2047,8 @@ function applyTask(b,id,patch){
   var td=b.date,tm=ymd(new Date(parse(b.date).getTime()+864e5));
   var open=all.filter(function(x){return x.status==='待辦'||x.status==='進行中'});
   open.sort(function(a,c){                     // 跟後端 sortTasks_ 同一套規則
-    var da=a.due||'9999-99-99',dc=c.due||'9999-99-99';
-    if(da!==dc)return da<dc?-1:1;
-    if(a.priority!==c.priority)return PORD.indexOf(a.priority)-PORD.indexOf(c.priority);
+    var oa=orderOf(a),oc=orderOf(c);
+    if(oa!==oc)return oa-oc;
     return a.id<c.id?-1:(a.id>c.id?1:0)});
   b.running=open.filter(function(x){return x.status==='進行中'});
   var rest=open.filter(function(x){return x.status!=='進行中'});
@@ -2233,11 +2243,56 @@ function lift(x,y){
 function over(x,y){
   DRAG.ghost.style.left=(x-DRAG.dx)+'px';DRAG.ghost.style.top=(y-DRAG.dy)+'px';
   var c=colOf(document.elementFromPoint(x,y),DRAG.k);
+  // 插入點每次移動都要重算，所以排在下面那道「同一欄就不重算」的捷徑前面
+  if(DRAG.k==='t')markIns(c,y);
   if(c===DRAG.over)return;
   if(DRAG.over)DRAG.over.classList.remove('drop');
   var key=c&&c.dataset[DKIND[DRAG.k].key];
   var same=!c||key===undefined||key===DRAG.from;
   DRAG.over=c;if(!same)c.classList.add('drop');else DRAG.over=null}
+
+/**
+ * 拖到同一欄裡面＝改順序。標出會插在哪一張卡的前面；插到最後就標在「＋ 新增任務」上。
+ * 換欄的情況不算改順序，交給 toCol：那是改到期日或狀態，不是排順序。
+ */
+function markIns(col,y){
+  clearIns();DRAG.at=null;DRAG.atCol=null;
+  if(!col||col.dataset.drop!==DRAG.from)return;
+  var cards=[].slice.call(col.querySelectorAll('.t[data-id]')).filter(function(el){
+    return el!==DRAG.card});
+  var at=null;
+  for(var i=0;i<cards.length;i++){
+    var r=cards[i].getBoundingClientRect();
+    if(y<r.top+r.height/2){at=cards[i];break}}
+  DRAG.at=at;DRAG.atCol=col;
+  if(at)at.classList.add('insb');else col.classList.add('inse')}
+
+function clearIns(){
+  var a=document.querySelector('.t.insb');if(a)a.classList.remove('insb');
+  var c=document.querySelector('.col.inse');if(c)c.classList.remove('inse')}
+
+/** 放手：算出「夾在誰和誰中間」送給後端。序號由後端算，前端只知道畫面上這一欄。 */
+function reorder(id,at,col){
+  var ids=[].slice.call(col.querySelectorAll('.t[data-id]')).map(function(el){return el.dataset.id});
+  var from=ids.indexOf(id),to=at?ids.indexOf(at.dataset.id):ids.length;
+  if(from<0)return;
+  if(to>from)to--;                     // 自己被抽掉之後，後面的往前遞補一格
+  if(to===from)return;                 // 沒動就不要送
+  var rest=ids.slice();rest.splice(from,1);
+  var before=rest[to-1]||'',after=rest[to]||'';
+  return mutate('task_move',{id:id,before:before,after:after},function(){
+    return applyOrder(id,before,after)})
+    .then(function(r){if(r)toast('順序已更新')})}
+
+/** 先在畫面上排好，不等伺服器。序號取前後兩筆的中間值，跟後端算法一致。 */
+function applyOrder(id,before,after){
+  var a=allTasks(RAW),t=null,b=null,c=null;
+  a.forEach(function(x){if(!x)return;
+    if(x.id===id)t=x;if(before&&x.id===before)b=x;if(after&&x.id===after)c=x});
+  if(!t)return false;
+  var ob=b?orderOf(b):null,oc=c?orderOf(c):null;
+  t.order=(ob!==null&&oc!==null)?(ob+oc)/2:(ob!==null?ob+1000:(oc!==null?oc-1000:orderOf(t)));
+  return applyTask(RAW,id,{})}
 
 function move(e){
   if(DRAG){over(e.clientX,e.clientY);return}
@@ -2253,11 +2308,15 @@ function drop(){
   if(!DRAG)return;
   var k=DRAG.k,id=DRAG.id;
   var to=DRAG.over&&DRAG.over.dataset[DKIND[k].key];
+  var at=DRAG.at,atCol=DRAG.atCol;
   DRAG.ghost.remove();DRAG.card.classList.remove('lift');
   if(DRAG.over)DRAG.over.classList.remove('drop');
+  clearIns();
   document.body.classList.remove('dragging');
   var from=DRAG.from;DRAG=null;NODRAG=Date.now();
-  if(to===undefined||to===null||to===from)return;
+  if(to===undefined||to===null||to===from){
+    if(k==='t'&&atCol)return reorder(id,at,atCol);   // 同一欄裡面＝改順序
+    return}
   if(k==='nc')return moveItem(id,to);
   if(k==='chip')return toDay(id,to);
   toCol(id,to,from)}
