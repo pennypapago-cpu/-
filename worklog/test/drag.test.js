@@ -456,6 +456,25 @@ assert(ctx.taskCard({id:'TA',title:'今天的',due:T,priority:'B',status:'待辦
   assert(/id="pgB"[^>]*class="pbody"/.test(src),'資料區是整頁內文，還能放表格');
 }
 
+// ---- 新加的排最後面（前端的樂觀排序要跟後端同一套） ----
+// 這兩套排序是同一條規則的兩份拷貝，最容易各自漂走：後端改了前端沒改，
+// 存檔前後順序就會跳一次。
+{
+  const mk=(id,created)=>({id,title:id,priority:'B',status:'待辦',due:T,created,
+    project:'',next:'',waiting:''});
+  ctx.RAW={date:T,running:[],tomorrow:[],unscheduled:[],
+    today:[mk('Z1','2026-09-03 09:00'),mk('Z2','2026-09-03 11:00'),mk('Z3','2026-09-03 10:00')]};
+  ctx.paint=function(){};
+  assert(ctx.applyTask(ctx.RAW,'Z1',{}),'找得到那筆');
+  assert.strictEqual(ctx.RAW.today.map(t=>t.id).join(),'Z1,Z3,Z2',
+    '同一天同一級照建立時間排：'+ctx.RAW.today.map(t=>t.id).join());
+  // id 的字母順序在最前面，但建立時間最晚——要排最後
+  ctx.RAW.today.push(mk('A0','2026-09-03 23:00'));
+  ctx.applyTask(ctx.RAW,'A0',{});
+  assert.strictEqual(ctx.RAW.today[ctx.RAW.today.length-1].id,'A0',
+    '最新加的排最後，不是照 id：'+ctx.RAW.today.map(t=>t.id).join());
+}
+
 // ---- 有摘要的卡片要看得出來 ----
 // 從 LINE 貼三行進來，第一行當標題、其餘收進摘要。卡片上不標的話那幾行等於藏起來，
 // 使用者會以為根本沒存進去（她就是這樣回報的）。

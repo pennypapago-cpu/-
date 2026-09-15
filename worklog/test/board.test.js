@@ -516,6 +516,25 @@ console.log('產出      ', out.rows.map(r=>r.title+'→'+r.link).join(' '));
   console.log('重複預告  下週看到 '+nx.ghosts.length+' 筆預告，件數仍是 '+nx.total);
 }
 
+// ---- 新加的排最後面 ----
+// 以前同一天同一級是拿 id 定序，而 id 是隨機的 uuid，新增一件事會插進清單中間。
+{
+  const mk=(id,created)=>TASKS.push([id,created,'排序測試 '+id,'排序',T,'B','待辦','','','','','','我','']);
+  mk('Z1','2026-09-03 09:00');
+  mk('Z2','2026-09-03 11:00');
+  mk('Z3','2026-09-03 10:00');
+  const mine=ctx.handle_('board',{date:T},'tok').today
+    .filter(t=>t.project==='排序').map(t=>t.id);
+  assert.strictEqual(mine.join(),'Z1,Z3,Z2','同一天同一級要照建立時間排：'+mine.join());
+  // 再加一筆，它就該在最後面——不管 id 長什麼樣
+  mk('A0','2026-09-03 23:00');
+  const after=ctx.handle_('board',{date:T},'tok').today
+    .filter(t=>t.project==='排序').map(t=>t.id);
+  assert.strictEqual(after[after.length-1],'A0',
+    '最新加的要排最後面，即使 id 的字母順序在最前面：'+after.join());
+  console.log('新增排序  照建立時間，新的排最後');
+}
+
 // ---- 重複長出下一次時，寫過的內容要跟著過去 ----
 // 每週要做的事，摘要裡通常是「這件事怎麼做」（品號、對象、步驟），
 // 不跟著過去的話等於每週都要重打一次。

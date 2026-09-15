@@ -1086,13 +1086,21 @@ function daysBetween_(a, b) {
   return (!x || !y) ? 0 : Math.round((y - x) / 86400000);
 }
 
-/** 依到期日、再依優先級排序，就地改動並回傳同一個陣列 */
+/**
+ * 依到期日、再依優先級排序，就地改動並回傳同一個陣列。
+ *
+ * 同一天同一級的最後用「建立時間」定序，新加的就排在最後面。
+ * 以前是拿 id 定序，但 id 是隨機的 uuid——新增一件事會插進清單中間，
+ * 看起來像亂跳。id 只留著當最後的平手處理，讓前後端排得出一樣的結果。
+ */
 function sortTasks_(rows) {
   return rows.sort(function (a, b) {
     var da = a.due || '9999-99-99', db = b.due || '9999-99-99';
     if (da !== db) return da < db ? -1 : 1;
     if (a.priority !== b.priority) return PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority];
-    return a.id < b.id ? -1 : (a.id > b.id ? 1 : 0);   // 平手時用 id 定序，前端才排得出一樣的結果
+    var ca = String(a.created || ''), cb = String(b.created || '');
+    if (ca !== cb) return ca < cb ? -1 : 1;
+    return a.id < b.id ? -1 : (a.id > b.id ? 1 : 0);
   });
 }
 

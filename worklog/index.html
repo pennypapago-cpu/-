@@ -2039,6 +2039,9 @@ function applyTask(b,id,patch){
     var da=a.due||'9999-99-99',dc=c.due||'9999-99-99';
     if(da!==dc)return da<dc?-1:1;
     if(a.priority!==c.priority)return PORD.indexOf(a.priority)-PORD.indexOf(c.priority);
+    // 同一天同一級用建立時間，新加的排最後面。id 是隨機的 uuid，拿來定序會插進中間
+    var ca=String(a.created||''),cc=String(c.created||'');
+    if(ca!==cc)return ca<cc?-1:1;
     return a.id<c.id?-1:(a.id>c.id?1:0)});
   b.running=open.filter(function(x){return x.status==='進行中'});
   var rest=open.filter(function(x){return x.status!=='進行中'});
