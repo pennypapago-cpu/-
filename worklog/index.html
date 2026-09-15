@@ -1249,7 +1249,7 @@ function taskCard(t,col){
   var sub=(t.project?'<em>'+esc(t.project)+'</em>':'')+
     (t.waiting?'<b>等待者：</b>'+esc(t.waiting):(t.next?'<b>下一步：</b>'+esc(t.next):''));
   return '<article class="t p'+t.priority+'" data-id="'+t.id+'" title="'+PN[t.priority]+'">'+
-    '<div class="ti">'+ownerMark(t.owner)+repeatMark(t.repeat)+esc(t.title)+'</div>'+
+    '<div class="ti">'+ownerMark(t.owner)+repeatMark(t.repeat)+noteMark(t.note)+esc(t.title)+'</div>'+
     '<div class="meta"><div class="nx">'+sub+'</div>'+
       '<div class="dd '+cls+'">📅 '+lbl+'</div></div>'+
     '<div class="acts">'+a+'</div></article>'}
@@ -1260,6 +1260,13 @@ function ownerMark(o){
   if(o==='AI')return '<i class="own" title="交給 AI">🤖</i>';
   if(o==='一起')return '<i class="own" title="AI 做初稿、自己收尾">🤝</i>';
   return ''}
+
+/** 有寫摘要的標一個記號，滑上去看得到前幾行。
+    不標的話，從 LINE 貼進來的那幾行（品號、客人原話）等於藏起來了——
+    卡片上看不到、也沒有任何線索要點進去看。 */
+function noteMark(n){
+  n=String(n||'').trim();
+  return n?'<i class="own" title="'+esc(n.slice(0,140)+(n.length>140?'…':''))+'">📝</i>':''}
 
 /** 重複任務標一個記號，看得出這件做完還會再來 */
 function repeatMark(r){

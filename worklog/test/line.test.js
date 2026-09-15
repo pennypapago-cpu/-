@@ -87,8 +87,27 @@ assert.strictEqual(col('執行者'),'我','從 LINE 丟進來的是自己要做�
 assert.strictEqual(col('優先'),'B');
 assert.strictEqual(col('專案'),'LINE','看得出這筆是從哪裡進來的');
 assert(reply().includes('已加到今日工作：跟 PN 確認合約'),'回一句確認：'+reply());
+// 其餘幾行收到哪裡也要講。只覆誦第一行的話，貼三行進來會以為後面兩行被吃掉了
+assert(reply().includes('另外 2 行收進摘要'),'要說清楚其餘幾行沒有不見：'+reply());
 assert.strictEqual(sent[0].auth,'Bearer ch-tok','回話要帶 channel access token');
 assert.strictEqual(sent[0].body.replyToken,'RT');
+
+// 只有一行就不要多嘴，沒有「另外 0 行」這種事
+{
+  reset({LINE_SECRET:'s',LINE_TOKEN:'k',LINE_USER:'U-penny'});
+  post({line:'s'},msg('檢查品號'));
+  assert(!/另外/.test(reply()),'沒有其餘內容就不要加那句：'+reply());
+}
+
+// 她實際回報的那一則：三行的品號清單，只看到第一行被覆誦就以為後面沒進去
+{
+  reset({LINE_SECRET:'s',LINE_TOKEN:'k',LINE_USER:'U-penny'});
+  post({line:'s'},msg('檢查品號\nTTCO-244 \nTTCO-241'));
+  const r=tasks()[0];
+  assert.strictEqual(r[TASK_H.indexOf('標題')],'檢查品號');
+  assert.strictEqual(r[TASK_H.indexOf('備註')],'TTCO-244 \nTTCO-241','品號要收進備註');
+  assert(reply().includes('另外 2 行收進摘要'),'而且要回話講出來：'+reply());
+}
 
 // ---- 開頭寫日期就照著排 ----
 // Cowork 實測抓到的：訊息寫「明天」，到期日卻被設成今天

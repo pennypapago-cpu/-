@@ -289,7 +289,7 @@ function lineHook_(e) {
         continue;
       }
       var t = lineTask_(String(ev.message.text || ''));
-      lineReply_(ev.replyToken, t ? lineWhenSaid_(t.due) + '：' + t.title : '訊息是空的，沒有東西可以記。');
+      lineReply_(ev.replyToken, t ? lineSaid_(t) : '訊息是空的，沒有東西可以記。');
     }
   } catch (err) {
     // 回錯誤碼只會讓 LINE 一直重送同一則，變成重複的任務。錯誤留在紀錄裡就好
@@ -362,6 +362,20 @@ function lineWhen_(line) {
   }
 
   return none;
+}
+
+/**
+ * 回話要把「其餘幾行收到哪裡」也講出來。只回標題的話，貼三行進來只看到第一行被覆誦，
+ * 使用者會以為後面幾行被吃掉了——實際上它們在備註裡，只是從 LINE 這邊看不到。
+ */
+function lineSaid_(t) {
+  var s = lineWhenSaid_(t.due) + '：' + t.title;
+  var n = noteLines_(t.note);
+  return n ? s + '（另外 ' + n + ' 行收進摘要）' : s;
+}
+
+function noteLines_(note) {
+  return String(note || '').split('\n').filter(function (x) { return x.trim(); }).length;
 }
 
 /** 回話要講出實際排到哪一天。寫「明天」卻回「已加到今日工作」，使用者會以為沒解析到。 */
