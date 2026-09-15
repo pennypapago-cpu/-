@@ -446,6 +446,16 @@ assert(!late.includes('逾期 '),'不再只寫「逾期」');
 // 今天到期的還是寫「今天」，不要被順延那條吃掉
 assert(ctx.taskCard({id:'TA',title:'今天的',due:T,priority:'B',status:'待辦'},'today').includes('今天'));
 
+// 通則：每一種卡片都要有一個能寫長文字的地方。少一種，那種卡片就只剩標題，
+// 細節只能寫在標題裡或乾脆不寫。
+{
+  const forms=[['任務','fB'],['手動紀錄','fS']];
+  forms.forEach(([name,id])=>assert(
+    new RegExp('<textarea[^>]*id="'+id+'"').test(src),
+    name+'的表單少了可以寫長文字的那一格（'+id+'）'));
+  assert(/id="pgB"[^>]*class="pbody"/.test(src),'資料區是整頁內文，還能放表格');
+}
+
 // ---- 有摘要的卡片要看得出來 ----
 // 從 LINE 貼三行進來，第一行當標題、其餘收進摘要。卡片上不標的話那幾行等於藏起來，
 // 使用者會以為根本沒存進去（她就是這樣回報的）。
