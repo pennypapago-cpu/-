@@ -516,6 +516,37 @@ console.log('產出      ', out.rows.map(r=>r.title+'→'+r.link).join(' '));
   console.log('重複預告  下週看到 '+nx.ghosts.length+' 筆預告，件數仍是 '+nx.total);
 }
 
+// ---- 重複長出下一次時，寫過的內容要跟著過去 ----
+// 每週要做的事，摘要裡通常是「這件事怎麼做」（品號、對象、步驟），
+// 不跟著過去的話等於每週都要重打一次。
+{
+  task('K1','每週盤點','Shopline',T,'B','待辦','先對帳','倉庫','','','每週');
+  const row=TASKS[TASKS.length-1];
+  row[TASKS[0].indexOf('備註')]='TTCO-244\nTTCO-241\n盤完拍照回傳';
+  const done=ctx.handle_('task_update',{id:'K1',status:'完成'},'tok');
+  const n=done.row.spawned;
+  assert(n,'要長出下一次');
+  assert.strictEqual(n.note,'TTCO-244\nTTCO-241\n盤完拍照回傳','摘要要跟著過去');
+  assert.strictEqual(n.next,'先對帳','下一步也是');
+  assert.strictEqual(n.waiting,'倉庫','等待者也是');
+  assert.strictEqual(n.repeat,'每週');
+  assert.strictEqual(n.status,'待辦','新的那筆是待辦，不是繼承完成');
+  assert.notStrictEqual(n.id,'K1','是新的一筆');
+  // 做完的那一筆留在原地，內容也不能被清掉——它是這次做了什麼的紀錄
+  const H=TASKS[0],old=TASKS.filter(r=>r[0]==='K1')[0];
+  assert.strictEqual(old[H.indexOf('狀態')],'完成');
+  assert.strictEqual(old[H.indexOf('備註')],'TTCO-244\nTTCO-241\n盤完拍照回傳',
+    '原本那筆的內容要留著——它是這次做了什麼的紀錄');
+  // 每月也一樣——她問的是「週和月」，兩種都釘住
+  task('K2','每月對帳','Shopline','2026-09-01','B','待辦','','','','','每月');
+  TASKS[TASKS.length-1][TASKS[0].indexOf('備註')]='對帳單放在共用雲端';
+  const m=ctx.handle_('task_update',{id:'K2',status:'完成'},'tok').row.spawned;
+  assert(m,'每月的也要長出下一次');
+  assert.strictEqual(m.note,'對帳單放在共用雲端','每月的摘要一樣要跟著過去');
+  assert.strictEqual(m.repeat,'每月');
+  console.log('重複保存  每週和每月的摘要、下一步、等待者都跟著下一次過去');
+}
+
 // ---- S 最優先 ----
 // 多一級不是換個字而已：排序、占比、建議順序的理由都要跟著認得它。
 {
