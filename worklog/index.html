@@ -621,7 +621,12 @@
     border-radius:9px;padding:10px 11px;font-size:1.125rem}
   .f textarea{resize:vertical;min-height:60px}
   .f2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-  .foot{display:flex;gap:9px;margin-top:16px}
+  /* 儲存鈕永遠貼在表單底部。字放大之後表單會比視窗高，鈕被推到看不到的地方，
+     按不到就會以為「按了存不起來」——這是實際踩到的。負的邊界是要蓋掉 .sheet 的內距，
+     不然鈕下面會露出一條縫，捲動的內容會從那裡穿過去。 */
+  .foot{display:flex;gap:9px;position:sticky;bottom:-18px;z-index:1;
+    margin:16px -18px -18px;padding:14px 18px 18px;background:var(--face2);
+    box-shadow:0 -12px 18px -12px rgba(0,0,0,.6)}
   .foot button{flex:1;padding:11px;border-radius:10px;font-size:1.125rem;font-weight:600;
     background:var(--card);border:1px solid var(--line2);color:var(--mute)}
   .foot button.pri{background:var(--acc2);border-color:var(--acc2);color:#fff}
@@ -659,6 +664,7 @@
       font-size:2.0312rem;line-height:1;box-shadow:0 6px 22px rgba(0,0,0,.5)}
     .veil{align-items:flex-end;padding:0}
     .sheet{max-width:none;border-radius:16px 16px 0 0;max-height:92vh;padding-bottom:26px}
+    .foot{bottom:-26px;margin-bottom:-26px;padding-bottom:26px}
   }
   @media(min-width:981px){ .burger{display:none} .scrim{display:none!important} }
   @media(max-width:1240px) and (min-width:981px){
