@@ -456,6 +456,13 @@ assert(ctx.taskCard({id:'TA',title:'今天的',due:T,priority:'B',status:'待辦
   assert(/id="pgB"[^>]*class="pbody"/.test(src),'資料區是整頁內文，還能放表格');
 }
 
+// backfill 跑完要講出補了幾筆排序。那是「從此可以用拖的」的關鍵一步，
+// 不報的話跑完也不知道成了沒——實際發生過：Cowork 回報裡完全沒提到排序。
+{
+  const bf=src.slice(src.indexOf("call('backfill'"),src.indexOf("call('backfill'")+700);
+  assert(/排序/.test(bf)&&/r\.order/.test(bf),'backfill 的回報要包含排序補了幾筆：'+bf.slice(0,240));
+}
+
 // ---- 會捲動的表單，儲存那排要固定在底部 ----
 // 字級放大之後表單比視窗高，儲存鈕被推到看不見的地方。使用者按不到，
 // 就會以為「按了存不起來」——實際踩到的是手動紀錄那張（摘要有 11rem 高）。
