@@ -166,6 +166,12 @@ function setup() {
   }
   cfg.getRange(2, 1, 1, 2).setValues([['TOKEN', token]]);
   cfg.getRange(3, 1, 1, 2).setValues([['說明', 'TOKEN 是 API 與手機介面的金鑰，外洩就到 Apps Script 的 Script Properties 改掉再重跑 setup']]);
+  // 只在還沒有的時候寫，不然每次 update-worklog 跑 setup 都會蓋掉她調過的比例
+  if (!cfgGet_(CFG_USAGE_W)) {
+    cfgSet_(CFG_USAGE_W, USAGE_WEIGHTS.join(','));
+    cfgSet_('說明2', 'claude額度分配 是「週五晚上＋週末,一,二,三,四,五」六段，'
+      + '加起來不必剛好 100，看板照比例換算');
+  }
   cfg.autoResizeColumns(1, 2);
 
   var defaultSheet = ss.getSheetByName('工作表1') || ss.getSheetByName('Sheet1');
@@ -429,6 +435,8 @@ function handle_(action, p, token) {
       case 'item_del':    return { ok: true, removed: itemDel_(p), data: data_() };
       case 'metrics':     return { ok: true, metrics: metrics_(p.date) };
       case 'metrics_save': return withBoard_({ ok: true, metrics: saveMetrics_(p) }, p);
+      case 'usage':       return { ok: true, usage: usage_() };
+      case 'usage_save':  return withBoard_({ ok: true, usage: saveUsage_(p) }, p);
       case 'brief':       return Object.assign({ ok: true }, brief_(p.date));
       case 'brief_save':  return { ok: true, row: saveBrief_(p) };
       default:            return { ok: false, error: '不認識的 action: ' + action };
@@ -845,6 +853,7 @@ function board_(date) {
     stats: stats_(today, week, open, logsToday),
     note: readBrief_(today),
     metrics: metrics_(today),
+    usage: usage_(),
     logs: logsToday,
     calendar: cal.events,
     // 讀不到要說出來。空陣列沒辦法分辨「今天真的沒行程」和「根本沒授權」，
@@ -1493,6 +1502,131 @@ function saveMetrics_(p) {
   } finally {
     lock.releaseLock();
   }
+}
+
+// ---------------------------------------------------------------- Claude 用量
+
+/**
+ * Claude 訂閱的每週額度用到哪了。
+ *
+ * 這個數字沒有官方 API 可讀——Admin API 只給 API 帳戶的用量，訂閱方案的
+ * 5 小時／每週額度只出現在 /usage 面板上。所以這裡存的永遠是「最後一次
+ * 有人看到的值」，由看板上點一下手動填，或 Cowork 讀了面板之後寫進來。
+ */
+var CFG_USAGE = 'claude用量';
+var CFG_USAGE_AT = 'claude用量更新';
+var CFG_USAGE_W = 'claude額度分配';
+
+// 週期是週五 20:00 到下週五 20:00（面板上的 Resets Fri 8:00 PM）。
+var USAGE_RESET_DAY = 5;    // 0＝日 … 5＝五
+var USAGE_RESET_HOUR = 20;
+
+/**
+ * 額度怎麼分給一週。順序是「週五晚上＋週末 / 一 / 二 / 三 / 四 / 五」。
+ *
+ * 不照七天平均的原因：週期一開頭就是整個週末。平均分的話，週末不用電腦
+ * 就一定累積出「落後」，到週一早上看板已經在喊超前；反過來完全不給週末
+ * 額度，週六碰一下就變紅字。兩種都會變成狼來了，看兩天就不看了。
+ */
+var USAGE_WEIGHTS = [15, 17, 17, 17, 17, 17];
+
+/** 設定工作表是 項目／值 兩欄。TOKEN 也在這張表上，所以一次只取指定那一格，
+    不要整張倒出來——順手 return 一個含 TOKEN 的物件，遲早會被送到前端。 */
+function cfgGet_(key) {
+  var sh = SpreadsheetApp.getActive().getSheetByName(SHEET_CFG);
+  if (!sh) return '';
+  var row = cfgRow_(sh, key);
+  return row ? sh.getRange(row, 2, 1, 1).getValues()[0][0] : '';
+}
+
+function cfgSet_(key, value) {
+  var sh = ensureSheet_(SpreadsheetApp.getActive(), SHEET_CFG, ['項目', '值']);
+  var row = cfgRow_(sh, key);
+  if (row) sh.getRange(row, 2, 1, 1).setValues([[value]]);
+  else sh.appendRow([key, value]);
+}
+
+/** 找某個項目在第幾列，沒有就回 0。表頭佔第一列，所以從第二列開始找。 */
+function cfgRow_(sh, key) {
+  var last = sh.getLastRow();
+  if (last < 2) return 0;
+  var rows = sh.getRange(2, 1, last - 1, 1).getValues();
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i][0]).trim() === key) return i + 2;
+  }
+  return 0;
+}
+
+/**
+ * 讀她自己調過的分配比例。加起來不必剛好 100——照比例換算，
+ * 這樣「1,2,2,2,2,2」跟「15,17,17,17,17,17」都能填。
+ * 六段沒填齊就整組不採用：半套的比例比預設值更難解釋。
+ */
+function usageWeights_() {
+  var raw = String(cfgGet_(CFG_USAGE_W) || '').trim();
+  if (!raw) return USAGE_WEIGHTS;
+  var w = raw.split(/[,，\s]+/).map(function (s) { return Number(s); });
+  if (w.length !== 6) return USAGE_WEIGHTS;
+  var sum = 0;
+  for (var i = 0; i < 6; i++) {
+    if (!isFinite(w[i]) || w[i] < 0) return USAGE_WEIGHTS;
+    sum += w[i];
+  }
+  if (!sum) return USAGE_WEIGHTS;
+  return w.map(function (n) { return n / sum * 100; });
+}
+
+/** 現在落在週期的第幾段。0＝週五 20:00 之後到週日，1..5＝週一到週五。 */
+function usageBucket_(d) {
+  var day = d.getDay();
+  if (day === 0 || day === 6) return 0;
+  // 週五 20:00 一過就是新週期的開頭，跟週末同一段
+  if (day === USAGE_RESET_DAY) return d.getHours() >= USAGE_RESET_HOUR ? 0 : 5;
+  return day;
+}
+
+/** 下一次歸零的時刻 */
+function usageReset_(d) {
+  var ahead = (USAGE_RESET_DAY - d.getDay() + 7) % 7;
+  if (ahead === 0 && d.getHours() >= USAGE_RESET_HOUR) ahead = 7;
+  var r = new Date(d.getFullYear(), d.getMonth(), d.getDate() + ahead, USAGE_RESET_HOUR, 0, 0);
+  return r;
+}
+
+function usage_(now) {
+  var d = now || new Date();
+  var w = usageWeights_();
+  var bucket = usageBucket_(d);
+  var allow = 0;
+  for (var i = 0; i <= bucket; i++) allow += w[i];
+  var reset = usageReset_(d);
+  var pct = num_(cfgGet_(CFG_USAGE));
+  var u = {
+    has: pct !== null,
+    pct: pct,
+    allow: Math.round(allow),
+    updated: String(cfgGet_(CFG_USAGE_AT) || ''),
+    resetAt: fmtDateTime_(reset),
+    // 無條件進位：剩 0.2 天說「剩 1 天」比說「剩 0 天」好判斷
+    daysLeft: Math.ceil((reset.getTime() - d.getTime()) / 86400000)
+  };
+  if (pct === null) { u.diff = null; u.state = 'na'; u.stale = 0; return u; }
+  u.diff = Math.round((pct - u.allow) * 10) / 10;
+  // 超前 5 個百分點以內還在「今天多做一點」的範圍，不值得變紅
+  u.state = u.diff <= 0 ? 'ok' : (u.diff <= 5 ? 'warn' : 'over');
+  var at = parseDate_(u.updated);
+  // 數字是人抄的，隔一夜就可能差很多。過了一天就別再拿它下判斷
+  u.stale = at ? Math.floor((d.getTime() - at.getTime()) / 86400000) : 0;
+  if (u.stale >= 1) u.state = 'stale';
+  return u;
+}
+
+function saveUsage_(p) {
+  var n = num_(p.pct);
+  if (n === null || n < 0 || n > 100) throw new Error('用量要填 0 到 100 之間的數字');
+  cfgSet_(CFG_USAGE, n);
+  cfgSet_(CFG_USAGE_AT, now_());
+  return usage_();
 }
 
 function brief_(date) {

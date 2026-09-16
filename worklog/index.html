@@ -160,6 +160,13 @@
   .mx .m.good b{color:#4ade9e}
   .mx .m.bad b{color:#ff8b8b}
   .mx .m.na b{color:var(--dim);font-weight:600}
+  .mx .m.warn b{color:#e8b45c}
+  /* 可以點的那一格要看得出來可以點，不然沒人會去按 */
+  .mx .m.tap{cursor:pointer}
+  .mx .m.tap:hover{border-color:var(--dim)}
+  /* 就地輸入：沿用同一格的字級，數字不會在按下去的瞬間跳一下大小 */
+  .mx .m b input{width:100%;font:inherit;color:inherit;background:transparent;
+    border:0;border-bottom:2px solid var(--b);padding:0;outline:none}
   .mx .up{flex:0 0 auto;align-self:center;color:var(--dim);font-size:0.8125rem;padding:0 2px}
   .mx .miss{flex:1 1 100%;color:var(--mute);font-size:0.875rem;padding:9px 12px;
     background:var(--card);border:1px dashed var(--line2);border-radius:11px}
@@ -1089,7 +1096,7 @@ function hit(o,q){return !q||[o.title,o.project,o.next,o.waiting,o.summary,o.sou
 function paint(){
   header();
   var q=$('q').value.trim().toLowerCase();
-  if(VIEW!=='board'){mx(null);brief('')}   // 這兩條只屬於每日看板
+  if(VIEW!=='board'){mx(null,null);brief('')}   // 這兩條只屬於每日看板
   if(VIEW==='settings')return $('view').innerHTML=settings();
   if(!RAW)return;
   if(VIEW==='board')return $('view').innerHTML=board(RAW,q);
@@ -1102,7 +1109,7 @@ function paint(){
 
 /* ---------------- board ---------------- */
 function board(r,q){
-  brief(r.note);mx(r.metrics);
+  brief(r.note);mx(r.metrics,r.usage);
   var f=function(a,c){return a.filter(function(x){return hit(x,q)}).map(function(t){return taskCard(t,c)})};
   var run=f(r.running,'run').concat(r.liveLogs.filter(function(l){return hit(l,q)}).map(logCard));
   var td=r.date||today(),tm=ymd(new Date(parse(td).getTime()+864e5));
@@ -1179,7 +1186,7 @@ function briefItems(body){
 
 function toggleMx(){
   MXOPEN=!MXOPEN;try{localStorage.setItem('mxOpen',MXOPEN?'1':'0')}catch(e){}
-  mx(RAW&&RAW.metrics);header()}
+  mx(RAW&&RAW.metrics,RAW&&RAW.usage);header()}
 
 function toggleBrief(){
   BOPEN=!BOPEN;localStorage.setItem('briefOpen',BOPEN?'1':'0');
@@ -1196,13 +1203,13 @@ function money(v){return v===null||v===undefined||v===''?'—':'$'+n2(v)}
  * 生意數字列。看板連不到 Shopline 和 FB 廣告管理員，數字是 Cowork 的
  * daily-metrics skill 抓好寫進「指標」工作表的，這裡只負責顯示。
  */
-function mx(m){
+function mx(m,u){
   var el=$('mx'),h=$('mxHead');
-  if(!m||!MXOPEN){el.style.display='none';h.style.display='none';el.innerHTML='';return}
+  if((!m&&!u)||!MXOPEN){el.style.display='none';h.style.display='none';el.innerHTML='';return}
   el.style.display='';h.style.display='flex';$('mxWhen').textContent='';
-  if(!m.has){
+  if(!m||!m.has){
     el.innerHTML='<div class="miss">今日還沒有營運數字。在 Cowork 說「更新今日數據」，'+
-      '它會去 Shopline 和 FB 廣告管理員抓一次填進來。</div>';
+      '它會去 Shopline 和 FB 廣告管理員抓一次填進來。</div>'+useTile(u);
     return}
   // 廣告佔比是成本，愈低愈好，所以好壞的顏色跟其他格子反過來。
   // 門檻沿用原本 ROAS 那組換算過來的：33.3%＝ROAS 3，66.7%＝ROAS 1.5，
@@ -1222,13 +1229,58 @@ function mx(m){
       '','FB 廣告的連結點擊，不是全站流量')+
     tile('加入購物車',n2(m.carts),m.cpaCart===null?'':'一次 '+money(m.cpaCart),
       '','FB 的歸因轉換（預設 7 天點擊 + 1 天瀏覽），今天報的裡面有前幾天點的人。'+
-      '跟「流量」基準不同，不要拿來算轉換率。');
+      '跟「流量」基準不同，不要拿來算轉換率。')+
+    useTile(u);
   $('mxWhen').textContent=m.updated?String(m.updated).slice(11,16)+' 更新':''}
 
 function tile(label,val,sub,cls,tip){
   return '<div class="m'+(cls?' '+cls:'')+(tip?' tip':'')+'"'+
     (tip?' title="'+esc(tip)+'"':'')+'><u>'+esc(label)+'</u><b>'+esc(val)+'</b>'+
     (sub?'<s>'+esc(sub)+'</s>':'')+'</div>'}
+
+/**
+ * Claude 每週額度用掉多少。訂閱方案沒有官方 API 可讀（Admin API 只給 API 帳戶），
+ * 數字是看了 /usage 面板之後填進來的——所以這一格兼作輸入口，點一下就能改，
+ * 不用為了一個數字再開一個設定頁。後端還沒更新時 u 是 undefined，那就整格不畫，
+ * 免得點下去只換來一句「不認識的 action」。
+ */
+function useTile(u){
+  if(!u)return '';
+  var cls={ok:'good',warn:'warn',over:'bad',stale:'na',na:'na'}[u.state]||'na';
+  var val='—',sub='點一下填現在的數字';
+  if(u.has){
+    val=n2(u.pct)+'%';
+    sub='上限 '+n2(u.allow)+'%・'+(u.stale>=1?'數字 '+u.stale+' 天前':'剩 '+u.daysLeft+' 天');
+  }
+  return '<div class="m tip tap '+cls+'" title="'+esc(
+    'Claude 訂閱的每週額度用掉多少。這個數字沒有 API 可以讀，要自己看 /usage 面板'+
+    '再點這一格填進來。「上限」是到今天為止照進度應該用掉的量，週期從週五 20:00 '+
+    '歸零；額度不照七天平均分，因為週期一開頭就是週末。要改比例就到試算表'+
+    '「設定」工作表的 claude額度分配 那一列，六段依序是「週五晚上＋週末,一,二,三,四,五」。'
+  )+'" id="useT" onclick="setUse()"><u>Claude 用量</u>'+
+    '<b id="useV">'+esc(val)+'</b><s>'+esc(sub)+'</s></div>'}
+
+/** 點那一格就地打字。不開視窗也不用 prompt——為了一個兩位數的數字
+    彈一個對話框，在手機上要多按兩次才回得到看板。 */
+function setUse(){
+  var b=$('useV');if(!b||b.querySelector('input'))return;
+  var u=RAW&&RAW.usage;
+  b.innerHTML='<input type="number" min="0" max="100" step="1" value="'+
+    (u&&u.has?esc(String(u.pct)):'')+'" onclick="event.stopPropagation()" '+
+    'onkeydown="useKey(event,this)" onblur="useSave(this)">';
+  var i=b.querySelector('input');i.focus();i.select()}
+
+function useKey(e,i){
+  if(e.key==='Enter')i.blur();
+  // 取消要先立旗標再 blur，不然 onblur 會照樣把值存下去
+  if(e.key==='Escape'){i.dataset.esc='1';i.blur()}}
+
+function useSave(i){
+  var back=function(){mx(RAW&&RAW.metrics,RAW&&RAW.usage)};
+  if(i.dataset.esc){back();return}
+  var n=Number(String(i.value).replace(/[%％\s]/g,''));
+  if(i.value===''||!isFinite(n)||n<0||n>100){toast('要填 0 到 100 的數字');back();return}
+  mutate('usage_save',{pct:n}).then(function(r){if(r)toast('用量記成 '+n2(n)+'%')})}
 
 /** pre 是排在任務前面、但不算件數的東西（目前只有日曆行程）。
     件數講的是「還有幾件事要做完」，行程不是待辦，算進去會讓那個數字失去意義。 */
