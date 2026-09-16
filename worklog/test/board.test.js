@@ -43,7 +43,7 @@ log('L3',Y+' 14:00',Y+' 15:00','Cowork','起士公爵','昨天的事','完成');
 
 const METRICS=[['日期','營業額','訂單數','廣告花費','流量','加入購物車','更新時間'],
   [T,48200,31,12500,1840,96,T+' 14:30']];
-const sheets={'指標':new Sheet('指標',METRICS),'任務':new Sheet('任務',TASKS),'紀錄':new Sheet('紀錄',LOGS),'簡報':new Sheet('簡報',[['日期','產生時間','內容'],[T,T+' 07:30','昨天：完成 board API。\n今天必做：吳若樺貼文定稿。\n建議：先清逾期那件。']])};
+const sheets={'設定':new Sheet('設定',[['項目','值'],['TOKEN','tok']]),'指標':new Sheet('指標',METRICS),'任務':new Sheet('任務',TASKS),'紀錄':new Sheet('紀錄',LOGS),'簡報':new Sheet('簡報',[['日期','產生時間','內容'],[T,T+' 07:30','昨天：完成 board API。\n今天必做：吳若樺貼文定稿。\n建議：先清逾期那件。']])};
 const ctx={Utilities:{formatDate:f,getUuid:()=>'u'+String(++UUID).padStart(7,'0')+'-'+UUID},Logger:{log(){}},
   SpreadsheetApp:{getActive:()=>({getSheetByName:n=>sheets[n]||null})},
   PropertiesService:{getScriptProperties:()=>({getProperty:()=>'tok',setProperty(){}})},
@@ -687,3 +687,79 @@ console.log('產出      ', out.rows.map(r=>r.title+'→'+r.link).join(' '));
 }
 
 console.log('\nALL PASS');
+
+// ---- Claude 每週用量 ----
+// 週期是週五 20:00 到下週五 20:00，額度不照七天平均分（週期一開頭就是週末）。
+// 這段換算全是日期邊界，寫錯了畫面上只會看到一個不太對的數字，沒人會發現，
+// 所以這裡把整個星期每一天都釘住。
+assert.strictEqual(typeof ctx.usage_,'function','usage_ 要存在');
+const at=s=>new Date(s.length>10?s.replace(' ','T'):s+'T12:00:00');
+
+// 到當天為止「照進度應該用掉多少」。預設 15 / 17×5。
+const WANT=[['2026-09-11 21:00',15],   // 五 20:00 之後＝新週期的開頭，跟週末同一段
+            ['2026-09-12',15],['2026-09-13',15],
+            ['2026-09-14',32],['2026-09-15',49],['2026-09-16',66],
+            ['2026-09-17',83],['2026-09-18 19:00',100]];
+WANT.forEach(([when,allow])=>
+  assert.strictEqual(ctx.usage_(at(when)).allow,allow,when+' 的上限應該是 '+allow));
+
+// 邊界：週五 19:59 還是上一個週期的最後一刻，20:00 一到就歸零重算
+assert.strictEqual(ctx.usage_(at('2026-09-18 19:59')).allow,100,'週五 20:00 前是舊週期的尾巴');
+assert.strictEqual(ctx.usage_(at('2026-09-18 20:00')).allow,15,'週五 20:00 一到就是新週期');
+
+// 通則：一路走完整個週期，上限只能往上不能往下，而且最後一定要走到 100。
+// 少了這條，比例填成加起來 80 也不會有人發現，週五晚上永遠在喊超支。
+let prev=-1;
+for(let h=0;h<168;h++){          // 第 168 小時已經是下一個週期的開頭，不算在內
+  const u=ctx.usage_(new Date(at('2026-09-11 20:00').getTime()+h*3600000));
+  assert(u.allow>=prev||h===0,'上限不可以往回走（第 '+h+' 小時）');
+  if(h)prev=Math.max(prev,u.allow);
+  assert(u.daysLeft>=0&&u.daysLeft<=7,'剩餘天數要落在 0～7（第 '+h+' 小時）');
+}
+assert.strictEqual(prev,100,'走完一個週期要剛好累積到 100');
+
+// 下一次歸零一定是週五 20:00
+['2026-09-14','2026-09-16','2026-09-18 08:00'].forEach(s=>
+  assert(/^2026-09-18 20:00$/.test(ctx.usage_(at(s)).resetAt),s+' 的下次歸零是 9/18 20:00'));
+assert.strictEqual(ctx.usage_(at('2026-09-18 21:00')).resetAt,'2026-09-25 20:00',
+  '週五 20:00 之後要指向下一個週五');
+
+// 還沒有人填過數字
+const empty=ctx.usage_(at('2026-09-16'));
+assert.strictEqual(empty.has,false,'沒填過就是 has:false');
+assert.strictEqual(empty.state,'na','沒填過不要判好壞');
+
+// 填進去之後的好壞判斷。超前 5 個百分點以內算誤差，不變紅。
+const cases=[[60,'ok'],[66,'ok'],[70,'warn'],[71,'warn'],[72,'over'],[90,'over']];
+cases.forEach(([pct,state])=>{
+  ctx.saveUsage_({pct:pct});
+  ctx.cfgSet_('claude用量更新','2026-09-16 09:00');   // 好壞判斷跟新舊分開測
+  const u=ctx.usage_(at('2026-09-16'));
+  assert.strictEqual(u.pct,pct,'存進去要讀得回來');
+  assert.strictEqual(u.allow,66,'週三的上限是 66');
+  assert.strictEqual(u.state,state,pct+'% 對 66% 應該是 '+state);
+});
+// 存進去要自己蓋時間戳，不然沒辦法判斷數字是什麼時候看到的
+ctx.saveUsage_({pct:50});
+assert(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(ctx.usage_().updated),'存的時候要記下時間');
+// 這個數字是人抄的，放隔夜就可能差很多，過了一天就不要再拿它下判斷
+ctx.cfgSet_('claude用量更新','2026-09-14 09:00');
+const old=ctx.usage_(at('2026-09-16'));
+assert.strictEqual(old.state,'stale','隔了兩天的數字不算數');
+assert.strictEqual(old.stale,2,'要講得出是幾天前的');
+
+assert.throws(()=>ctx.saveUsage_({pct:120}),/0 到 100/,'超出範圍要擋下來');
+assert.throws(()=>ctx.saveUsage_({pct:'還沒看'}),/0 到 100/,'不是數字要擋下來');
+
+// 比例可以自己調，加起來不必剛好 100
+ctx.cfgSet_('claude額度分配','1,2,2,2,2,2');
+ctx.cfgSet_('claude用量更新','2026-09-16 09:00');
+assert.strictEqual(ctx.usage_(at('2026-09-13')).allow,9,'1/11 換算成 9%');
+assert.strictEqual(ctx.usage_(at('2026-09-18 19:00')).allow,100,'照比例換算最後還是 100');
+// 填壞了就整組退回預設，不要用半套的比例算出一個沒人看得懂的上限
+['1,2,2','0,0,0,0,0,0','a,b,c,d,e,f','1,2,2,2,2,-2'].forEach(bad=>{
+  ctx.cfgSet_('claude額度分配',bad);
+  assert.strictEqual(ctx.usage_(at('2026-09-16')).allow,66,'「'+bad+'」要退回預設比例');
+});
+ctx.cfgSet_('claude額度分配','');
+console.log('Claude 用量  一週 8 個時點的上限、168 小時單調遞增、'+cases.length+' 種好壞判斷都對');
